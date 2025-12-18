@@ -1,6 +1,5 @@
 package br.gov.go.saude.fhir.safira.domain.pipelines;
 
-import br.gov.go.saude.fhir.safira.domain.PoliticsVersion;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -26,15 +25,15 @@ public class StepRegistry {
         this.pipelines = buildPipelines(definitions);
     }
 
-    public List<VerificationStep> verification(PoliticsVersion version) {
-        return pipelines.get(new PipelineKey(version, VERIFICATION))
+    public List<VerificationStep> verification(String politicsVersion) {
+        return pipelines.get(new PipelineKey(politicsVersion, VERIFICATION))
                 .stream()
                 .map(VerificationStep.class::cast)
                 .toList();
     }
 
-    public List<SigningStep> signing(PoliticsVersion version) {
-        return pipelines.get(new PipelineKey(version, SIGNING))
+    public List<SigningStep> signing(String politicsVersion) {
+        return pipelines.get(new PipelineKey(politicsVersion, SIGNING))
                 .stream()
                 .map(SigningStep.class::cast)
                 .toList();
@@ -47,7 +46,7 @@ public class StepRegistry {
 
         for (PipelineDefinition def : definitions) {
             PipelineKey key = new PipelineKey(
-                    def.pipelineKey().version(), def.pipelineKey().operation()
+                    def.pipelineKey().politicsVersion(), def.pipelineKey().operation()
             );
 
             List<Object> steps = def.stepIds().stream()
@@ -72,35 +71,35 @@ public class StepRegistry {
         return Map.copyOf(result);
     }
 
-        private Map<String, Object> indexSteps (
-                List < VerificationStep > verification,
-                List < SigningStep > signing){
+    private Map<String, Object> indexSteps(
+            List<VerificationStep> verification,
+            List<SigningStep> signing) {
 
-            Map<String, Object> index = new HashMap<>();
+        Map<String, Object> index = new HashMap<>();
 
-            Stream.concat(verification.stream(), signing.stream())
-                    .forEach(step -> {
-                        StepId id = step.getClass().getAnnotation(StepId.class);
+        Stream.concat(verification.stream(), signing.stream())
+                .forEach(step -> {
+                    StepId id = step.getClass().getAnnotation(StepId.class);
 
-                        if (id == null) {
-                            throw new IllegalStateException(
-                                    "Step sem @StepId: " + step.getClass()
-                            );
-                        }
+                    if (id == null) {
+                        throw new IllegalStateException(
+                                "Step sem @StepId: " + step.getClass()
+                        );
+                    }
 
-                        if (!StringUtils.hasText(id.value())) {
-                            throw new IllegalStateException(
-                                    "StepId vazio na classe: " + step.getClass()
-                            );
-                        }
+                    if (!StringUtils.hasText(id.value())) {
+                        throw new IllegalStateException(
+                                "StepId vazio na classe: " + step.getClass()
+                        );
+                    }
 
-                        if (index.putIfAbsent(id.value(), step) != null) {
-                            throw new IllegalStateException(
-                                    "StepId duplicado: " + id.value()
-                            );
-                        }
-                    });
+                    if (index.putIfAbsent(id.value(), step) != null) {
+                        throw new IllegalStateException(
+                                "StepId duplicado: " + id.value()
+                        );
+                    }
+                });
 
-            return Map.copyOf(index);
-        }
+        return Map.copyOf(index);
     }
+}

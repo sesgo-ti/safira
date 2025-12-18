@@ -1,5 +1,7 @@
 package br.gov.go.saude.fhir.safira.api;
 
+// import br.gov.go.saude.fhir.safira.app.VersionsService;
+
 import br.gov.go.saude.fhir.safira.app.VersionsService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -9,6 +11,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class SignatureController {
+    public final VersionsService versionsService;
+
+    public SignatureController(VersionsService versionsService) {
+        this.versionsService = versionsService;
+    }
 
     @PostMapping("/assinar")
     public ResponseEntity<String> sign() {
@@ -32,6 +39,6 @@ public class SignatureController {
         return ResponseEntity
                 .ok()
                 .contentType(MediaType.parseMediaType("application/fhir+json"))
-                .body(VersionsService.getVersionsAvailable().toString());
+                .body(versionsService.getVersionsSupported().toString());
     }
 }
