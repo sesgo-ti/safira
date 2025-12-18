@@ -1,0 +1,19 @@
+safira:
+  # Configuração das Pipelines de Assinatura e Verificação
+  #
+  # Estrutura:
+  #   pipelines: Lista de definições de pipelines.
+  #     - version: Identificador da versão do Guia de Implementação FHIR.
+  #                Formato: "URL_CANONICA|VERSAO"
+  #     - operation: Tipo da operação. Valores possíveis: [SIGNING, VERIFICATION]
+  #     - steps: Lista ordenada de IDs dos passos (steps) a serem executados.
+  #
+  pipelines:
+    - version: "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|0.1.0"
+      operation: SIGNING
+      steps:
+        - "json-canonicalizer"
+    - version: "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|0.1.0"
+      operation: VERIFICATION
+      steps:
+        - "json-canonicalization-validator"
