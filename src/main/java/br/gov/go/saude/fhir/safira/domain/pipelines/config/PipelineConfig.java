@@ -1,5 +1,7 @@
-package br.gov.go.saude.fhir.safira.domain.pipelines;
+package br.gov.go.saude.fhir.safira.domain.pipelines.config;
 
+import br.gov.go.saude.fhir.safira.domain.pipelines.PipelineDefinition;
+import br.gov.go.saude.fhir.safira.domain.pipelines.PipelineKey;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 

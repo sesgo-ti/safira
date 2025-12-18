@@ -1,4 +1,4 @@
-package br.gov.go.saude.fhir.safira.domain.pipelines;
+package br.gov.go.saude.fhir.safira.domain.pipelines.config;
 
 import br.gov.go.saude.fhir.safira.domain.OperationType;
 import lombok.Getter;

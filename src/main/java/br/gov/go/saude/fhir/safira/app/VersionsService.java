@@ -1,6 +1,6 @@
 package br.gov.go.saude.fhir.safira.app;
 
-import br.gov.go.saude.fhir.safira.domain.pipelines.PipelineConfig;
+import br.gov.go.saude.fhir.safira.domain.pipelines.config.PipelineConfig;
 import org.springframework.stereotype.Service;
 
 import java.util.Set;
