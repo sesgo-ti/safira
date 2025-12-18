@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class SignatureController {
 
     @PostMapping("/assinar")
-    public ResponseEntity<String> toSign() {
+    public ResponseEntity<String> sign() {
         return ResponseEntity
                 .ok()
                 .contentType(MediaType.parseMediaType("application/fhir+json"))
@@ -20,7 +20,7 @@ public class SignatureController {
 
 
     @PostMapping("/verificar")
-    public ResponseEntity<String> toCheckSignature() {
+    public ResponseEntity<String> verify() {
         return ResponseEntity
                 .ok()
                 .contentType(MediaType.parseMediaType("application/fhir+json"))
@@ -28,7 +28,7 @@ public class SignatureController {
     }
 
     @GetMapping("/versoes")
-    public ResponseEntity<String> versionsAvailable() {
+    public ResponseEntity<String> versionsSupported() {
         return ResponseEntity
                 .ok()
                 .contentType(MediaType.parseMediaType("application/fhir+json"))
