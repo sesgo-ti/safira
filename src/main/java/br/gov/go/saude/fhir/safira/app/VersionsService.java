@@ -6,7 +6,7 @@ import java.util.Set;
 
 @Service
 public class VersionsService {
-    public static Set<String> getSupportedVersions() {
+    public static Set<String> getVersionsAvailable() {
         return Set.of("https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|0.1.0");
     }
 }
