@@ -1,5 +1,6 @@
 package br.gov.go.saude.fhir.safira.api;
 
+import br.gov.go.saude.fhir.safira.app.VersionsService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,6 +32,6 @@ public class SignatureController {
         return ResponseEntity
                 .ok()
                 .contentType(MediaType.parseMediaType("application/fhir+json"))
-                .body("https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|0.1.0");
+                .body(VersionsService.getSupportedVersions().toString());
     }
 }
