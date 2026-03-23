@@ -1,6 +1,6 @@
 package br.gov.go.saude.fhir.safira.rest.service;
 
-import br.gov.go.saude.fhir.safira.rest.service.VersionsService;
+import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

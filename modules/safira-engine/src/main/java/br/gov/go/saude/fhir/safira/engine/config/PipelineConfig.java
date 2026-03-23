@@ -18,10 +18,10 @@ public class PipelineConfig {
 
     @Bean
     public List<PipelineDefinition> pipelines() {
-        return properties.getPipelines().stream()
+        return properties.pipelines().stream()
                 .map(entry -> new PipelineDefinition(
-                        new PipelineKey(entry.getVersion(), entry.getOperation()),
-                        entry.getSteps()
+                        new PipelineKey(entry.version(), entry.operation()),
+                        entry.steps()
                 ))
                 .toList();
     }
