@@ -25,7 +25,6 @@ package br.gov.go.saude.fhir.safira.engine.domain;
  *
  * @param <C> o tipo do contexto utilizado pelo step, que deve
  *            estender de {@link StepContext}.
- * @since 1.0.0
  */
 @FunctionalInterface
 public interface Step<C extends StepContext> {
@@ -37,7 +36,7 @@ public interface Step<C extends StepContext> {
      * @return resultado da execução ({@link ResultStep.Ok} ou
      *         {@link ResultStep.Fail})
      */
-    ResultStep<C> execute(C context);
+    ResultStep<C> execute(C context) throws StepException;
 
     /**
      * Retorna o nome do step para logging/diagnóstico.

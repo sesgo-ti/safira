@@ -18,8 +18,6 @@ import java.util.Optional;
  * Define o contrato mínimo para acesso a atributos genéricos em contextos
  * de execução de steps.
  * </p>
- *
- * @since 1.0.0
  */
 public interface StepContext {
 

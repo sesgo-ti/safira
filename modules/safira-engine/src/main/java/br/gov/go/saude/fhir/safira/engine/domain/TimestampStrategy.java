@@ -1,5 +1,8 @@
 package br.gov.go.saude.fhir.safira.engine.domain;
 
+import lombok.Getter;
+
+@Getter
 public enum TimestampStrategy {
     IAT("iat"),
     TSA("tsa");
@@ -8,9 +11,5 @@ public enum TimestampStrategy {
 
     TimestampStrategy(String value) {
         this.value = value;
-    }
-
-    public String getValue() {
-        return value;
     }
 }

@@ -1,7 +1,10 @@
 package br.gov.go.saude.fhir.safira.engine.config;
 
+import br.gov.go.saude.fhir.safira.engine.domain.PipelineExecutor;
+import br.gov.go.saude.fhir.safira.engine.domain.Step;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.PipelineDefinition;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.PipelineKey;
+import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepRegistry;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -24,5 +27,18 @@ public class PipelineConfig {
                         entry.steps()
                 ))
                 .toList();
+    }
+
+    @Bean
+    public StepRegistry stepRegistry(
+            List<Step<?>> availableSteps,
+            List<PipelineDefinition> definitions) {
+
+        return new StepRegistry(availableSteps, definitions);
+    }
+
+    @Bean
+    public PipelineExecutor pipelineExecutor(StepRegistry stepRegistry) {
+        return new PipelineExecutor(stepRegistry);
     }
 }
