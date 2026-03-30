@@ -1,9 +1,13 @@
 package br.gov.go.saude.fhir.safira.engine.domain.signing;
 
+import br.gov.go.saude.fhir.safira.engine.domain.fhir.Bundle;
+import br.gov.go.saude.fhir.safira.engine.domain.fhir.Provenance;
+import br.gov.go.saude.fhir.safira.engine.domain.fhir.Signature;
 import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties;
 import br.gov.go.saude.fhir.safira.engine.domain.CryptoMaterial;
 import br.gov.go.saude.fhir.safira.engine.domain.StepContext;
 import br.gov.go.saude.fhir.safira.engine.domain.TimestampStrategy;
+
 import lombok.Builder;
 import lombok.Singular;
 import lombok.Value;
@@ -18,9 +22,8 @@ import java.util.Optional;
 @Value
 @Builder(toBuilder = true)
 public class SigningContext implements StepContext {
-
-    String rawBundleJson;
-    String rawProvenanceJson;
+    Bundle bundle;
+    Provenance provenance;
     CryptoMaterial cryptoMaterial;
     List<String> rawCertificateChain;
     Long referenceTimestamp;
@@ -31,6 +34,8 @@ public class SigningContext implements StepContext {
     PrivateKey privateKey;
     X509Certificate[] certificateChain;
     Instant signingTime;
+
+    Signature signature;
 
     @Singular("attribute")
     Map<String, Object> attributes;
