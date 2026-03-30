@@ -7,6 +7,10 @@ import java.lang.annotation.Target;
 
 /**
  * Identifica unicamente um passo para ser referenciado por uma PipelineDefinition.
+ *
+ * <p>Necessária apenas para steps carregados via Spring/YAML. Consumidores
+ * que montam o {@link StepRegistry} programaticamente fornecem os pipelines
+ * já resolvidos, sem necessidade desta anotação.</p>
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
