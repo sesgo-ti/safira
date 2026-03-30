@@ -7,7 +7,7 @@
  */
 
 package br.gov.go.saude.fhir.safira.engine.domain;
-
+import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import lombok.Getter;
 
 /**
@@ -15,7 +15,7 @@ import lombok.Getter;
  * {@link Step}.
  *
  * <p>
- * Diferente de um {@link ResultStep.Fail}, que representa uma falha de
+ * Diferente de um {@link StepResult.Failure}, que representa uma falha de
  * validação ou resultado esperado de uma regra de negócio,
  * esta exceção indica que o passo não pôde ser concluído devido a um erro de
  * sistema, infraestrutura ou configuração (ex: falha de IO, serviço
@@ -26,19 +26,19 @@ import lombok.Getter;
 public class StepException extends RuntimeException {
 
     public static final String DEFAULT_MSG = "STEP_EXECUTION_ERROR";
-    private final String code;
-    private final String description;
+    private final SignatureExceptionCode code;
+    private final String diagnostics;
 
-    public StepException(String code, String description, Throwable cause) {
-        super(code + ": " + description, cause);
+    public StepException(SignatureExceptionCode code, String diagnostics, Throwable cause) {
+        super(diagnostics, cause);
         this.code = code;
-        this.description = description;
+        this.diagnostics = diagnostics;
     }
 
-    public StepException(String code, String description) {
-        super(code + ": " + description);
+    public StepException(SignatureExceptionCode code, String diagnostics) {
+        super(diagnostics);
         this.code = code;
-        this.description = description;
+        this.diagnostics = diagnostics;
     }
 
     /**
@@ -47,7 +47,7 @@ public class StepException extends RuntimeException {
      * @param code  código do erro que causou a exceção
      * @param cause causa raiz
      */
-    public StepException(String code, Throwable cause) {
+    public StepException(SignatureExceptionCode code, Throwable cause) {
         this(code, DEFAULT_MSG, cause);
     }
 
@@ -56,7 +56,7 @@ public class StepException extends RuntimeException {
      *
      * @param code código do erro que causou a exceção
      */
-    public StepException(String code) {
+    public StepException(SignatureExceptionCode code) {
         this(code, DEFAULT_MSG);
     }
 }

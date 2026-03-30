@@ -1,5 +1,7 @@
 package br.gov.go.saude.fhir.safira.engine.domain;
 
+import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
+
 /**
  * Representa o resultado de um step de validação ou processamento no
  * pipeline.
@@ -8,8 +10,8 @@ package br.gov.go.saude.fhir.safira.engine.domain;
  * Esta interface selada (sealed) permite apenas dois tipos de resultados:
  * </p>
  * <ul>
- * <li>{@link Ok} - Operação bem-sucedida, contém o contexto atualizado</li>
- * <li>{@link Fail} - Operação falhou, contém código do erro</li>
+ * <li>{@link Success} - Operação bem-sucedida, contém o contexto atualizado</li>
+ * <li>{@link Failure} - Operação falhou, contém código do erro</li>
  * </ul>
  *
  * <p>
@@ -17,17 +19,17 @@ package br.gov.go.saude.fhir.safira.engine.domain;
  * </p>
  *
  * <pre>{@code
- * ResultStep result = step.execute(context);
+ * StepResult result = step.execute(context);
  * String stepName = result.stepName();
  * return switch (result) {
- *     case ResultStep.Ok ok -> processNext(ok.context());
- *     case ResultStep.Fail fail -> handleError(fail.code());
+ *     case StepResult.Success success -> processNext(success.context());
+ *     case StepResult.Failure failure -> handleError(failure.code());
  * };
  * }</pre>
  *
  * @param <C> Contexto associado ao step e ao resultado do step
  */
-public sealed interface ResultStep<C> permits ResultStep.Ok, ResultStep.Fail {
+public sealed interface StepResult<C> permits StepResult.Success, StepResult.Failure {
 
     /**
      * Retorna o nome do step que produziu este resultado.
@@ -49,7 +51,7 @@ public sealed interface ResultStep<C> permits ResultStep.Ok, ResultStep.Fail {
      * @return {@code true} se for um resultado de sucesso, {@code false} caso
      *         contrário
      */
-    boolean isOk();
+    boolean isSuccess();
 
     /**
      * Verifica se o resultado representa falha.
@@ -57,8 +59,8 @@ public sealed interface ResultStep<C> permits ResultStep.Ok, ResultStep.Fail {
      * @return {@code true} se for um resultado de falha, {@code false} caso
      *         contrário
      */
-    default boolean isFail() {
-        return !isOk();
+    default boolean isFailure() {
+        return !isSuccess();
     }
 
     /**
@@ -67,23 +69,24 @@ public sealed interface ResultStep<C> permits ResultStep.Ok, ResultStep.Fail {
      * @param stepName o nome do step que produziu o resultado
      * @param context  o contexto resultante da operação bem-sucedida
      * @param <C>      tipo do contexto
-     * @return instância de {@link Ok} contendo o contexto
+     * @return instância de {@link Success} contendo o contexto
      */
-    static <C> ResultStep<C> ok(String stepName, C context) {
-        return new Ok<>(stepName, context);
+    static <C> StepResult<C> success(String stepName, C context) {
+        return new Success<>(stepName, context);
     }
 
     /**
      * Cria um resultado de falha com o código do erro.
      *
-     * @param stepName o nome do step que produziu o resultado
-     * @param code     o código do erro que identifica a falha
-     * @param context  o contexto resultante da operação bem-sucedida
-     * @param <C>      tipo do contexto
-     * @return instância de {@link Fail} contendo o erro
+     * @param stepName    o nome do step que produziu o resultado
+     * @param code        o código do erro que identifica a falha
+     * @param diagnostics detalhes específicos e contextuais do erro
+     * @param context     o contexto resultante da operação bem-sucedida
+     * @param <C>         tipo do contexto
+     * @return instância de {@link Failure} contendo o erro
      */
-    static <C> ResultStep<C> fail(String stepName, String code, C context) {
-        return new Fail<>(stepName, code, context);
+    static <C> StepResult<C> failure(String stepName, SignatureExceptionCode code, String diagnostics, C context) {
+        return new Failure<>(stepName, code, diagnostics, context);
     }
 
     /**
@@ -93,7 +96,7 @@ public sealed interface ResultStep<C> permits ResultStep.Ok, ResultStep.Fail {
      * @param context  o contexto resultante da operação
      * @param <C>      tipo do contexto
      */
-    record Ok<C>(String stepName, C context) implements ResultStep<C> {
+    record Success<C>(String stepName, C context) implements StepResult<C> {
         /**
          * Cria um resultado de sucesso.
          *
@@ -101,7 +104,7 @@ public sealed interface ResultStep<C> permits ResultStep.Ok, ResultStep.Fail {
          * @param context  o contexto, não pode ser nulo
          * @throws NullPointerException se stepName ou context forem nulos
          */
-        public Ok {
+        public Success {
             if (stepName == null) {
                 throw new NullPointerException("stepName não pode ser nulo");
             }
@@ -111,7 +114,7 @@ public sealed interface ResultStep<C> permits ResultStep.Ok, ResultStep.Fail {
         }
 
         @Override
-        public boolean isOk() {
+        public boolean isSuccess() {
             return true;
         }
     }
@@ -119,22 +122,17 @@ public sealed interface ResultStep<C> permits ResultStep.Ok, ResultStep.Fail {
     /**
      * Resultado de falha contendo detalhes do erro.
      *
-     * <p>O parâmetro de tipo {@code C} não é usado diretamente, mas é necessário
-     * para manter compatibilidade com {@code ResultStep<C>}.</p>
-     *
-     * @param stepName o nome do step que produziu o resultado
-     * @param code     o código do erro que causou a falha
-     * @param <C>      tipo do contexto (não usado, mantido para compatibilidade)
+     * @param stepName    o nome do step que produziu o resultado
+     * @param code        o código oficial do CodeSystem da Segurança
+     * @param diagnostics os detalhes contextuais adicionais
+     * @param context     o contexto do pipeline
+     * @param <C>         tipo do contexto
      */
-    record Fail<C>(String stepName, String code, C context) implements ResultStep<C> {
+    record Failure<C>(String stepName, SignatureExceptionCode code, String diagnostics, C context) implements StepResult<C> {
         /**
          * Cria um resultado de falha.
-         *
-         * @param stepName o nome do step, não pode ser nulo
-         * @param code     o código do erro, não pode ser nulo
-         * @throws NullPointerException se stepName ou code forem nulos
          */
-        public Fail {
+        public Failure {
             if (stepName == null) {
                 throw new NullPointerException("stepName não pode ser nulo");
             }
@@ -147,7 +145,7 @@ public sealed interface ResultStep<C> permits ResultStep.Ok, ResultStep.Fail {
         }
 
         @Override
-        public boolean isOk() {
+        public boolean isSuccess() {
             return false;
         }
     }
