@@ -1,9 +1,12 @@
 package br.gov.go.saude.fhir.safira.engine.domain;
 
+import br.gov.go.saude.fhir.safira.engine.domain.fhir.OperationOutcome;
+import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepRegistry;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * The standard sequence executor for pipelines.
@@ -22,47 +25,81 @@ public class PipelineExecutor {
      * @param politicsVersion the version of the pipeline policy to load
      * @param operation the operation type (SIGNING, VERIFICATION, etc.)
      * @param initialContext current context injected by the client caller
-     * @return ResultStep containing the enriched context on success or the failure outcome
+     * @param resultExtractor function to extract the final payload T from the context
+     * @return PipelineResult containing the extracted payload on success or the failure outcome
      */
-    public <C extends StepContext> ResultStep<C> execute(String politicsVersion, OperationType operation, C initialContext) {
+    public <C extends StepContext, T> PipelineResult<T> execute(String politicsVersion, OperationType operation, C initialContext, Function<C, T> resultExtractor) {
         List<Step<C>> steps = stepRegistry.getSteps(politicsVersion, operation);
 
+        if (steps == null || steps.isEmpty()) {
+            return new PipelineResult.Failure<>(
+                    OperationOutcome.createSignatureError("fatal", "processing", "INTERNAL_ERROR", "Configuração de pipeline não encontrada ou vazia para a versão: " + politicsVersion, null)
+            );
+        }
+
         C currentContext = initialContext;
-        ResultStep<C> lastResult = null;
+        StepResult.Success<C> lastSuccessResult = null;
+        
         for (Step<C> step : steps) {
             try {
-                ResultStep<C> result = step.execute(currentContext);
+                StepResult<C> result = step.execute(currentContext);
 
                 switch (result) {
-                    case ResultStep.Fail<C> fail -> {
-                        return fail; // Pipeline stops on first failure
+                    case StepResult.Failure<C> failure -> {
+                        SignatureExceptionCode ec = failure.code();
+                        String severity = ec.getSeverity() != null ? ec.getSeverity() : "error";
+                        return new PipelineResult.Failure<>(
+                                OperationOutcome.createSignatureError(severity, "processing", ec.getCode(), ec.getDisplay(), failure.diagnostics())
+                        );
                     }
-                    case ResultStep.Ok<C> ok -> {
-                        currentContext = ok.context(); // Pipeline carries the enriched context forward
-                        lastResult = ok; // Keep track of the last successful step
+                    case StepResult.Success<C> success -> {
+                        currentContext = success.context();
+                        lastSuccessResult = success;
                     }
                 }
             } catch (StepException ex) {
-                throw ex;
+                SignatureExceptionCode ec = ex.getCode();
+                String severity = ec.getSeverity() != null ? ec.getSeverity() : "fatal";
+                return new PipelineResult.Failure<>(
+                        OperationOutcome.createSignatureError(severity, "exception", ec.getCode(), ec.getDisplay(), ex.getDiagnostics())
+            );
             } catch (Exception ex) {
-                throw new StepException("INTERNAL_ERROR", "Pipeline failed at step " + step.getName() + ": " + ex.getMessage(), ex);
+                return new PipelineResult.Failure<>(
+                        OperationOutcome.createSignatureError("fatal", "exception", "INTERNAL_ERROR", "Ocorreu um erro interno inesperado: " + ex.getMessage(), ex.getMessage())
+                );
             }
         }
 
-        return lastResult;
+        if (lastSuccessResult != null) {
+            T payload = resultExtractor.apply(lastSuccessResult.context());
+            if (payload == null) {
+                return new PipelineResult.Failure<>(
+                        OperationOutcome.createSignatureError("fatal", "processing", "INTERNAL_ERROR", "O pipeline finalizou com sucesso, mas nenhum resultado foi produzido.", null)
+                );
+            }
+            return new PipelineResult.Success<>(payload);
+        }
+
+        return new PipelineResult.Failure<>(
+                OperationOutcome.createSignatureError("fatal", "processing", "INTERNAL_ERROR", "O pipeline finalizou sem concluir nenhum passo com sucesso.", null)
+        );
     }
 
     /**
      * Convenience method for executing the SIGNING pipeline.
+     *
+     * @param politicsVersion version of the pipeline policy to load
+     * @param context current context injected by the client caller
+     * @return PipelineResult containing the extracted payload on success or OperationOutcome on failure
      */
-    public ResultStep<SigningContext> sign(String politicsVersion, SigningContext context) {
-        return execute(politicsVersion, OperationType.SIGNING, context);
+    public PipelineResult<?> sign(String politicsVersion, SigningContext context) {
+        return execute(politicsVersion, OperationType.SIGNING, context, SigningContext::getSignature);
     }
 
-    /**
-     * Convenience method for executing the VERIFICATION pipeline.
-     */
-    public <C extends StepContext> ResultStep<C> verify(String politicsVersion, C context) {
-        return execute(politicsVersion, OperationType.VERIFICATION, context);
-    }
+    // /**
+    //  * Convenience method for executing the VERIFICATION pipeline.
+    //  */
+    // public <C extends StepContext, T> PipelineResult<T> verify(String politicsVersion, C context, Function<C, T> resultExtractor) {
+    //     return execute(politicsVersion, OperationType.VERIFICATION, context, resultExtractor);
+    // }
 }
