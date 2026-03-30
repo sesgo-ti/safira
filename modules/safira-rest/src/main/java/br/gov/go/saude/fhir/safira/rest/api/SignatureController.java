@@ -19,9 +19,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class SignatureController {
-    public final VersionsService versionsService;
-    public final SigningService signingService;
-    public final SigningInputValidator signingInputValidator;
+    private final VersionsService versionsService;
+    private final SigningService signingService;
+    private final SigningInputValidator signingInputValidator;
 
     public SignatureController(VersionsService versionsService, SigningService signingService, SigningInputValidator signingInputValidator) {
         this.versionsService = versionsService;
@@ -29,7 +29,7 @@ public class SignatureController {
         this.signingInputValidator = signingInputValidator;
     }
 
-    @InitBinder("signingInput")
+    @InitBinder("input")
     protected void initBinder(WebDataBinder binder) {
         binder.addValidators(signingInputValidator);
     }
