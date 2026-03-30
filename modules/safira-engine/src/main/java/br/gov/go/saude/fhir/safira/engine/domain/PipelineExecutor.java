@@ -29,11 +29,15 @@ public class PipelineExecutor {
      * @return PipelineResult containing the extracted payload on success or the failure outcome
      */
     public <C extends StepContext, T> PipelineResult<T> execute(String politicsVersion, OperationType operation, C initialContext, Function<C, T> resultExtractor) {
-        List<Step<C>> steps = stepRegistry.getSteps(politicsVersion, operation);
-
-        if (steps == null || steps.isEmpty()) {
+        List<Step<C>> steps;
+        try {
+            steps = stepRegistry.getSteps(politicsVersion, operation);
+        } catch (IllegalArgumentException ex) {
             return new PipelineResult.Failure<>(
-                    OperationOutcome.createSignatureError("fatal", "processing", "INTERNAL_ERROR", "Configuração de pipeline não encontrada ou vazia para a versão: " + politicsVersion, null)
+                    OperationOutcome.createSignatureError("fatal", "processing",
+                            SignatureExceptionCode.POLICY_VERSION_UNSUPPORTED.getCode(),
+                            SignatureExceptionCode.POLICY_VERSION_UNSUPPORTED.getDisplay(),
+                            ex.getMessage())
             );
         }
 
