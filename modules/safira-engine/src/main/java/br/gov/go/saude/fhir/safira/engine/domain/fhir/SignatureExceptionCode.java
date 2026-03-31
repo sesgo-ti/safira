@@ -22,6 +22,7 @@ public enum SignatureExceptionCode {
     CERT_REVOKED("CERT.REVOKED", "Certificado Revogado", "error", "CERT"),
     CERT_ISSUE_DATE_TOO_OLD("CERT.ISSUE-DATE-TOO-OLD", "Data de Emissão Anterior ao Mínimo Exigido", "error", "CERT"),
     CERT_NOT_ICP_BRASIL("CERT.NOT-ICP-BRASIL", "Certificado Não é ICP-Brasil", "error", "CERT"),
+    CERT_NOT_TRUSTED_ROOT("CERT.NOT-TRUSTED-ROOT", "Raiz Não Confiável ICP-Brasil", "error", "CERT"),
     CERT_NEAR_EXPIRY("CERT.NEAR-EXPIRY", "Certificado Próximo ao Vencimento", "warning", "CERT"),
     CERT_WEAK_KEY("CERT.WEAK-KEY", "Chave Criptográfica Fraca", "warning", "CERT"),
     CERT_UNSUPPORTED_ALGORITHM("CERT.UNSUPPORTED-ALGORITHM", "Algoritmo Não Suportado", "error", "CERT"),

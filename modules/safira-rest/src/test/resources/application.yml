@@ -106,6 +106,9 @@ safira:
       # uma nova versão deve ser obtida obrigatoriamente.
       ttl-maximo: 10080
 
+      # Data mínima de emissão do certificado do signatário (epoch seconds, UTC).
+      minimum-certificate-date: 1751328000
+
     # -------------------------------------------------------------------------
     # Limites de segurança para processamento de Bundles FHIR
     # -------------------------------------------------------------------------

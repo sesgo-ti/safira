@@ -106,6 +106,11 @@ safira:
       # uma nova versão deve ser obtida obrigatoriamente.
       ttl-maximo: 10080
 
+      # Data mínima de emissão do certificado do signatário (epoch seconds, UTC).
+      # Certificados emitidos antes desta data são rejeitados por não atenderem
+      # aos requisitos de segurança vigentes. Padrão: 1751328000 (2025-07-01T00:00:00Z).
+      minimum-certificate-date: 1751328000
+
     # -------------------------------------------------------------------------
     # Limites de segurança para processamento de Bundles FHIR
     # -------------------------------------------------------------------------

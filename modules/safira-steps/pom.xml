@@ -37,6 +37,17 @@
             <version>1.1</version>
         </dependency>
 
+        <dependency>
+            <groupId>br.gov.go.saude.fhir</groupId>
+            <artifactId>trust-store-icpbrasil</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcpkix-jdk18on</artifactId>
+        </dependency>
+
 
         <!-- Utilities for validation and JSON -->
         <dependency>
