@@ -5,6 +5,7 @@ import br.gov.go.saude.fhir.safira.steps.signing.ChainBuildStep;
 import br.gov.go.saude.fhir.safira.steps.signing.ChainValidationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.ContextValidationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.JsonCanonicalizationStep;
+import br.gov.go.saude.fhir.safira.steps.signing.PayloadPreparationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.PayloadValidationStep;
 import br.gov.go.saude.fhir.truststore.icpbrasil.service.CertificateChainResolver;
 import br.gov.go.saude.fhir.truststore.icpbrasil.service.TrustStoreService;
@@ -27,6 +28,7 @@ public class SafiraStepsAutoConfiguration {
             new PayloadValidationStep(),
             new ChainBuildStep(certificateChainResolver),
             new ChainValidationStep(trustStoreService, revocationService),
+            new PayloadPreparationStep(),
             new JsonCanonicalizationStep()
         );
     }

@@ -15,6 +15,7 @@ safira:
       steps:
         - "chain-build"
         - "chain-validation"
+        - "payload-preparation"
         - "json-canonicalizer"
 
   # ---------------------------------------------------------------------------
