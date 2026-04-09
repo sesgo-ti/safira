@@ -1,5 +1,6 @@
 package br.gov.go.saude.fhir.safira.steps.signing;
 
+import br.gov.go.saude.fhir.safira.engine.domain.StepException;
 import br.gov.go.saude.fhir.safira.engine.domain.StepResult;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.Bundle;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.Provenance;
@@ -50,18 +51,24 @@ public class PayloadPreparationStep implements SigningStep {
         Map<String, Object> copy = new LinkedHashMap<>(resource);
         copy.remove("id");
 
-        Object metaObj = copy.get("meta");
-        if (metaObj instanceof Map<?, ?> rawMeta) {
-            Map<String, Object> meta = new LinkedHashMap<>((Map<String, Object>) rawMeta);
-            meta.remove("versionId");
-            meta.remove("lastUpdated");
-            meta.remove("source");
-            meta.remove("tag");
-            if (meta.isEmpty()) {
-                copy.remove("meta");
-            } else {
-                copy.put("meta", meta);
-            }
+        Object metaValue = copy.get("meta");
+        if (metaValue == null) return copy;
+
+        if (!(metaValue instanceof Map)) {
+            throw new StepException(SignatureExceptionCode.FORMAT_BUNDLE_MALFORMED,
+                    "O campo 'meta' deve ser um objeto JSON.");
+        }
+
+        Map<String, Object> meta = new LinkedHashMap<>((Map<String, Object>) metaValue);
+        meta.remove("versionId");
+        meta.remove("lastUpdated");
+        meta.remove("source");
+        meta.remove("tag");
+
+        if (meta.isEmpty()) {
+            copy.remove("meta");
+        } else {
+            copy.put("meta", meta);
         }
 
         return copy;
