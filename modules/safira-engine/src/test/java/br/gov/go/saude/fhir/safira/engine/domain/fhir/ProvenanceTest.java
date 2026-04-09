@@ -32,6 +32,52 @@ class ProvenanceTest {
     }
 
     @Test
+    void shouldParseTargetWithIdentifier() {
+        String json = """
+                {
+                  "resourceType": "Provenance",
+                  "target": [{
+                    "reference": "urn:uuid:p1",
+                    "identifier": {
+                      "use": "official",
+                      "system": "http://hospital.example",
+                      "value": "12345",
+                      "type": {
+                        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+                        "code": "MR",
+                        "display": "Medical Record Number"
+                      }
+                    }
+                  }]
+                }
+                """;
+
+        Provenance provenance = Provenance.fromJson(json);
+
+        Identifier identifier = provenance.target().getFirst().identifier();
+        assertNotNull(identifier);
+        assertEquals("official", identifier.use());
+        assertEquals("http://hospital.example", identifier.system());
+        assertEquals("12345", identifier.value());
+        assertNotNull(identifier.type());
+        assertEquals("MR", identifier.type().code());
+    }
+
+    @Test
+    void shouldParseTargetWithoutIdentifier() {
+        String json = """
+                {
+                  "resourceType": "Provenance",
+                  "target": [{"reference": "urn:uuid:p1"}]
+                }
+                """;
+
+        Provenance provenance = Provenance.fromJson(json);
+
+        assertNull(provenance.target().getFirst().identifier());
+    }
+
+    @Test
     void shouldThrowWhenJsonIsInvalid() {
         assertThrows(IllegalArgumentException.class, () -> Provenance.fromJson("not json"));
     }

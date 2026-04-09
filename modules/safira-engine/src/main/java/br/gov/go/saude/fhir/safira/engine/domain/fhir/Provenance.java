@@ -42,17 +42,47 @@ public record Provenance(
 
             List<Reference> targets = new ArrayList<>();
             for (JsonNode t : targetNode) {
-                targets.add(new Reference(
-                        t.path("reference").asText(null),
-                        t.path("type").asText(null),
-                        null,
-                        t.path("display").asText(null)
-                ));
+                targets.add(parseReference(t));
             }
 
             return new Provenance(resourceType, id, List.copyOf(targets), null, rawJson);
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("JSON inválido: " + e.getMessage(), e);
         }
+    }
+
+    private static Reference parseReference(JsonNode node) {
+        if (node.isMissingNode() || node.isNull()) return null;
+
+        return new Reference(
+                node.path("reference").asText(null),
+                node.path("type").asText(null),
+                parseIdentifier(node.path("identifier")),
+                node.path("display").asText(null)
+        );
+    }
+
+    private static Identifier parseIdentifier(JsonNode node) {
+        if (node.isMissingNode() || node.isNull()) return null;
+
+        return new Identifier(
+                node.path("use").asText(null),
+                parseCoding(node.path("type")),
+                node.path("system").asText(null),
+                node.path("value").asText(null),
+                parseReference(node.path("assigner"))
+        );
+    }
+
+    private static Coding parseCoding(JsonNode node) {
+        if (node.isMissingNode() || node.isNull()) return null;
+
+        return new Coding(
+                node.path("system").asText(null),
+                node.path("version").asText(null),
+                node.path("code").asText(null),
+                node.path("display").asText(null),
+                node.has("userSelected") ? node.path("userSelected").asBoolean() : null
+        );
     }
 }
