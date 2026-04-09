@@ -11,6 +11,7 @@ import br.gov.go.saude.fhir.truststore.icpbrasil.model.RevocationStatus;
 import br.gov.go.saude.fhir.truststore.icpbrasil.service.TrustStoreService;
 import br.gov.go.saude.fhir.truststore.icpbrasil.service.revocation.RevocationService;
 
+import javax.security.auth.x500.X500Principal;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
@@ -138,7 +139,7 @@ public class ChainValidationStep implements SigningStep {
             }
 
             // 2.7.3 Validação temporal: notBefore ≤ refTs ≤ notAfter
-            fail = validateCertTemporal(certI, i, refTs, context);
+            fail = validateCertTemporal(certI, refTs, context);
             if (fail != null) return fail;
         }
 
@@ -178,19 +179,20 @@ public class ChainValidationStep implements SigningStep {
         return null;
     }
 
-    private StepResult<SigningContext> validateCertTemporal(X509Certificate cert, int position,
-                                                            long refTs, SigningContext context) {
+    private StepResult<SigningContext> validateCertTemporal(X509Certificate cert, long refTs,
+                                                            SigningContext context) {
         long notBeforeEpoch = cert.getNotBefore().toInstant().getEpochSecond();
         long notAfterEpoch = cert.getNotAfter().toInstant().getEpochSecond();
+        String subject = cert.getSubjectX500Principal().getName(X500Principal.RFC2253);
 
         if (refTs < notBeforeEpoch) {
             return StepResult.failure(getName(), SignatureExceptionCode.CERT_NOT_YET_VALID,
-                    "O certificado na posição " + position + " ainda não estava válido no momento " +
+                    "O certificado [" + subject + "] ainda não estava válido no momento " +
                             "do timestamp de referência fornecido.", context);
         }
         if (refTs > notAfterEpoch) {
             return StepResult.failure(getName(), SignatureExceptionCode.CERT_EXPIRED,
-                    "O certificado na posição " + position + " estava expirado no momento " +
+                    "O certificado [" + subject + "] estava expirado no momento " +
                             "do timestamp de referência fornecido.", context);
         }
         return null;
@@ -200,7 +202,7 @@ public class ChainValidationStep implements SigningStep {
                                                        List<RevocationEvidence> evidences,
                                                        SigningContext context) {
         RevocationStatus result = revocationService.check(cert, issuer);
-        String subject = cert.getSubjectX500Principal().getName();
+        String subject = cert.getSubjectX500Principal().getName(X500Principal.RFC2253);
         return switch (result) {
             case RevocationStatus.Good g -> {
                 if (g.responseDer() != null) {
