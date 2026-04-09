@@ -35,6 +35,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -120,12 +122,16 @@ class ChainBuildStepTest {
         KeyPair rootKp = newKeyPair();
         X509Certificate root = newRootCert(rootKp);
         X509Certificate leaf = newLeafCert(rootKp);
+
         String leafB64 = toBase64(leaf);
         when(chainResolver.resolveChain(any())).thenReturn(List.of(leaf, root));
+
         var result = step.execute(context(List.of(leafB64)));
+
         assertTrue(result.isSuccess());
-        var ctx = ((StepResult.Success<SigningContext>) result).context();
-        assertEquals(2, ctx.getCertificateChain().orElseThrow().length);
+        X509Certificate[] chain = result.context().getCertificateChain().orElseThrow();
+        assertArrayEquals(new X509Certificate[]{leaf, root}, chain);
+        verify(chainResolver).resolveChain(leaf);
     }
 
     // ===== Cadeia com 2+ certificados: erros de formato =====
@@ -156,8 +162,9 @@ class ChainBuildStepTest {
         var result = step.execute(context(List.of(toBase64(leaf), toBase64(root))));
 
         assertTrue(result.isSuccess());
-        var ctx = result.context();
-        assertEquals(2, ctx.getCertificateChain().orElseThrow().length);
+        X509Certificate[] chain = result.context().getCertificateChain().orElseThrow();
+        assertArrayEquals(new X509Certificate[]{leaf, root}, chain);
+        verify(chainResolver, never()).resolveChain(any());
     }
 
     // ===== Certificate helpers =====
