@@ -27,7 +27,7 @@ class BundleTest {
         assertEquals("b1", bundle.id());
         assertEquals(1, bundle.entry().size());
         assertEquals("urn:uuid:p1", bundle.entry().getFirst().fullUrl());
-        assertEquals("Patient", bundle.entry().getFirst().resource().get("resourceType"));
+        assertTrue(bundle.entry().getFirst().resource().contains("\"resourceType\":\"Patient\""));
         assertEquals(json, bundle.rawJson());
     }
 

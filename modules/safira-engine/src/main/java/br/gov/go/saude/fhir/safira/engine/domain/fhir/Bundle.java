@@ -1,14 +1,12 @@
 package br.gov.go.saude.fhir.safira.engine.domain.fhir;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Builder;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -46,7 +44,7 @@ public record Bundle(
             for (JsonNode e : entryNode) {
                 entries.add(new BundleEntry(
                         e.path("fullUrl").asText(null),
-                        MAPPER.convertValue(e.path("resource"), new TypeReference<>() {})
+                        e.path("resource").toString()
                 ));
             }
 
@@ -65,7 +63,7 @@ public record Bundle(
     @Builder
     public record BundleEntry(
             String fullUrl,
-            Map<String, Object> resource
+            String resource
     ) {
     }
 }
