@@ -1,18 +1,20 @@
 package br.gov.go.saude.fhir.safira.steps.signing;
 
-import br.gov.go.saude.fhir.safira.engine.domain.fhir.Bundle;
-import br.gov.go.saude.fhir.safira.engine.domain.StepResult;
 import br.gov.go.saude.fhir.safira.engine.domain.StepException;
+import br.gov.go.saude.fhir.safira.engine.domain.StepResult;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
-import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class JsonCanonicalizationStepTest {
 
-    private SigningStep step;
+    private JsonCanonicalizationStep step;
 
     @BeforeEach
     void setUp() {
@@ -20,54 +22,77 @@ class JsonCanonicalizationStepTest {
     }
 
     @Test
-    void shouldCanonicalizeValidJsonAndAddToContext() {
-        // Arrange
-        String rawJson = """
-                {
-                  "type": "document",
-                  "resourceType": "Bundle",
-                  "entry": [{
-                    "resource": {
-                      "id": "1",
-                      "resourceType": "Patient",
-                      "birthDate": "1990-01-01"
-                    }
-                  }]
-                }""";
-                
-        String expectedCanonicalJson = """
-                {"entry":[{"resource":{"birthDate":"1990-01-01","id":"1","resourceType":"Patient"}}],"resourceType":"Bundle","type":"document"}""";
+    void shouldCanonicalizeEachPreparedResource() {
+        Map<String, Object> r1 = map("resourceType", "Patient", "name", "João");
+        Map<String, Object> r2 = map("resourceType", "Observation", "status", "final");
+        var context = contextWith(List.of(r1, r2));
 
-        SigningContext context = SigningContext.builder()
-                .bundle(Bundle.builder().rawJson(rawJson).build())
-                .build();
+        var result = step.execute(context);
 
-        // Act
-        StepResult<SigningContext> result = step.execute(context);
-
-        // Assert
-        assertTrue(result.isSuccess(), "Step execution should be successful");
-        
-        SigningContext updatedContext = ((StepResult.Success<SigningContext>) result).context();
-        String canonicalizedJson = updatedContext.getAttribute("canonicalizedJson", String.class).orElse(null);
-
-        assertEquals(expectedCanonicalJson, canonicalizedJson, "JSON should be perfectly canonicalized (RFC 8785)");
+        assertSuccess(result);
+        var canonicalized = canonicalizedResources(result);
+        assertEquals(2, canonicalized.size());
     }
 
     @Test
-    void shouldThrowStepExceptionWhenProvidedInvalidJson() {
-        // Arrange
-        String invalidJson = "{ invalid: format,, }";
+    void shouldSortJsonKeysAlphabetically() {
+        Map<String, Object> resource = new LinkedHashMap<>();
+        resource.put("z_field", "last");
+        resource.put("a_field", "first");
+        resource.put("m_field", "middle");
+        var context = contextWith(List.of(resource));
 
-        SigningContext context = SigningContext.builder()
-                .bundle(Bundle.builder().rawJson(invalidJson).build())
+        var result = step.execute(context);
+
+        assertSuccess(result);
+        String canonicalized = canonicalizedResources(result).getFirst();
+        assertEquals("{\"a_field\":\"first\",\"m_field\":\"middle\",\"z_field\":\"last\"}", canonicalized);
+    }
+
+    @Test
+    void shouldPreserveOrderOfResources() {
+        Map<String, Object> r1 = map("resourceType", "Patient");
+        Map<String, Object> r2 = map("resourceType", "Observation");
+        var context = contextWith(List.of(r1, r2));
+
+        var result = step.execute(context);
+
+        assertSuccess(result);
+        var canonicalized = canonicalizedResources(result);
+        assertTrue(canonicalized.get(0).contains("Patient"));
+        assertTrue(canonicalized.get(1).contains("Observation"));
+    }
+
+    @Test
+    void shouldThrowStepExceptionWhenPreparedResourcesNotFound() {
+        SigningContext context = SigningContext.builder().build();
+
+        assertThrows(StepException.class, () -> step.execute(context));
+    }
+
+    // ===== Helpers =====
+
+    private SigningContext contextWith(List<Map<String, Object>> preparedResources) {
+        return SigningContext.builder()
+                .attribute(PayloadPreparationStep.PREPARED_RESOURCES_KEY, preparedResources)
                 .build();
+    }
 
-        // Act & Assert
-        StepException exception = assertThrows(StepException.class, () -> step.execute(context), 
-            "Should throw StepException when canonicalizer fails to parse");
-            
-        assertTrue(exception.getMessage().contains("Erro inesperado na canonicalização do JSON"), 
-            "Exception message should indicate canonicalization failure");
+    private Map<String, Object> map(Object... pairs) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        for (int i = 0; i < pairs.length; i += 2) {
+            m.put((String) pairs[i], pairs[i + 1]);
+        }
+        return m;
+    }
+
+    private void assertSuccess(StepResult<SigningContext> result) {
+        assertInstanceOf(StepResult.Success.class, result);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> canonicalizedResources(StepResult<SigningContext> result) {
+        SigningContext ctx = ((StepResult.Success<SigningContext>) result).context();
+        return ctx.getAttribute(JsonCanonicalizationStep.CANONICALIZED_RESOURCES_KEY, List.class).orElseThrow();
     }
 }
