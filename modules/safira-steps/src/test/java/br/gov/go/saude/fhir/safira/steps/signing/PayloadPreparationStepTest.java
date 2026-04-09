@@ -6,17 +6,18 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.Provenance;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.Reference;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class PayloadPreparationStepTest {
 
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     private PayloadPreparationStep step;
 
     @BeforeEach
@@ -28,22 +29,21 @@ class PayloadPreparationStepTest {
 
     @Test
     void shouldStorePreparedResourcesInContextAttributes() {
-        Map<String, Object> resource = map("resourceType", "Patient", "id", "p1");
+        String resource = "{\"resourceType\":\"Patient\",\"id\":\"p1\"}";
         var context = context(bundle(entry("urn:uuid:p1", resource)), provenance("urn:uuid:p1"));
 
         var result = step.execute(context);
 
         assertSuccess(result);
-        var prepared = preparedResources(result);
-        assertEquals(1, prepared.size());
+        assertEquals(1, preparedResources(result).size());
     }
 
     // ===== Ordem preservada =====
 
     @Test
     void shouldPreserveTargetOrderFromProvenance() {
-        Map<String, Object> r1 = map("resourceType", "Patient", "id", "p1");
-        Map<String, Object> r2 = map("resourceType", "Observation", "id", "obs1");
+        String r1 = "{\"resourceType\":\"Patient\",\"id\":\"p1\"}";
+        String r2 = "{\"resourceType\":\"Observation\",\"id\":\"obs1\"}";
         Bundle bundle = Bundle.builder()
                 .resourceType("Bundle")
                 .entry(List.of(entry("urn:uuid:p1", r1), entry("urn:uuid:obs1", r2)))
@@ -58,100 +58,82 @@ class PayloadPreparationStepTest {
         assertSuccess(result);
         var prepared = preparedResources(result);
         assertEquals(2, prepared.size());
-        assertEquals("Observation", prepared.get(0).get("resourceType"));
-        assertEquals("Patient", prepared.get(1).get("resourceType"));
+        assertTrue(prepared.get(0).contains("\"Observation\""));
+        assertTrue(prepared.get(1).contains("\"Patient\""));
     }
 
     // ===== Remoção de elementos não assinados =====
 
     @Test
-    void shouldRemoveIdFromResource() {
-        Map<String, Object> resource = map("resourceType", "Patient", "id", "p1", "name", "João");
+    void shouldRemoveIdFromResource() throws Exception {
+        String resource = "{\"resourceType\":\"Patient\",\"id\":\"p1\",\"name\":\"João\"}";
         var context = context(bundle(entry("urn:uuid:p1", resource)), provenance("urn:uuid:p1"));
 
         var result = step.execute(context);
 
         assertSuccess(result);
-        Map<String, Object> prepared = preparedResources(result).getFirst();
-        assertFalse(prepared.containsKey("id"));
-        assertEquals("João", prepared.get("name"));
+        JsonNode prepared = MAPPER.readTree(preparedResources(result).getFirst());
+        assertFalse(prepared.has("id"));
+        assertEquals("João", prepared.get("name").asText());
     }
 
     @Test
-    void shouldRemoveMetaTransientFieldsFromResource() {
-        Map<String, Object> meta = new LinkedHashMap<>();
-        meta.put("versionId", "1");
-        meta.put("lastUpdated", "2024-01-01T00:00:00Z");
-        meta.put("source", "http://source.example.com");
-        meta.put("tag", List.of(Map.of("system", "http://tag.example", "code", "T1")));
-        meta.put("profile", List.of("https://example.com/profile|1.0"));
-        Map<String, Object> resource = map("resourceType", "Patient");
-        resource.put("meta", meta);
+    void shouldRemoveMetaTransientFieldsFromResource() throws Exception {
+        String resource = "{\"resourceType\":\"Patient\",\"meta\":{\"versionId\":\"1\",\"lastUpdated\":\"2024-01-01\",\"source\":\"http://x\",\"tag\":[{\"code\":\"T1\"}],\"profile\":[\"http://p\"]}}";
         var context = context(bundle(entry("urn:uuid:p1", resource)), provenance("urn:uuid:p1"));
 
         var result = step.execute(context);
 
         assertSuccess(result);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> preparedMeta = (Map<String, Object>) preparedResources(result).getFirst().get("meta");
-        assertNotNull(preparedMeta);
-        assertFalse(preparedMeta.containsKey("versionId"));
-        assertFalse(preparedMeta.containsKey("lastUpdated"));
-        assertFalse(preparedMeta.containsKey("source"));
-        assertFalse(preparedMeta.containsKey("tag"));
-        assertTrue(preparedMeta.containsKey("profile"));
+        JsonNode prepared = MAPPER.readTree(preparedResources(result).getFirst());
+        JsonNode meta = prepared.get("meta");
+        assertNotNull(meta);
+        assertFalse(meta.has("versionId"));
+        assertFalse(meta.has("lastUpdated"));
+        assertFalse(meta.has("source"));
+        assertFalse(meta.has("tag"));
+        assertTrue(meta.has("profile"));
     }
 
     @Test
-    void shouldRemoveMetaWhenEmptyAfterStripping() {
-        Map<String, Object> meta = new LinkedHashMap<>();
-        meta.put("versionId", "1");
-        meta.put("lastUpdated", "2024-01-01T00:00:00Z");
-        Map<String, Object> resource = map("resourceType", "Patient");
-        resource.put("meta", meta);
+    void shouldKeepMetaProfileAndSecurityFields() throws Exception {
+        String resource = "{\"resourceType\":\"Patient\",\"meta\":{\"versionId\":\"2\",\"lastUpdated\":\"2024-01-01\",\"profile\":[\"http://p\"],\"security\":[{\"code\":\"N\"}]}}";
         var context = context(bundle(entry("urn:uuid:p1", resource)), provenance("urn:uuid:p1"));
 
         var result = step.execute(context);
 
         assertSuccess(result);
-        Map<String, Object> prepared = preparedResources(result).getFirst();
-        assertFalse(prepared.containsKey("meta"));
+        JsonNode meta = MAPPER.readTree(preparedResources(result).getFirst()).get("meta");
+        assertNotNull(meta);
+        assertFalse(meta.has("versionId"));
+        assertFalse(meta.has("lastUpdated"));
+        assertTrue(meta.has("profile"));
+        assertTrue(meta.has("security"));
     }
 
     @Test
-    void shouldKeepMetaProfileAndSecurityFields() {
-        Map<String, Object> meta = new LinkedHashMap<>();
-        meta.put("versionId", "2");
-        meta.put("lastUpdated", "2024-01-01T00:00:00Z");
-        meta.put("profile", List.of("https://example.com/profile|1.0"));
-        meta.put("security", List.of(Map.of("system", "http://sec.example", "code", "N")));
-        Map<String, Object> resource = map("resourceType", "Patient");
-        resource.put("meta", meta);
+    void shouldRemoveMetaWhenEmptyAfterStripping() throws Exception {
+        String resource = "{\"resourceType\":\"Patient\",\"meta\":{\"versionId\":\"1\",\"lastUpdated\":\"2024-01-01\"}}";
         var context = context(bundle(entry("urn:uuid:p1", resource)), provenance("urn:uuid:p1"));
 
         var result = step.execute(context);
 
         assertSuccess(result);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> preparedMeta = (Map<String, Object>) preparedResources(result).getFirst().get("meta");
-        assertNotNull(preparedMeta);
-        assertFalse(preparedMeta.containsKey("versionId"));
-        assertFalse(preparedMeta.containsKey("lastUpdated"));
-        assertTrue(preparedMeta.containsKey("profile"));
-        assertTrue(preparedMeta.containsKey("security"));
+        JsonNode prepared = MAPPER.readTree(preparedResources(result).getFirst());
+        assertFalse(prepared.has("meta"));
     }
 
     @Test
-    void shouldNotModifyResourceWithoutIdOrMeta() {
-        Map<String, Object> resource = map("resourceType", "Patient", "name", "Maria");
+    void shouldNotModifyResourceWithoutIdOrMeta() throws Exception {
+        String resource = "{\"resourceType\":\"Patient\",\"name\":\"Maria\"}";
         var context = context(bundle(entry("urn:uuid:p1", resource)), provenance("urn:uuid:p1"));
 
         var result = step.execute(context);
 
         assertSuccess(result);
-        Map<String, Object> prepared = preparedResources(result).getFirst();
-        assertEquals("Patient", prepared.get("resourceType"));
-        assertEquals("Maria", prepared.get("name"));
+        JsonNode prepared = MAPPER.readTree(preparedResources(result).getFirst());
+        assertEquals("Patient", prepared.get("resourceType").asText());
+        assertEquals("Maria", prepared.get("name").asText());
     }
 
     // ===== Falha defensiva =====
@@ -160,7 +142,7 @@ class PayloadPreparationStepTest {
     void shouldReturnFailureWhenTargetReferenceNotFoundInBundle() {
         Bundle bundle = Bundle.builder()
                 .resourceType("Bundle")
-                .entry(List.of(entry("urn:uuid:p1", map("resourceType", "Patient"))))
+                .entry(List.of(entry("urn:uuid:p1", "{\"resourceType\":\"Patient\"}")))
                 .build();
         Provenance provenance = Provenance.builder()
                 .resourceType("Provenance")
@@ -190,7 +172,7 @@ class PayloadPreparationStepTest {
                 .build();
     }
 
-    private Bundle.BundleEntry entry(String fullUrl, Map<String, Object> resource) {
+    private Bundle.BundleEntry entry(String fullUrl, String resource) {
         return Bundle.BundleEntry.builder()
                 .fullUrl(fullUrl)
                 .resource(resource)
@@ -200,7 +182,7 @@ class PayloadPreparationStepTest {
     private Provenance provenance(String... refs) {
         return Provenance.builder()
                 .resourceType("Provenance")
-                .target(List.of(refs).stream().map(this::ref).toList())
+                .target(java.util.Arrays.stream(refs).map(this::ref).toList())
                 .build();
     }
 
@@ -208,20 +190,12 @@ class PayloadPreparationStepTest {
         return Reference.builder().reference(reference).build();
     }
 
-    private Map<String, Object> map(Object... pairs) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        for (int i = 0; i < pairs.length; i += 2) {
-            m.put((String) pairs[i], pairs[i + 1]);
-        }
-        return m;
-    }
-
     private void assertSuccess(StepResult<SigningContext> result) {
         assertInstanceOf(StepResult.Success.class, result);
     }
 
     @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> preparedResources(StepResult<SigningContext> result) {
+    private List<String> preparedResources(StepResult<SigningContext> result) {
         SigningContext ctx = ((StepResult.Success<SigningContext>) result).context();
         return ctx.getAttribute(PayloadPreparationStep.PREPARED_RESOURCES_KEY, List.class).orElseThrow();
     }

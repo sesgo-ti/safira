@@ -82,9 +82,9 @@ class SigningInputMapperTest {
         assertEquals("123", context.getBundle().id());
         assertEquals(2, context.getBundle().entry().size());
         assertEquals("urn:uuid:abc", context.getBundle().entry().get(0).fullUrl());
-        assertTrue(context.getBundle().entry().get(0).resource().containsKey("resourceType"));
+        assertTrue(context.getBundle().entry().get(0).resource().contains("\"resourceType\""));
         assertEquals("urn:uuid:def", context.getBundle().entry().get(1).fullUrl());
-        assertEquals("Provenance", context.getBundle().entry().get(1).resource().get("resourceType"));
+        assertTrue(context.getBundle().entry().get(1).resource().contains("\"resourceType\":\"Provenance\""));
         assertNotNull(context.getBundle().rawJson());
 
         // Validate Provenance
