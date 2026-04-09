@@ -9,23 +9,26 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 @StepId("payload-preparation")
 public class PayloadPreparationStep implements SigningStep {
 
     public static final String PREPARED_RESOURCES_KEY = "preparedResources";
 
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     @Override
     public StepResult<SigningContext> execute(SigningContext context) {
         Bundle bundle = context.getBundle();
         Provenance provenance = context.getProvenance();
 
-        List<Map<String, Object>> preparedResources = new ArrayList<>();
+        List<String> preparedResources = new ArrayList<>();
 
         for (Reference target : provenance.target()) {
             String ref = target.reference();
@@ -36,7 +39,13 @@ public class PayloadPreparationStep implements SigningStep {
                         "A instância referenciada em Provenance.target não foi encontrada no Bundle: " + ref, context);
             }
 
-            preparedResources.add(stripUnsignedElements(entry.get().resource()));
+            try {
+                String stripped = stripUnsignedElements(entry.get().resource());
+                preparedResources.add(stripped);
+            } catch (Exception e) {
+                throw new StepException(SignatureExceptionCode.FORMAT_BUNDLE_MALFORMED,
+                        "Erro ao processar recurso para assinatura: " + e.getMessage(), e);
+            }
         }
 
         SigningContext updated = context.toBuilder()
@@ -46,31 +55,22 @@ public class PayloadPreparationStep implements SigningStep {
         return StepResult.success(getName(), updated);
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> stripUnsignedElements(Map<String, Object> resource) {
-        Map<String, Object> copy = new LinkedHashMap<>(resource);
-        copy.remove("id");
+    private String stripUnsignedElements(String resourceJson) throws Exception {
+        ObjectNode node = (ObjectNode) MAPPER.readTree(resourceJson);
+        node.remove("id");
 
-        Object metaValue = copy.get("meta");
-        if (metaValue == null) return copy;
-
-        if (!(metaValue instanceof Map)) {
-            throw new StepException(SignatureExceptionCode.FORMAT_BUNDLE_MALFORMED,
-                    "O campo 'meta' deve ser um objeto JSON.");
+        JsonNode metaNode = node.get("meta");
+        if (metaNode != null && metaNode.isObject()) {
+            ObjectNode meta = (ObjectNode) metaNode;
+            meta.remove("versionId");
+            meta.remove("lastUpdated");
+            meta.remove("source");
+            meta.remove("tag");
+            if (meta.isEmpty()) {
+                node.remove("meta");
+            }
         }
 
-        Map<String, Object> meta = new LinkedHashMap<>((Map<String, Object>) metaValue);
-        meta.remove("versionId");
-        meta.remove("lastUpdated");
-        meta.remove("source");
-        meta.remove("tag");
-
-        if (meta.isEmpty()) {
-            copy.remove("meta");
-        } else {
-            copy.put("meta", meta);
-        }
-
-        return copy;
+        return MAPPER.writeValueAsString(node);
     }
 }

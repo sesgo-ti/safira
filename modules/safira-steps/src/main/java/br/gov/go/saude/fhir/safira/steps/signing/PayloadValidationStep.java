@@ -10,15 +10,17 @@ import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
 import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @StepId("payload-validation")
 public class PayloadValidationStep implements SigningStep {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Override
     public StepResult<SigningContext> execute(SigningContext context) {
@@ -92,7 +94,7 @@ public class PayloadValidationStep implements SigningStep {
                   return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_PROVENANCE_TARGET_DUPLICATE, "Existem alvos duplicados no Provenance.", context);
              }
         }
-        
+
         if (config != null && config.security() != null && prov.target().size() > config.security().maxEntriesBundle()) {
              return StepResult.failure(getName(), SignatureExceptionCode.SECURITY_PROVENANCE_SIZE_LIMIT_EXCEEDED, "O número de alvos no Provenance excede o limite permitido.", context);
         }
@@ -107,13 +109,16 @@ public class PayloadValidationStep implements SigningStep {
                 return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_TARGET_REFERENCE_MISSING, "O alvo '" + refUri + "' definido no Provenance não foi encontrado dentro do Bundle.", context);
             }
 
-            Map<String, Object> resource = matchedEntry.get().resource();
-            if (resource == null || resource.isEmpty()) {
-                return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_BUNDLE_RESOURCE_MISSING, "A entry '" + refUri + "' do Bundle não contém a propriedade 'resource'.", context);
-            }
-
-            if (!resource.containsKey("resourceType")) {
-                return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_BUNDLE_MALFORMED, "A entry '" + refUri + "' do Bundle não possui a propriedade 'resourceType'.", context);
+            try {
+                JsonNode resource = MAPPER.readTree(matchedEntry.get().resource());
+                if (resource == null || resource.isEmpty()) {
+                    return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_BUNDLE_RESOURCE_MISSING, "A entry '" + refUri + "' do Bundle não contém a propriedade 'resource'.", context);
+                }
+                if (!resource.has("resourceType")) {
+                    return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_BUNDLE_MALFORMED, "A entry '" + refUri + "' do Bundle não possui a propriedade 'resourceType'.", context);
+                }
+            } catch (Exception e) {
+                return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_BUNDLE_MALFORMED, "O recurso na entry '" + refUri + "' não é um JSON válido.", context);
             }
         }
         return null;
@@ -123,58 +128,55 @@ public class PayloadValidationStep implements SigningStep {
         Set<String> targetRefs = prov.target().stream().map(Reference::reference).collect(Collectors.toSet());
         for (BundleEntry entry : bundle.entry()) {
             if (targetRefs.contains(entry.fullUrl())) {
-                Map<String, Object> resource = entry.resource();
-                StepResult<SigningContext> fail = traverseAndValidateReferences(resource, entry.fullUrl(), context);
+                try {
+                    JsonNode resource = MAPPER.readTree(entry.resource());
+                    StepResult<SigningContext> fail = traverseAndValidateReferences(resource, entry.fullUrl(), context);
+                    if (fail != null) return fail;
+                } catch (Exception e) {
+                    return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_BUNDLE_MALFORMED, "JSON inválido no recurso: " + entry.fullUrl(), context);
+                }
+            }
+        }
+        return null;
+    }
+
+    private StepResult<SigningContext> traverseAndValidateReferences(JsonNode node, String rootUrl, SigningContext context) {
+        if (node == null || node.isNull()) return null;
+
+        if (node.isObject()) {
+            if (node.has("reference") || node.has("identifier")) {
+                StepResult<SigningContext> fail = validateReferenceNode(node, rootUrl, context);
+                if (fail != null) return fail;
+            }
+            // Always recurse into child fields, even for Reference nodes
+            var fields = node.fields();
+            while (fields.hasNext()) {
+                var field = fields.next();
+                StepResult<SigningContext> fail = traverseAndValidateReferences(field.getValue(), rootUrl, context);
+                if (fail != null) return fail;
+            }
+        } else if (node.isArray()) {
+            for (JsonNode item : node) {
+                StepResult<SigningContext> fail = traverseAndValidateReferences(item, rootUrl, context);
                 if (fail != null) return fail;
             }
         }
         return null;
     }
 
-    @SuppressWarnings("unchecked")
-    private StepResult<SigningContext> traverseAndValidateReferences(Map<String, Object> node, String rootUrl, SigningContext context) {
-        if (node == null) return null;
-        
-        for (Map.Entry<String, Object> kv : node.entrySet()) {
-            Object val = kv.getValue();
-            if (val instanceof Map map) {
-                if (map.containsKey("reference") || map.containsKey("identifier")) {
-                    StepResult<SigningContext> fail = validateReferenceNode(map, rootUrl, context);
-                    if (fail != null) return fail;
-                } else {
-                    StepResult<SigningContext> fail = traverseAndValidateReferences(map, rootUrl, context);
-                    if (fail != null) return fail;
-                }
-            } else if (val instanceof List list) {
-                for (Object item : list) {
-                    if (item instanceof Map mapItem) {
-                        if (mapItem.containsKey("reference") || mapItem.containsKey("identifier")) {
-                            StepResult<SigningContext> fail = validateReferenceNode(mapItem, rootUrl, context);
-                            if (fail != null) return fail;
-                        } else {
-                            StepResult<SigningContext> fail = traverseAndValidateReferences(mapItem, rootUrl, context);
-                            if (fail != null) return fail;
-                        }
-                    }
-                }
-            }
-        }
-        return null;
-    }
+    private StepResult<SigningContext> validateReferenceNode(JsonNode refNode, String rootUrl, SigningContext context) {
+        boolean hasRef = refNode.has("reference") && !refNode.get("reference").isNull();
+        boolean hasId = refNode.has("identifier") && !refNode.get("identifier").isNull();
 
-    private StepResult<SigningContext> validateReferenceNode(Map<String, Object> refNode, String rootUrl, SigningContext context) {
-        boolean hasRef = refNode.get("reference") != null;
-        boolean hasId = refNode.get("identifier") != null;
-
-        if (hasId && !hasRef) return null; 
+        if (hasId && !hasRef) return null;
         if (!hasId && hasRef) {
-            String refUri = String.valueOf(refNode.get("reference"));
-            if (refUri.startsWith("urn:uuid:")) return null; 
-            if (refUri.startsWith("#")) return null; 
-            
+            String refUri = refNode.get("reference").asText();
+            if (refUri.startsWith("urn:uuid:")) return null;
+            if (refUri.startsWith("#")) return null;
+
             return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_REFERENCE_INVALID, "Referência inválida detectada. As referências internas devem usar UUIDs (urn:uuid:) ou relativas ('#'). Origem: " + rootUrl, context);
         }
-        
-        return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_REFERENCE_INVALID, "Conflito encontrado: As propriedades 'id' e 'reference' não podem ser fornecidas juntas numa mesma Reference. Origem: " + rootUrl, context);
+
+        return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_REFERENCE_INVALID, "Conflito encontrado: As propriedades 'identifier' e 'reference' não podem ser fornecidas juntas numa mesma Reference. Origem: " + rootUrl, context);
     }
 }
