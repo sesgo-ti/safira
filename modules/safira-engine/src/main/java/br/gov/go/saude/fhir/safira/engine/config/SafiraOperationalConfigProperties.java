@@ -96,9 +96,11 @@ public record SafiraOperationalConfigProperties(
      * @param timoutVerificationBundle Timeout (segundos) para verificação do Bundle. Padrão: 10. Intervalo: [5, 300].
      */
     public record SecurityLimitsProps(
-            @DefaultValue("1000")     Integer maxEntriesBundle,
-            @DefaultValue("52428800") Integer maxBundleSize,
-            @DefaultValue("10")       Integer timoutVerificationBundle
+            @DefaultValue("1000")        Integer maxEntriesBundle,
+            @DefaultValue("52428800")    Integer maxBundleSize,
+            @DefaultValue("10")          Integer timoutVerificationBundle,
+            @DefaultValue("1751328000")  Long minReferenceTimestamp,
+            @DefaultValue("4102444800")  Long maxReferenceTimestamp
     ) {}
 
     // -------------------------------------------------------------------------
