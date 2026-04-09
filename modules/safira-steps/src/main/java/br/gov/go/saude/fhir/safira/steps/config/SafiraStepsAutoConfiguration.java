@@ -3,6 +3,7 @@ package br.gov.go.saude.fhir.safira.steps.config;
 import br.gov.go.saude.fhir.safira.engine.domain.Step;
 import br.gov.go.saude.fhir.safira.steps.signing.ChainBuildStep;
 import br.gov.go.saude.fhir.safira.steps.signing.ChainValidationStep;
+import br.gov.go.saude.fhir.safira.steps.signing.ContentDigestStep;
 import br.gov.go.saude.fhir.safira.steps.signing.ContextValidationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.JsonCanonicalizationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.PayloadPreparationStep;
@@ -29,7 +30,8 @@ public class SafiraStepsAutoConfiguration {
             new ChainBuildStep(certificateChainResolver),
             new ChainValidationStep(trustStoreService, revocationService),
             new PayloadPreparationStep(),
-            new JsonCanonicalizationStep()
+            new JsonCanonicalizationStep(),
+            new ContentDigestStep()
         );
     }
 }

@@ -17,6 +17,7 @@ safira:
         - "chain-validation"
         - "payload-preparation"
         - "json-canonicalizer"
+        - "content-digest"
 
   # ---------------------------------------------------------------------------
   # Configurações Operacionais do Engine de Assinatura Digital
