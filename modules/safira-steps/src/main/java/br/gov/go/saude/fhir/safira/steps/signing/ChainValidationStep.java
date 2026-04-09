@@ -145,7 +145,7 @@ public class ChainValidationStep implements SigningStep {
         // 2.8 Validação de revogação (posição i de 0 a n-2)
         List<RevocationEvidence> evidences = new ArrayList<>();
         for (int i = 0; i < certs.size() - 1; i++) {
-            fail = checkRevocation(certs.get(i), certs.get(i + 1), i, evidences, context);
+            fail = checkRevocation(certs.get(i), certs.get(i + 1), evidences, context);
             if (fail != null) return fail;
         }
 
@@ -197,9 +197,10 @@ public class ChainValidationStep implements SigningStep {
     }
 
     private StepResult<SigningContext> checkRevocation(X509Certificate cert, X509Certificate issuer,
-                                                       int position, List<RevocationEvidence> evidences,
+                                                       List<RevocationEvidence> evidences,
                                                        SigningContext context) {
         RevocationStatus result = revocationService.check(cert, issuer);
+        String subject = cert.getSubjectX500Principal().getName();
         return switch (result) {
             case RevocationStatus.Good g -> {
                 if (g.responseDer() != null) {
@@ -213,24 +214,23 @@ public class ChainValidationStep implements SigningStep {
             }
             case RevocationStatus.Revoked r -> StepResult.failure(getName(),
                     SignatureExceptionCode.CERT_REVOKED,
-                    "O certificado na posição " + position + " foi revogado. Fonte: " + r.source() + ".", context);
+                    "O certificado [" + subject + "] foi revogado. Fonte: " + r.source() + ".", context);
             case RevocationStatus.NoDistributionPoints ignored -> StepResult.failure(getName(),
                     SignatureExceptionCode.REVOCATION_NO_DISTRIBUTION_POINTS,
-                    "O certificado na posição " + position + " não contém pontos de distribuição de " +
+                    "O certificado [" + subject + "] não contém pontos de distribuição de " +
                             "revogação válidos nas extensões AIA (OCSP) ou CDP (CRL).", context);
             case RevocationStatus.OcspUnavailable ignored -> StepResult.failure(getName(),
                     SignatureExceptionCode.REVOCATION_OCSP_UNAVAILABLE,
-                    "O serviço OCSP está inacessível ao verificar a revogação do certificado na posição " + position + ".", context);
+                    "O serviço OCSP está inacessível ao verificar a revogação do certificado [" + subject + "].", context);
             case RevocationStatus.CrlUnavailable ignored -> StepResult.failure(getName(),
                     SignatureExceptionCode.REVOCATION_CRL_UNAVAILABLE,
-                    "A lista CRL está inacessível ao verificar a revogação do certificado na posição " + position + ".", context);
+                    "A lista CRL está inacessível ao verificar a revogação do certificado [" + subject + "].", context);
             case RevocationStatus.NoConnectivity ignored -> StepResult.failure(getName(),
                     SignatureExceptionCode.REVOCATION_NO_CONNECTIVITY,
-                    "Sem conectividade externa para verificar a revogação do certificado na posição " + position + ".", context);
+                    "Sem conectividade externa para verificar a revogação do certificado [" + subject + "].", context);
             case RevocationStatus.Malformed m -> StepResult.failure(getName(),
                     SignatureExceptionCode.REVOCATION_RESPONSE_MALFORMED,
-                    "A resposta de revogação está malformada ao verificar o certificado na posição " +
-                            position + ". Fonte: " + m.source() + ".", context);
+                    "A resposta de revogação está malformada ao verificar o certificado [" + subject + "]. Fonte: " + m.source() + ".", context);
         };
     }
 
