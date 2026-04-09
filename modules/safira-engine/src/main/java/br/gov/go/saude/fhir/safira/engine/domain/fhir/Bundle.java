@@ -4,6 +4,7 @@ import lombok.Builder;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Simplified representation of a FHIR Bundle restricted to the exact needs
@@ -18,6 +19,12 @@ public record Bundle(
         // Raw bundle in json format
         String rawJson
 ) {
+    public Optional<BundleEntry> findEntryByFullUrl(String fullUrl) {
+        return entry.stream()
+                .filter(e -> e.fullUrl().equals(fullUrl))
+                .findFirst();
+    }
+
     @Builder
     public record BundleEntry(
             String fullUrl,

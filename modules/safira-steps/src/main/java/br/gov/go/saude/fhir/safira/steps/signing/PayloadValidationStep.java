@@ -100,21 +100,19 @@ public class PayloadValidationStep implements SigningStep {
     }
 
     private StepResult<SigningContext> verifyCrossReferences(Bundle bundle, Provenance prov, SigningContext context) {
-        Map<String, BundleEntry> bundleEntryMap = bundle.entry().stream()
-                .collect(Collectors.toMap(BundleEntry::fullUrl, e -> e));
-
         for (Reference targetRef : prov.target()) {
             String refUri = targetRef.reference();
-            BundleEntry matchedEntry = bundleEntryMap.get(refUri);
-            if (matchedEntry == null) {
+            var matchedEntry = bundle.findEntryByFullUrl(refUri);
+            if (matchedEntry.isEmpty()) {
                 return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_TARGET_REFERENCE_MISSING, "O alvo '" + refUri + "' definido no Provenance não foi encontrado dentro do Bundle.", context);
             }
-                
-            if (matchedEntry.resource() == null || matchedEntry.resource().isEmpty()) {
+
+            Map<String, Object> resource = matchedEntry.get().resource();
+            if (resource == null || resource.isEmpty()) {
                 return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_BUNDLE_RESOURCE_MISSING, "A entry '" + refUri + "' do Bundle não contém a propriedade 'resource'.", context);
             }
-            
-            if (!matchedEntry.resource().containsKey("resourceType")) {
+
+            if (!resource.containsKey("resourceType")) {
                 return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_BUNDLE_MALFORMED, "A entry '" + refUri + "' do Bundle não possui a propriedade 'resourceType'.", context);
             }
         }

@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @StepId("payload-preparation")
 public class PayloadPreparationStep implements SigningStep {
@@ -25,21 +24,18 @@ public class PayloadPreparationStep implements SigningStep {
         Bundle bundle = context.getBundle();
         Provenance provenance = context.getProvenance();
 
-        Map<String, Map<String, Object>> bundleIndex = bundle.entry().stream()
-                .collect(Collectors.toMap(Bundle.BundleEntry::fullUrl, Bundle.BundleEntry::resource, (a, b) -> a));
-
         List<Map<String, Object>> preparedResources = new ArrayList<>();
 
         for (Reference target : provenance.target()) {
             String ref = target.reference();
-            Map<String, Object> resource = bundleIndex.get(ref);
+            var entry = bundle.findEntryByFullUrl(ref);
 
-            if (resource == null) {
+            if (entry.isEmpty()) {
                 return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_TARGET_REFERENCE_MISSING,
                         "A instância referenciada em Provenance.target não foi encontrada no Bundle: " + ref, context);
             }
 
-            preparedResources.add(stripUnsignedElements(resource));
+            preparedResources.add(stripUnsignedElements(entry.get().resource()));
         }
 
         SigningContext updated = context.toBuilder()
