@@ -84,6 +84,29 @@ class PayloadPreparationStepTest {
         meta.put("lastUpdated", "2024-01-01T00:00:00Z");
         meta.put("source", "http://source.example.com");
         meta.put("tag", List.of(Map.of("system", "http://tag.example", "code", "T1")));
+        meta.put("profile", List.of("https://example.com/profile|1.0"));
+        Map<String, Object> resource = map("resourceType", "Patient");
+        resource.put("meta", meta);
+        var context = context(bundle(entry("urn:uuid:p1", resource)), provenance("urn:uuid:p1"));
+
+        var result = step.execute(context);
+
+        assertSuccess(result);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> preparedMeta = (Map<String, Object>) preparedResources(result).getFirst().get("meta");
+        assertNotNull(preparedMeta);
+        assertFalse(preparedMeta.containsKey("versionId"));
+        assertFalse(preparedMeta.containsKey("lastUpdated"));
+        assertFalse(preparedMeta.containsKey("source"));
+        assertFalse(preparedMeta.containsKey("tag"));
+        assertTrue(preparedMeta.containsKey("profile"));
+    }
+
+    @Test
+    void shouldRemoveMetaWhenEmptyAfterStripping() {
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("versionId", "1");
+        meta.put("lastUpdated", "2024-01-01T00:00:00Z");
         Map<String, Object> resource = map("resourceType", "Patient");
         resource.put("meta", meta);
         var context = context(bundle(entry("urn:uuid:p1", resource)), provenance("urn:uuid:p1"));

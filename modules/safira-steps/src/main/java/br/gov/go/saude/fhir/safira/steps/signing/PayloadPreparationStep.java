@@ -26,7 +26,7 @@ public class PayloadPreparationStep implements SigningStep {
         Provenance provenance = context.getProvenance();
 
         Map<String, Map<String, Object>> bundleIndex = bundle.entry().stream()
-                .collect(Collectors.toMap(Bundle.BundleEntry::fullUrl, Bundle.BundleEntry::resource));
+                .collect(Collectors.toMap(Bundle.BundleEntry::fullUrl, Bundle.BundleEntry::resource, (a, b) -> a));
 
         List<Map<String, Object>> preparedResources = new ArrayList<>();
 
