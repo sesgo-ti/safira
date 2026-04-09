@@ -63,7 +63,7 @@ public class ChainBuildStep implements SigningStep {
             }
         }
 
-        // Monta a cadeia caso o usuário forneça somente 1 certificado (o certificado do signitário)
+        // Monta a cadeia caso o usuário forneça somente 1 certificado (o certificado do signatário)
         X509Certificate[] certArray;
         if (certs.size() == 1) {
             try {

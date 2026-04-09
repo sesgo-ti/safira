@@ -93,7 +93,7 @@ class ChainBuildStepTest {
         assertFailure(result, SignatureExceptionCode.CERT_INVALID_FORMAT);
     }
 
-    // ===== Cadeia com 1 certificado: mountChain retorna incompleta =====
+    // ===== Cadeia com 1 certificado: resolveChain retorna incompleta =====
 
     @Test
     void shouldReturnCertChainIncompleteWhenResolveChainThrowsIncompleteChainException() throws Exception {
