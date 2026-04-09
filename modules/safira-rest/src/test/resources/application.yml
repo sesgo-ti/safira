@@ -13,6 +13,8 @@ safira:
     - version: "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|0.1.0"
       operation: SIGNING
       steps:
+        - "chain-build"
+        - "chain-validation"
         - "json-canonicalizer"
 
   # ---------------------------------------------------------------------------
@@ -106,6 +108,9 @@ safira:
       # uma nova versão deve ser obtida obrigatoriamente.
       ttl-maximo: 10080
 
+      # Data mínima de emissão do certificado do signatário (epoch seconds, UTC).
+      minimum-certificate-date: 1751328000
+
     # -------------------------------------------------------------------------
     # Limites de segurança para processamento de Bundles FHIR
     # -------------------------------------------------------------------------
@@ -121,6 +126,12 @@ safira:
       # Timeout (em segundos) para verificação do Bundle.
       # Padrão: 10 | Intervalo válido: [5, 300]
       timout-verification-bundle: 10
+
+      # Limite inferior (epoch seconds) do timestamp de referência. Padrão: 1751328000 (2025-07-01T00:00:00Z).
+      min-reference-timestamp: 1751328000
+
+      # Limite superior (epoch seconds) do timestamp de referência. Padrão: 4102444800 (2100-01-01T00:00:00Z).
+      max-reference-timestamp: 4102444800
 
     # -------------------------------------------------------------------------
     # Middleware criptográfico para SMARTCARD / TOKEN (PKCS#11)

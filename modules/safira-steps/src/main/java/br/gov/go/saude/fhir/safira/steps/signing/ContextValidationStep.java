@@ -54,7 +54,10 @@ public class ContextValidationStep implements SigningStep {
         if (refTs == null) {
             return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_INVALID_TIMESTAMP, "O Timestamp de referência não foi fornecido.", context);
         }
-        if (refTs < 1751328000L || refTs > 4102444800L) {
+        var security = context.getOperationalConfig().security();
+        long min = security.minReferenceTimestamp();
+        long max = security.maxReferenceTimestamp();
+        if (refTs < min || refTs > max) {
             return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_TIMEOUT_OUT_OF_RANGE, "O Timestamp de referência está fora do intervalo seguro permitido para assinatura.", context);
         }
         return null;

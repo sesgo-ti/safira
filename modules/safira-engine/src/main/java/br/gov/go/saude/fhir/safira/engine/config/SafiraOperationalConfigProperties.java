@@ -68,6 +68,8 @@ public record SafiraOperationalConfigProperties(
      * @param refresh                  Intervalo (minutos) para verificação de novo conteúdo na ICP-Brasil. Padrão: 1440.
      * @param ttlCritico               TTL de alerta (minutos): sinaliza conteúdo local próximo do vencimento. Padrão: 2880.
      * @param ttlMaximo                TTL máximo (minutos): após este ponto o truststore local é ignorado. Padrão: 10080.
+     * @param minimumCertificateDate   Data mínima de emissão do certificado (epoch seconds). Certificados emitidos antes desta data
+     *                                 são rejeitados por não atenderem aos requisitos de segurança vigentes. Padrão: 1751328000 (2025-07-01T00:00:00Z).
      */
     public record TrustStoreProps(
             String icpbrasilUrlCertificados,
@@ -80,7 +82,8 @@ public record SafiraOperationalConfigProperties(
             String bucket,
             @DefaultValue("1440")  Integer refresh,
             @DefaultValue("2880")  Integer ttlCritico,
-            @DefaultValue("10080") Integer ttlMaximo
+            @DefaultValue("10080") Integer ttlMaximo,
+            @DefaultValue("1751328000") Long minimumCertificateDate
     ) {}
 
     // -------------------------------------------------------------------------
@@ -93,9 +96,11 @@ public record SafiraOperationalConfigProperties(
      * @param timoutVerificationBundle Timeout (segundos) para verificação do Bundle. Padrão: 10. Intervalo: [5, 300].
      */
     public record SecurityLimitsProps(
-            @DefaultValue("1000")     Integer maxEntriesBundle,
-            @DefaultValue("52428800") Integer maxBundleSize,
-            @DefaultValue("10")       Integer timoutVerificationBundle
+            @DefaultValue("1000")        Integer maxEntriesBundle,
+            @DefaultValue("52428800")    Integer maxBundleSize,
+            @DefaultValue("10")          Integer timoutVerificationBundle,
+            @DefaultValue("1751328000")  Long minReferenceTimestamp,
+            @DefaultValue("4102444800")  Long maxReferenceTimestamp
     ) {}
 
     // -------------------------------------------------------------------------
