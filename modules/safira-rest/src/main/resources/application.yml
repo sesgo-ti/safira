@@ -20,6 +20,7 @@ safira:
         - "content-digest"
         - "protected-header"
         - "signing-input"
+        - "crypto-signing"
 
   # ---------------------------------------------------------------------------
   # Configurações Operacionais do Engine de Assinatura Digital

@@ -5,6 +5,7 @@ import br.gov.go.saude.fhir.safira.steps.signing.ChainBuildStep;
 import br.gov.go.saude.fhir.safira.steps.signing.ChainValidationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.ContentDigestStep;
 import br.gov.go.saude.fhir.safira.steps.signing.ContextValidationStep;
+import br.gov.go.saude.fhir.safira.steps.signing.CryptoSigningStep;
 import br.gov.go.saude.fhir.safira.steps.signing.JsonCanonicalizationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.PayloadPreparationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.PayloadValidationStep;
@@ -35,7 +36,8 @@ public class SafiraStepsAutoConfiguration {
             new JsonCanonicalizationStep(),
             new ContentDigestStep(),
             new ProtectedHeaderStep(),
-            new SigningInputStep()
+            new SigningInputStep(),
+            new CryptoSigningStep()
         );
     }
 }
