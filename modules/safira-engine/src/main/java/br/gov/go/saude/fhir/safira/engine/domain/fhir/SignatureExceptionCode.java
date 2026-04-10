@@ -104,6 +104,7 @@ public enum SignatureExceptionCode {
     CONFIG_TIMEOUT_OUT_OF_RANGE("CONFIG.TIMEOUT-OUT-OF-RANGE", "Timeout Fora da Faixa", "error", "CONFIG"),
     CONFIG_TSA_AUTH_FAILED("CONFIG.TSA-AUTH-FAILED", "Falha na Autenticação TSA", "error", "CONFIG"),
     CONFIG_TSA_URL_INVALID("CONFIG.TSA-URL-INVALID", "URL da TSA Inválida", "error", "CONFIG"),
+    CONFIG_TSA_CONFIG_MISSING("CONFIG.TSA-CONFIG-MISSING", "Configuração da TSA Ausente", "error", "CONFIG"),
     CONFIG_TRUST_STORE_TYPE_INVALID("CONFIG.TRUST-STORE-TYPE-INVALID", "Tipo de Trust Store Inválido", "error", "CONFIG"),
     CONFIG_TRUST_STORE_EMPTY("CONFIG.TRUST-STORE-EMPTY", "Trust Store Vazio", "error", "CONFIG"),
     CONFIG_TRUST_STORE_REFERENCE_INVALID("CONFIG.TRUST-STORE-REFERENCE-INVALID", "Referência de Trust Store Inválida", "error", "CONFIG"),
