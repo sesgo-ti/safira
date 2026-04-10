@@ -14,7 +14,6 @@ safira:
       operation: SIGNING
       steps:
         - "chain-build"
-        - "chain-validation"
         - "payload-preparation"
         - "json-canonicalizer"
         - "content-digest"
