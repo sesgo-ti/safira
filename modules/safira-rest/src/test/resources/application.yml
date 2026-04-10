@@ -21,6 +21,7 @@ safira:
         - "protected-header"
         - "signing-input"
         - "crypto-signing"
+        - "jws-preliminary"
 
   # ---------------------------------------------------------------------------
   # Configurações Operacionais do Engine de Assinatura Digital
