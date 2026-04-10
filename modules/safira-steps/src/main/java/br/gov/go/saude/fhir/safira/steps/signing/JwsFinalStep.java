@@ -41,8 +41,10 @@ public class JwsFinalStep implements SigningStep {
     @SuppressWarnings("unchecked")
     @Override
     public StepResult<SigningContext> execute(SigningContext context) {
+        // deepCopy para não mutar o ObjectNode compartilhado no contexto — mantém o step puro.
         ObjectNode jws = context
                 .getAttribute(JwsPreliminaryStep.JWS_PRELIMINARY_KEY, ObjectNode.class)
+                .map(ObjectNode::deepCopy)
                 .orElseThrow(() -> new StepException(SignatureExceptionCode.CRYPTO_SIGNATURE_CREATION_FAILED,
                         "A estrutura JWS preliminar não foi encontrada no contexto."));
 
