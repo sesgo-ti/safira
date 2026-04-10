@@ -24,6 +24,7 @@ import org.bouncycastle.asn1.x509.GeneralNames;
 
 import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -82,6 +83,7 @@ public class FhirSignatureStep implements SigningStep {
                 .build();
 
         Signature signature = Signature.builder()
+                .when(Instant.ofEpochSecond(context.getReferenceTimestamp()))
                 .data(jwsFinal.getBytes(StandardCharsets.UTF_8))
                 .sigFormat(SIG_FORMAT)
                 .targetFormat(TARGET_FORMAT)

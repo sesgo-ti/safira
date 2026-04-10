@@ -61,6 +61,8 @@ class FhirSignatureStepTest {
         assertEquals("application/jose", signature.sigFormat());
         assertEquals("application/octet-stream", signature.targetFormat());
         assertArrayEquals(jws.getBytes(StandardCharsets.UTF_8), signature.data());
+        assertNotNull(signature.when());
+        assertEquals(1754006400L, signature.when().getEpochSecond());
         assertEquals("urn:brasil:cpf", signature.who().identifier().system());
         assertEquals("12345678901", signature.who().identifier().value());
         assertEquals(1, signature.type().size());
@@ -128,6 +130,7 @@ class FhirSignatureStepTest {
     private SigningContext contextWith(String jwsFinal, X509Certificate cert) {
         return SigningContext.builder()
                 .certificateChain(new X509Certificate[]{cert})
+                .referenceTimestamp(1754006400L)
                 .attribute(JwsFinalStep.JWS_FINAL_KEY, jwsFinal)
                 .build();
     }
