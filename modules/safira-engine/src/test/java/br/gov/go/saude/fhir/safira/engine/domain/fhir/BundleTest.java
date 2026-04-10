@@ -50,6 +50,23 @@ class BundleTest {
     }
 
     @Test
+    void shouldPreserveDecimalPrecisionInResource() {
+        String json = """
+                {
+                  "resourceType": "Bundle",
+                  "entry": [{
+                    "fullUrl": "urn:uuid:o1",
+                    "resource": {"resourceType": "Observation", "valueQuantity": {"value": 1.0}}
+                  }]
+                }
+                """;
+
+        Bundle bundle = Bundle.fromJson(json);
+
+        assertTrue(bundle.entry().getFirst().resource().contains("1.0"));
+    }
+
+    @Test
     void shouldThrowWhenJsonIsInvalid() {
         assertThrows(IllegalArgumentException.class, () -> Bundle.fromJson("{ invalid }"));
     }
