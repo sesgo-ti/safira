@@ -19,6 +19,7 @@ safira:
         - "json-canonicalizer"
         - "content-digest"
         - "protected-header"
+        - "signing-input"
 
   # ---------------------------------------------------------------------------
   # Configurações Operacionais do Engine de Assinatura Digital
