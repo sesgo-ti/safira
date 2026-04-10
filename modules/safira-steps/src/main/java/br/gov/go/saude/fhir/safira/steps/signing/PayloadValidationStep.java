@@ -38,7 +38,8 @@ public class PayloadValidationStep implements SigningStep {
         if ((fail = verifyBundleStructure(bundle, context.getOperationalConfig(), context)) != null) return fail;
         if ((fail = verifyProvenanceStructure(provenance, context.getOperationalConfig(), context)) != null) return fail;
         if ((fail = verifyCrossReferences(bundle, provenance, context)) != null) return fail;
-        if ((fail = verifyInnerContentReferences(bundle, provenance, context)) != null) return fail;
+        //TODO: validar requisitos para implementação
+//        if ((fail = verifyInnerContentReferences(bundle, provenance, context)) != null) return fail;
 
         return StepResult.success(getName(), context);
     }
