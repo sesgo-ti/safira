@@ -24,6 +24,7 @@ safira:
         - "jws-preliminary"
         - "tsa-timestamp"
         - "jws-final"
+        - "fhir-signature"
 
   # ---------------------------------------------------------------------------
   # Configurações Operacionais do Engine de Assinatura Digital
