@@ -151,7 +151,7 @@ public class ChainValidationStep implements SigningStep {
         }
 
         return StepResult.success(getName(), context.toBuilder()
-                .attribute(REVOCATION_EVIDENCES_KEY, evidences)
+                .attribute(REVOCATION_EVIDENCES_KEY, List.copyOf(evidences))
                 .build());
     }
 

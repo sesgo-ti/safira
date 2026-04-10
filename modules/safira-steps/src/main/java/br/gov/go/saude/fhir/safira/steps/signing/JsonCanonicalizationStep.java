@@ -32,7 +32,7 @@ public class JsonCanonicalizationStep implements SigningStep {
             }
 
             SigningContext updated = context.toBuilder()
-                    .attribute(CANONICALIZED_RESOURCES_KEY, canonicalized)
+                    .attribute(CANONICALIZED_RESOURCES_KEY, List.copyOf(canonicalized))
                     .build();
 
             return StepResult.success(getName(), updated);
