@@ -18,6 +18,7 @@ safira:
         - "payload-preparation"
         - "json-canonicalizer"
         - "content-digest"
+        - "protected-header"
 
   # ---------------------------------------------------------------------------
   # Configurações Operacionais do Engine de Assinatura Digital
