@@ -136,6 +136,20 @@ class PayloadPreparationStepTest {
         assertEquals("Maria", prepared.get("name").asText());
     }
 
+    // ===== Preservação de precisão numérica =====
+
+    @Test
+    void shouldPreserveDecimalPrecisionAfterStripping() {
+        String resource = "{\"resourceType\":\"Observation\",\"id\":\"o1\",\"valueQuantity\":{\"value\":1.0}}";
+        var context = context(bundle(entry("urn:uuid:o1", resource)), provenance("urn:uuid:o1"));
+
+        var result = step.execute(context);
+
+        assertSuccess(result);
+        String prepared = preparedResources(result).getFirst();
+        assertTrue(prepared.contains("1.0"));
+    }
+
     // ===== Falha defensiva =====
 
     @Test
