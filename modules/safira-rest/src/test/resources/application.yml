@@ -22,6 +22,7 @@ safira:
         - "signing-input"
         - "crypto-signing"
         - "jws-preliminary"
+        - "tsa-timestamp"
 
   # ---------------------------------------------------------------------------
   # Configurações Operacionais do Engine de Assinatura Digital

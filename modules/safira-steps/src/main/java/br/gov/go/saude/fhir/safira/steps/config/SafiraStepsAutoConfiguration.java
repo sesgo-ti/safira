@@ -12,6 +12,7 @@ import br.gov.go.saude.fhir.safira.steps.signing.PayloadPreparationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.PayloadValidationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.ProtectedHeaderStep;
 import br.gov.go.saude.fhir.safira.steps.signing.SigningInputStep;
+import br.gov.go.saude.fhir.safira.steps.signing.TsaTimestampStep;
 import br.gov.go.saude.fhir.truststore.icpbrasil.service.CertificateChainResolver;
 import br.gov.go.saude.fhir.truststore.icpbrasil.service.TrustStoreService;
 import br.gov.go.saude.fhir.truststore.icpbrasil.service.revocation.RevocationService;
@@ -39,7 +40,8 @@ public class SafiraStepsAutoConfiguration {
             new ProtectedHeaderStep(),
             new SigningInputStep(),
             new CryptoSigningStep(),
-            new JwsPreliminaryStep()
+            new JwsPreliminaryStep(),
+            new TsaTimestampStep()
         );
     }
 }
