@@ -13,6 +13,8 @@ safira:
     - version: "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|0.1.0"
       operation: SIGNING
       steps:
+        - "context-validation"
+        - "payload-validation"
         - "chain-build"
         - "payload-preparation"
         - "json-canonicalizer"
