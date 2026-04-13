@@ -67,9 +67,18 @@ public class ProtectedHeaderStep implements SigningStep {
                     "A cadeia de certificados não está disponível no contexto.", context);
         }
 
-        // Validação temporal do IAT contra o certificado já realizada pelo ChainValidationStep
         Long referenceTimestamp = context.getReferenceTimestamp();
         String policyUri = context.getPolicyIdentifierUri();
+
+        if (context.getStrategy() == TimestampStrategy.IAT && referenceTimestamp != null) {
+            long notBefore = signerCert.getNotBefore().toInstant().getEpochSecond();
+            long notAfter = signerCert.getNotAfter().toInstant().getEpochSecond();
+            if (referenceTimestamp < notBefore || referenceTimestamp > notAfter) {
+                return StepResult.failure(getName(),
+                        SignatureExceptionCode.TEMPORAL_IAT_OUT_OF_CERT_PERIOD,
+                        "O instante declarado (iat) está fora do período de validade do certificado do signatário.", context);
+            }
+        }
 
         try {
             ObjectNode header = MAPPER.createObjectNode();

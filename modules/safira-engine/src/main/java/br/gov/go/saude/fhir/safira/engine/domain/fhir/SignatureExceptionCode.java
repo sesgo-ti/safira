@@ -102,6 +102,7 @@ public enum SignatureExceptionCode {
     CONFIG_INVALID_STRATEGY("CONFIG.INVALID-STRATEGY", "Estratégia de Timestamp Inválida", "error", "CONFIG"),
     CONFIG_TTL_OUT_OF_RANGE("CONFIG.TTL-OUT-OF-RANGE", "TTL de Cache Fora da Faixa", "error", "CONFIG"),
     CONFIG_TIMEOUT_OUT_OF_RANGE("CONFIG.TIMEOUT-OUT-OF-RANGE", "Timeout Fora da Faixa", "error", "CONFIG"),
+    CONFIG_TIMESTAMP_OUT_OF_RANGE("CONFIG.TIMESTAMP-OUT-OF-RANGE", "Timestamp de Referência Fora da Faixa", "error", "CONFIG"),
     CONFIG_TSA_AUTH_FAILED("CONFIG.TSA-AUTH-FAILED", "Falha na Autenticação TSA", "error", "CONFIG"),
     CONFIG_TSA_URL_INVALID("CONFIG.TSA-URL-INVALID", "URL da TSA Inválida", "error", "CONFIG"),
     CONFIG_TSA_CONFIG_MISSING("CONFIG.TSA-CONFIG-MISSING", "Configuração da TSA Ausente", "error", "CONFIG"),

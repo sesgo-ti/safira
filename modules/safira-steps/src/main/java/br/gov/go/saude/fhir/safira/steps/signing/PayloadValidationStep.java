@@ -13,6 +13,7 @@ import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperti
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -71,7 +72,7 @@ public class PayloadValidationStep implements SigningStep {
              if (bundle.entry().size() > config.security().maxEntriesBundle()) {
                   return StepResult.failure(getName(), SignatureExceptionCode.SECURITY_BUNDLE_SIZE_LIMIT_EXCEEDED, "O número de entries no Bundle excede o limite permitido.", context);
              }
-             if (bundle.rawJson() != null && bundle.rawJson().getBytes().length > config.security().maxBundleSize()) {
+             if (bundle.rawJson() != null && bundle.rawJson().getBytes(StandardCharsets.UTF_8).length > config.security().maxBundleSize()) {
                   return StepResult.failure(getName(), SignatureExceptionCode.SECURITY_BUNDLE_MEMORY_LIMIT_EXCEEDED, "O tamanho do Payload em bytes excede o limite máximo permitido.", context);
              }
         }

@@ -58,7 +58,7 @@ public class ContextValidationStep implements SigningStep {
         long min = security.minReferenceTimestamp();
         long max = security.maxReferenceTimestamp();
         if (refTs < min || refTs > max) {
-            return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_TIMEOUT_OUT_OF_RANGE, "O Timestamp de referência está fora do intervalo seguro permitido para assinatura.", context);
+            return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_TIMESTAMP_OUT_OF_RANGE, "O Timestamp de referência está fora do intervalo seguro permitido para assinatura.", context);
         }
         return null;
     }
@@ -70,7 +70,7 @@ public class ContextValidationStep implements SigningStep {
         if (strategy == TimestampStrategy.TSA) {
             if (config == null || config.verification() == null || 
                 config.verification().tsaUrl() == null || config.verification().tsaUrl().isBlank()) {
-                return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_MISSING_PARAMETER, "O uso de Auto-TSA falhou porque a URL da TSA não está configurada.", context);
+                return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_TSA_CONFIG_MISSING, "O uso de Auto-TSA falhou porque a URL da TSA não está configurada.", context);
             }
         }
         return null;
