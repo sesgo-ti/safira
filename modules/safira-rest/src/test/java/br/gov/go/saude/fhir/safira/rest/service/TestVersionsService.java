@@ -18,7 +18,8 @@ public class TestVersionsService {
     @Test
     void getVersionsSupportedCorrectly() {
         Set<String> expectedSupportedVersions = Set.of(
-                "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|0.1.0"
+                "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|0.1.0",
+                "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|1.1.0"
         );
 
         assertEquals(expectedSupportedVersions, versionsService.getVersionsSupported());

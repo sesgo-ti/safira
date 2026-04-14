@@ -27,6 +27,24 @@ safira:
         - "jws-final"
         - "fhir-signature"
 
+    - version: "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|1.1.0"
+      operation: SIGNING
+      steps:
+        - "context-validation"
+        - "payload-validation"
+        - "chain-build"
+        - "chain-validation"
+        - "payload-preparation"
+        - "json-canonicalizer"
+        - "content-digest"
+        - "protected-header"
+        - "signing-input"
+        - "crypto-signing"
+        - "jws-preliminary"
+        - "tsa-timestamp"
+        - "jws-final"
+        - "fhir-signature"
+
   # ---------------------------------------------------------------------------
   # Configurações Operacionais do Engine de Assinatura Digital
   # ---------------------------------------------------------------------------
