@@ -10,40 +10,19 @@ Implementação de Software da criação de assinatura digital e a correspondent
 ## Software Design
 https://github.com/FabricaDeSoftwareINF/server-hubsaude/tree/develop/safira
 
-## CLI para testar com certificado real
+## Teste com certificado real
 
-Utilitário de linha de comando para executar a pipeline completa de assinatura usando um certificado PKCS#12 (`.pfx`/`.p12`) real — útil para testar com um certificado ICP-Brasil sem expor o arquivo.
+Teste E2E condicional que executa a pipeline completa de assinatura usando um certificado PKCS#12 (`.pfx`/`.p12`) real. Ignorado automaticamente quando as system properties não estão presentes.
 
-**Build:**
+**Execução:**
 ```bash
-mvn -pl modules/safira-rest -am package -DskipTests
+mvn test -pl modules/safira-rest \
+    -Dtest=RealCertificateSigningIT \
+    -Dpfx.path=/caminho/para/sua-chave.pfx \
+    -Dpfx.password=sua-senha
 ```
 
-**Execução com os exemplos prontos:**
-```bash
-java -cp modules/safira-rest/target/safira-rest-1.0.0-SNAPSHOT.jar \
-     br.gov.go.saude.fhir.safira.rest.cli.SafiraSigningCli \
-     /caminho/para/sua-chave.pfx \
-     "sua-senha" \
-     examples/bundle.json \
-     examples/provenance.json
-```
-
-**Sintaxe geral:**
-```bash
-java -cp modules/safira-rest/target/safira-rest-*.jar \
-     br.gov.go.saude.fhir.safira.rest.cli.SafiraSigningCli \
-     <pfx-path> <senha> <bundle.json> [provenance.json]
-```
-
-- `pfx-path` — caminho para o PKCS#12
-- `senha` — senha do PKCS#12
-- `bundle.json` — Bundle FHIR a assinar
-- `provenance.json` — (opcional) Provenance FHIR. Se omitido, um Provenance mínimo é gerado referenciando todas as entries do Bundle.
-
-O alias da chave privada e a cadeia de certificados são extraídos automaticamente do PKCS#12. A saída é o recurso FHIR `Signature` em JSON em stdout. Em caso de falha, um `OperationOutcome` é impresso em stderr.
-
-Os arquivos de exemplo em `examples/` contêm um Bundle com `Patient` + `Observation` (com referência cruzada) e um `Provenance` que aponta para as duas entries — prontos para assinatura.
+Os arquivos de exemplo (`bundle.json` e `provenance.json`) estão em `modules/safira-rest/src/test/resources/examples/` e são carregados automaticamente pelo teste.
 
 ## Backlog
 
