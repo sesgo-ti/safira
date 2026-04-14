@@ -1,5 +1,6 @@
 package br.gov.go.saude.fhir.safira.rest.mapper;
 
+import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties;
 import br.gov.go.saude.fhir.safira.engine.domain.CryptoMaterial;
 import br.gov.go.saude.fhir.safira.engine.domain.TimestampStrategy;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.Bundle;
@@ -12,6 +13,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class SigningInputMapper {
 
+    private final SafiraOperationalConfigProperties operationalConfig;
+
+    public SigningInputMapper(SafiraOperationalConfigProperties operationalConfig) {
+        this.operationalConfig = operationalConfig;
+    }
+
     public SigningContext toContext(SigningInput input) {
         return SigningContext.builder()
                 .bundle(mapBundle(input.bundle()))
@@ -21,6 +28,7 @@ public class SigningInputMapper {
                 .strategy(TimestampStrategy.valueOf(input.strategy().toUpperCase()))
                 .policyIdentifierUri(input.policyIdentifierUri())
                 .cryptoMaterial(mapCryptoMaterial(input.signerCryptoMaterial()))
+                .operationalConfig(operationalConfig)
                 .build();
     }
 

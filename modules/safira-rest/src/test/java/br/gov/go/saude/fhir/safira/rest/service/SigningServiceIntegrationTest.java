@@ -30,6 +30,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.Security;
 import java.security.cert.X509Certificate;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
@@ -49,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class SigningServiceIntegrationTest {
 
     private static final String TEST_CPF = "12345678901";
-    private static final long REFERENCE_TIMESTAMP = 1754006400L; // 2025-08-01
+    private static final long REFERENCE_TIMESTAMP = Instant.now().getEpochSecond();
     private static final String POLICY_URI =
             "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|0.1.0";
 
@@ -105,7 +106,7 @@ class SigningServiceIntegrationTest {
 
         PipelineResult<?> result = signingService.sign(input);
 
-        assertTrue(result.isSuccess(), "Pipeline deveria ter sucesso");
+        assertTrue(result.isSuccess(), "Pipeline deveria ter sucesso: " + (result.isSuccess() ? "" : result.getExceptionDetails()));
         Object value = result.getValue();
         assertInstanceOf(Signature.class, value);
 

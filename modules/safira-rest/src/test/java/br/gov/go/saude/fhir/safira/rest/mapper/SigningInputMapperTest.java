@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SigningInputMapperTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final SigningInputMapper mapper = new SigningInputMapper();
+    private final SigningInputMapper mapper = new SigningInputMapper(null);
 
     @Test
     void shouldMapSigningInputToContextCorrectly() throws Exception {
