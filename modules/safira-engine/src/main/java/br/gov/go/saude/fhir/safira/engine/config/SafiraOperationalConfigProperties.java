@@ -71,6 +71,8 @@ public record SafiraOperationalConfigProperties(
      * @param ttlMaximo                TTL máximo (minutos): após este ponto o truststore local é ignorado. Padrão: 10080.
      * @param minimumCertificateDate   Data mínima de emissão do certificado (epoch seconds). Certificados emitidos antes desta data
      *                                 são rejeitados por não atenderem aos requisitos de segurança vigentes. Padrão: 1751328000 (2025-07-01T00:00:00Z).
+     * @param rootSha256Hashes         Lista de SHA-256 (hex lowercase) dos certificados raiz ICP-Brasil confiáveis,
+     *                                 usada pelos steps de validação enquanto o resolver completo do trust-store não está integrado.
      */
     public record TrustStoreProps(
             String icpbrasilUrlCertificados,
@@ -84,7 +86,9 @@ public record SafiraOperationalConfigProperties(
             @DefaultValue("1440")  Integer refresh,
             @DefaultValue("2880")  Integer ttlCritico,
             @DefaultValue("10080") Integer ttlMaximo,
-            @DefaultValue("1751328000") Long minimumCertificateDate
+            @DefaultValue("1751328000") Long minimumCertificateDate,
+            // TODO(validation): popular rootSha256Hashes a partir do trust-store resolver
+            @DefaultValue List<String> rootSha256Hashes
     ) {}
 
     // -------------------------------------------------------------------------
