@@ -23,7 +23,7 @@ public class PipelineExecutor {
      * Executes the pipeline sequence for a specific configuration.
      *
      * @param politicsVersion the version of the pipeline policy to load
-     * @param operation the operation type (SIGNING, VERIFICATION, etc.)
+     * @param operation the operation type (SIGNING, VALIDATION, etc.)
      * @param initialContext current context injected by the client caller
      * @param resultExtractor function to extract the final payload T from the context
      * @return PipelineResult containing the extracted payload on success or the failure outcome
@@ -101,9 +101,9 @@ public class PipelineExecutor {
     }
 
     // /**
-    //  * Convenience method for executing the VERIFICATION pipeline.
+    //  * Convenience method for executing the VALIDATION pipeline.
     //  */
-    // public <C extends StepContext, T> PipelineResult<T> verify(String politicsVersion, C context, Function<C, T> resultExtractor) {
-    //     return execute(politicsVersion, OperationType.VERIFICATION, context, resultExtractor);
+    // public <C extends StepContext, T> PipelineResult<T> validate(String politicsVersion, C context, Function<C, T> resultExtractor) {
+    //     return execute(politicsVersion, OperationType.VALIDATION, context, resultExtractor);
     // }
 }

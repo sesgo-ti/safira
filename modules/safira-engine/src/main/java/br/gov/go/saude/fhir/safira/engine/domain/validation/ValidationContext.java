@@ -1,4 +1,4 @@
-package br.gov.go.saude.fhir.safira.engine.domain.verification;
+package br.gov.go.saude.fhir.safira.engine.domain.validation;
 
 import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties;
 import br.gov.go.saude.fhir.safira.engine.domain.StepContext;
@@ -14,7 +14,7 @@ import java.util.Optional;
 
 @Value
 @Builder(toBuilder = true)
-public class VerificationContext implements StepContext {
+public class ValidationContext implements StepContext {
     SafiraOperationalConfigProperties operationalConfig;
 
     PrivateKey privateKey;
@@ -43,7 +43,7 @@ public class VerificationContext implements StepContext {
         return Optional.of(chain[0]);
     }
 
-    public VerificationContext addCertificate(X509Certificate cert) {
+    public ValidationContext addCertificate(X509Certificate cert) {
         X509Certificate[] newChain;
 
         if (this.certificateChain == null) {

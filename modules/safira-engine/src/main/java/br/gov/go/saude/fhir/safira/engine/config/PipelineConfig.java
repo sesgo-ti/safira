@@ -8,7 +8,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.pipelines.PipelineKey;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepRegistry;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
-import br.gov.go.saude.fhir.safira.engine.domain.verification.VerificationStep;
+import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationStep;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -98,9 +98,9 @@ public class PipelineConfig {
                     );
                 }
 
-                if (!(step instanceof VerificationStep || step instanceof SigningStep)) {
+                if (!(step instanceof ValidationStep || step instanceof SigningStep)) {
                     throw new IllegalStateException(
-                        "Step '" + id + "' is neither a VerificationStep nor a SigningStep."
+                        "Step '" + id + "' is neither a ValidationStep nor a SigningStep."
                     );
                 }
 
@@ -110,9 +110,9 @@ public class PipelineConfig {
                     );
                 }
 
-                if (def.pipelineKey().operation() == OperationType.VERIFICATION && !(step instanceof VerificationStep)) {
+                if (def.pipelineKey().operation() == OperationType.VALIDATION && !(step instanceof ValidationStep)) {
                     throw new IllegalStateException(
-                        "Pipeline " + def.pipelineKey() + " is for VERIFICATION but references a non-verification step: " + id
+                        "Pipeline " + def.pipelineKey() + " is for VALIDATION but references a non-validation step: " + id
                     );
                 }
 

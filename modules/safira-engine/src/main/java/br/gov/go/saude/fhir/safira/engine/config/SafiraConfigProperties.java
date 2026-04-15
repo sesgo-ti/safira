@@ -26,7 +26,7 @@ public record SafiraConfigProperties(List<PipelineConfigEntry> pipelines) {
      *
      * @param version   Versão do Guia de Implementação FHIR (Canonical URL | Version).
      *                  Ex: {@code https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|0.1.0}
-     * @param operation Tipo da operação da pipeline ({@code SIGNING} ou {@code VERIFICATION}).
+     * @param operation Tipo da operação da pipeline ({@code SIGNING} ou {@code VALIDATION}).
      * @param steps     Lista ordenada dos IDs dos passos a serem executados nesta pipeline.
      */
     public record PipelineConfigEntry(
