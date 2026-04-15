@@ -26,18 +26,14 @@ Os arquivos de exemplo (`bundle.json` e `provenance.json`) estão em `modules/sa
 
 ## Backlog
 
-- Validação de cadeia (`chain-validation`) ausente no YAML de testes — não é possível testar sem expor chave privada/senha de certificado real em código. Ativar quando houver mecanismo seguro de teste com certificados.
-- Validação de referências internas (`PayloadValidationStep.verifyInnerContentReferences`) — chamada comentada em `PayloadValidationStep.java:41-42`. Definir abordagem de implementação e descomentar.
-- `HttpTsaClient` — integração HTTP real com TSA externa (RFC 3161)
-- PKCS#11 (SMARTCARD/TOKEN) — suporte a dispositivos criptográficos
-- Remote signing — suporte a assinatura remota
-- Pipeline de verificação — steps de verificação da assinatura
-- Curvas ECDSA além de P-256 (`CryptoSigningStep`)
-- Tipo de assinatura dinâmico no `FhirSignatureStep` (hoje fixo em "Author's Signature")
+- [ ] Implementar `verifyInnerContentReferences` em `PayloadValidationStep` (hoje comentado)
+- [ ] Implementar integração HTTP real com TSA externa em `HttpTsaClient` (RFC 3161)
+- [ ] Suportar PKCS#11 (smartcard/token)
+- [ ] Suportar assinatura remota
+- [ ] Implementar pipeline de verificação de assinatura
+- [ ] Suportar curvas ECDSA além de P-256 em `CryptoSigningStep`
 
 ## Observações sobre a especificação (Criar Assinatura — Etapas 1-14)
-
-As seguintes observações foram identificadas durante auditoria sênior do código contra a especificação:
 
 - **Etapa 7.4 (iat vs sigT):** A especificação afirma corretamente que `iat` e `sigPId` são definidas pelo JAdES. Confirmado pela ETSI TS 119 182-1 V1.2.1 (2024-07), seção 5.1.11: a partir de 2025-07-15, `iat` (NumericDate inteiro) substitui `sigT` (RFC 3339) em novas assinaturas.
 - **Etapa 7.4 (iat em TSA):** A especificação define `iat` apenas para estratégia IAT. Porém, JAdES-B-B exige claimed signing time (`iat`) sempre, independente da estratégia. Sugestão: incluir `iat` no protected header para ambas as estratégias (IAT e TSA).
