@@ -3,8 +3,11 @@ package br.gov.go.saude.fhir.safira.rest.service;
 import br.gov.go.saude.fhir.safira.engine.domain.PipelineResult;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.Signature;
 import br.gov.go.saude.fhir.safira.rest.dto.SigningInput;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,7 +48,10 @@ class RealCertificateSigningIT {
     @Autowired
     private SigningService signingService;
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
     @Test
     void shouldSignBundleWithRealCertificate() throws Exception {
@@ -90,6 +96,10 @@ class RealCertificateSigningIT {
         assertNotNull(signature.who().identifier());
         assertNotNull(signature.type());
         assertFalse(signature.type().isEmpty());
+
+        System.out.println("\n===== FHIR Signature =====");
+        System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(signature));
+        System.out.println("==========================\n");
     }
 
     private JsonNode loadResource(String path) throws Exception {
