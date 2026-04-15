@@ -24,7 +24,7 @@ public enum SignatureExceptionCode {
     CERT_NOT_ICP_BRASIL("CERT.NOT-ICP-BRASIL", "Certificado Não é ICP-Brasil", "error", "CERT"),
     CERT_NOT_TRUSTED_ROOT("CERT.NOT-TRUSTED-ROOT", "Raiz Não Confiável ICP-Brasil", "error", "CERT"),
     CERT_NEAR_EXPIRY("CERT.NEAR-EXPIRY", "Certificado Próximo ao Vencimento", "warning", "CERT"),
-    CERT_WEAK_KEY("CERT.WEAK-KEY", "Chave Criptográfica Fraca", "warning", "CERT"),
+    CERT_WEAK_KEY("CERT.WEAK-KEY", "Chave Criptográfica Fraca", "error", "CERT"),
     CERT_UNSUPPORTED_ALGORITHM("CERT.UNSUPPORTED-ALGORITHM", "Algoritmo Não Suportado", "error", "CERT"),
     CERT_CHAIN_INCOMPLETE("CERT.CHAIN-INCOMPLETE", "Cadeia Incompleta", "error", "CERT"),
     CERT_MISSING_IDENTIFICATION("CERT.MISSING-IDENTIFICATION", "Identificação Ausente no Certificado", "error", "CERT"),
