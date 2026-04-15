@@ -28,6 +28,20 @@ safira:
         - "jws-final"
         - "fhir-signature"
 
+    - version: "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|1.1.0"
+      operation: VALIDATION
+      steps:
+        - "validation-context-validation"
+        - "jws-extraction"
+        - "jws-headers-validation"
+        - "validation-chain-build"
+        - "validation-chain-validation"
+        - "validation-signature-verification"
+        - "validation-ltv-revocation-check"
+        - "validation-timestamp-policy"
+        - "validation-payload-integrity"
+        - "validation-success"
+
   # ---------------------------------------------------------------------------
   # Configurações Operacionais do Engine de Assinatura Digital
   # ---------------------------------------------------------------------------
