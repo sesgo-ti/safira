@@ -37,3 +37,5 @@ build/
 ### Claude Code ###
 CLAUDE.local.md
 .claude/
+
+.data/
