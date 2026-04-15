@@ -4,6 +4,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.OperationOutcome;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepRegistry;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
+import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
 
 import java.util.List;
 import java.util.function.Function;
@@ -100,10 +101,14 @@ public class PipelineExecutor {
         return execute(politicsVersion, OperationType.SIGNING, context, SigningContext::getSignature);
     }
 
-    // /**
-    //  * Convenience method for executing the VALIDATION pipeline.
-    //  */
-    // public <C extends StepContext, T> PipelineResult<T> validate(String politicsVersion, C context, Function<C, T> resultExtractor) {
-    //     return execute(politicsVersion, OperationType.VALIDATION, context, resultExtractor);
-    // }
+    /**
+     * Convenience method for executing the VALIDATION pipeline.
+     *
+     * @param politicsVersion version of the pipeline policy to load
+     * @param context current validation context injected by the client caller
+     * @return PipelineResult containing the final OperationOutcome on success or a failure OperationOutcome on failure
+     */
+    public PipelineResult<OperationOutcome> validate(String politicsVersion, ValidationContext context) {
+        return execute(politicsVersion, OperationType.VALIDATION, context, ValidationContext::getOperationOutcome);
+    }
 }
