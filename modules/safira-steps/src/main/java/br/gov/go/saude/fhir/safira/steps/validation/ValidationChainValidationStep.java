@@ -69,7 +69,7 @@ public class ValidationChainValidationStep implements ValidationStep {
         boolean rootTrusted = trustedHashes.stream()
                 .anyMatch(h -> h != null && h.equalsIgnoreCase(rootHashFinal));
         if (!rootTrusted) {
-            return StepResult.failure(getName(), SignatureExceptionCode.CERT_NOT_ICP_BRASIL,
+            return StepResult.failure(getName(), SignatureExceptionCode.CERT_NOT_TRUSTED_ROOT,
                     "Raiz da cadeia não pertence à lista confiável de ACs ICP-Brasil.", context);
         }
 

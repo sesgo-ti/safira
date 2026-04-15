@@ -54,7 +54,7 @@ class ValidationChainValidationStepTest {
 
         StepResult<ValidationContext> result = step.execute(ctx);
 
-        assertEquals(SignatureExceptionCode.CERT_NOT_ICP_BRASIL, assertFailure(result).code());
+        assertEquals(SignatureExceptionCode.CERT_NOT_TRUSTED_ROOT, assertFailure(result).code());
     }
 
     @Test
