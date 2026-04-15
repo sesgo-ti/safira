@@ -203,3 +203,23 @@ safira:
         # Número máximo de tentativas de reconexão.
         # Padrão: 3 | Intervalo válido: [0, 10]
         maximo-retries: 3
+
+    # -------------------------------------------------------------------------
+    # Política de validação de assinaturas
+    # -------------------------------------------------------------------------
+    validation-policy:
+      # Janela (em dias) para considerar um certificado próximo do vencimento.
+      # Padrão: 30 | Intervalo válido: [1, 180]
+      near-expiry-threshold-days: 30
+
+      # Idade máxima (em dias) aceita para uma assinatura antes de sinalizar alerta.
+      # Padrão: 365 | Intervalo válido: [1, 1825]
+      signature-age-threshold-days: 365
+
+      # Política de tratamento para falhas de revogação.
+      # Valores: STRICT | SOFT_FAIL | WARN. Padrão: STRICT
+      revocation-policy: STRICT
+
+      # Tratamento para respostas OCSP com status UNKNOWN.
+      # Valores: TREAT_AS_REVOKED | TREAT_AS_WARNING. Padrão: TREAT_AS_REVOKED
+      ocsp-unknown-handling: TREAT_AS_REVOKED

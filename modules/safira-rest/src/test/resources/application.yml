@@ -218,3 +218,12 @@ safira:
         # Número máximo de tentativas de reconexão.
         # Padrão: 3 | Intervalo válido: [0, 10]
         maximo-retries: 3
+
+    # -------------------------------------------------------------------------
+    # Política de validação de assinaturas
+    # -------------------------------------------------------------------------
+    validation-policy:
+      near-expiry-threshold-days: 30
+      signature-age-threshold-days: 365
+      revocation-policy: STRICT
+      ocsp-unknown-handling: TREAT_AS_REVOKED
