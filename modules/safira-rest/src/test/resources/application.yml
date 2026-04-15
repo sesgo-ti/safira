@@ -6,7 +6,7 @@ safira:
   #   pipelines: Lista de definições de pipelines.
   #     - version: Identificador da versão do Guia de Implementação FHIR.
   #                Formato: "URL_CANONICA|VERSAO"
-  #     - operation: Tipo da operação. Valores possíveis: [SIGNING, VERIFICATION]
+  #     - operation: Tipo da operação. Valores possíveis: [SIGNING, VALIDATION]
   #     - steps: Lista ordenada de IDs dos passos (steps) a serem executados.
   # ---------------------------------------------------------------------------
   pipelines:

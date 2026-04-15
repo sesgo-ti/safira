@@ -50,12 +50,12 @@ public class SignatureController {
         };
     }
 
-    @PostMapping("/verificar")
-    public ResponseEntity<String> verify() {
+    @PostMapping("/validar")
+    public ResponseEntity<String> validate() {
         return ResponseEntity
                 .ok()
                 .contentType(MediaType.parseMediaType("application/fhir+json"))
-                .body("Objeto teve assinatura verificada com sucesso!");
+                .body("Objeto teve assinatura validada com sucesso!");
     }
 
     @GetMapping("/versoes")
