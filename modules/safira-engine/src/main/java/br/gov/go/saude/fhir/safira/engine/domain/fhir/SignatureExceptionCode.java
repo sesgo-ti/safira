@@ -133,7 +133,7 @@ public enum SignatureExceptionCode {
     TEMPORAL_CLOCK_SKEW_DETECTED("TEMPORAL.CLOCK-SKEW-DETECTED", "Diferença de Relógio Detectada", "warning", "TEMPORAL"),
     VALIDATION("VALIDATION", "Problemas de Validação", null, "VALIDATION"),
     VALIDATION_SIGNATURE_VERIFICATION_FAILED("VALIDATION.SIGNATURE-VERIFICATION-FAILED", "Verificação Criptográfica da Assinatura Falhou", "error", "VALIDATION"),
-    VALIDATION_UNSUPPORTED_ALGORITHM("VALIDATION.UNSUPPORTED-ALGORITHM", "Algoritmo Não Suportado para Validação", null, null),
+    VALIDATION_UNSUPPORTED_ALGORITHM("VALIDATION.UNSUPPORTED-ALGORITHM", "Algoritmo Não Suportado para Validação", "error", "VALIDATION"),
     CACHE_CRITICAL_STALE("CACHE.CRITICAL-STALE", "Cache Crítico", null, null),
     CACHE_EXPIRED_UNSAFE("CACHE.EXPIRED-UNSAFE", "Cache Expirado", null, null),
     CACHE_STALE_BUT_VALID("CACHE.STALE-BUT-VALID", "Cache Desatualizado Válido", null, null),
