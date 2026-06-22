@@ -1,7 +1,8 @@
 package br.gov.go.saude.fhir.safira.engine.domain;
 
 /**
- * Marker interface for the different types of cryptographic material.
+ * Material criptográfico utilizado na assinatura digital.
+ * Cada subtipo carrega as credenciais específicas do mecanismo de acesso à chave privada.
  */
 public sealed interface CryptoMaterial permits 
     CryptoMaterial.PemMaterial, 

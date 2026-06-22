@@ -11,16 +11,10 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import lombok.Getter;
 
 /**
- * Exceção lançada quando ocorre um erro técnico durante a execução de um
- * {@link Step}.
+ * Indica erro técnico irrecuperável durante a execução de um {@link Step} —
+ * distinto de {@link StepResult.Failure}, que representa falha de regra de negócio esperada.
  *
- * <p>
- * Diferente de um {@link StepResult.Failure}, que representa uma falha de
- * validação ou resultado esperado de uma regra de negócio,
- * esta exceção indica que o passo não pôde ser concluído devido a um erro de
- * sistema, infraestrutura ou configuração (ex: falha de IO, serviço
- * indisponível, erro de criptografia).
- * </p>
+ * <p>Exemplos: falha de IO, serviço indisponível, erro criptográfico de sistema.
  */
 @Getter
 public class StepException extends RuntimeException {
@@ -41,21 +35,10 @@ public class StepException extends RuntimeException {
         this.diagnostics = diagnostics;
     }
 
-    /**
-     * Cria uma exceção com um código e uma causa.
-     *
-     * @param code  código do erro que causou a exceção
-     * @param cause causa raiz
-     */
     public StepException(SignatureExceptionCode code, Throwable cause) {
         this(code, DEFAULT_MSG, cause);
     }
 
-    /**
-     * Cria uma exceção apenas com um código.
-     *
-     * @param code código do erro que causou a exceção
-     */
     public StepException(SignatureExceptionCode code) {
         this(code, DEFAULT_MSG);
     }

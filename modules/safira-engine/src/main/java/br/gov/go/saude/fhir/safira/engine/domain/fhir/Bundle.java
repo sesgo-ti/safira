@@ -10,8 +10,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Simplified representation of a FHIR Bundle restricted to the exact needs
- * of the digital signature process as per Safira's architecture.
+ * Representação simplificada de um {@code Bundle} FHIR, restrita ao que o processo
+ * de assinatura digital precisa: {@code resourceType}, {@code id}, {@code entry} e o JSON bruto.
  */
 @Builder
 public record Bundle(

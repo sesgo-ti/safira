@@ -4,9 +4,7 @@ import lombok.Builder;
 
 import java.util.List;
 
-/**
- * Simplified representation of the FHIR CodeableConcept data type.
- */
+/** Tipo de dado FHIR {@code CodeableConcept}. */
 @Builder
 public record CodeableConcept(
         List<Coding> coding,

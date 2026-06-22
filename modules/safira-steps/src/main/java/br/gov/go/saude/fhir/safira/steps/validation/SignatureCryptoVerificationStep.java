@@ -22,12 +22,9 @@ import java.util.Map;
 /**
  * Step: verificação criptográfica da assinatura JWS (spec §4).
  *
- * <p>Reconstrói o signing input ({@code rawProtectedHeaderBase64Url + "." + payloadBase64Url}),
- * extrai a chave pública do certificado folha e verifica a assinatura com
- * {@code SHA256withRSA} (RS256) ou {@code SHA256withECDSA} (ES256).
- *
- * <p>TODO(security): medir tempo de verificação e emitir warning
- * CRYPTO.TIMING-ATTACK-DETECTED em caso de outlier estatístico — fora do escopo inicial.
+ * <p>Reconstrói o signing input ({@code protectedHeader + "." + payload}), extrai a chave
+ * pública do certificado folha e verifica com {@code SHA256withRSA} (RS256) ou
+ * {@code SHA256withECDSA} (ES256).
  */
 @StepId("validation-signature-verification")
 public class SignatureCryptoVerificationStep implements ValidationStep {

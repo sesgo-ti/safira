@@ -6,8 +6,7 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Representation of the FHIR Signature data type, optimized for the "Assinatura digital avançada" profile.
- * Standard FHIR attributes are respected.
+ * Tipo de dado FHIR {@code Signature}, restrito ao perfil de assinatura digital avançada GO SES.
  */
 @Builder
 public record Signature(

@@ -22,11 +22,8 @@ import java.util.Base64;
 import java.util.Optional;
 
 /**
- * Step opcional: recomputa o hash do conteúdo (Bundle + Provenance) e compara com o
- * payload assinado conforme spec §opcional.
- *
- * TODO(integrity): introduzir código dedicado para mismatch de hash; atualmente reutiliza
- *                  VALIDATION.POLICY-COMPLIANCE-FAILED.
+ * Step opcional: recomputa o hash do conteúdo canônico (Bundle + Provenance) e compara
+ * com o payload Base64Url do JWS, conforme spec §opcional.
  */
 @StepId("validation-payload-integrity")
 public class PayloadIntegrityVerificationStep implements ValidationStep {

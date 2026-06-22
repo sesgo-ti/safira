@@ -3,9 +3,11 @@ package br.gov.go.saude.fhir.safira.engine.domain.fhir;
 import lombok.Getter;
 
 /**
- * FHIR CodeSystem: situacao-excepcional-assinatura
- * URL: https://fhir.saude.go.gov.br/r4/seguranca/CodeSystem/situacao-excepcional-assinatura.
- * Implementation based on version 0.1.2 of the CodeSystem.
+ * CodeSystem FHIR {@code situacao-excepcional-assinatura}, versão 0.1.2.
+ *
+ * <p>Cada constante mapeia um código do CodeSystem publicado em
+ * {@code https://fhir.saude.go.gov.br/r4/seguranca/CodeSystem/situacao-excepcional-assinatura}
+ * com sua severidade padrão e grupo hierárquico.
  */
 @Getter
 public enum SignatureExceptionCode {

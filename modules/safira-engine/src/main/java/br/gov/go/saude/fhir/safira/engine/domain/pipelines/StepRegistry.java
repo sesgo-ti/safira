@@ -13,8 +13,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Engine's internal registry for Pipelines.
- * Framework-agnostic. Receives already-resolved pipelines (PipelineKey → ordered steps).
+ * Registro interno de pipelines, agnóstico de framework.
+ * Recebe pipelines já resolvidos ({@link PipelineKey} → steps ordenados) na construção.
  */
 public class StepRegistry {
     private static final Logger log = LoggerFactory.getLogger(StepRegistry.class);
@@ -38,7 +38,9 @@ public class StepRegistry {
     }
 
     /**
-     * Resolves the configured steps for a given policy version and operation type.
+     * Retorna os steps configurados para a versão de política e operação indicadas.
+     *
+     * @throws IllegalArgumentException se não houver pipeline configurado para a combinação informada
      */
     @SuppressWarnings("unchecked")
     public <C extends StepContext> List<Step<C>> getSteps(String politicsVersion, OperationType operation) {
