@@ -7,6 +7,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.StepResult;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.OperationOutcome;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
+import br.gov.go.saude.fhir.truststore.icpbrasil.service.TrustStoreService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -20,6 +21,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class ValidationChainValidationStepTest {
 
@@ -28,19 +32,21 @@ class ValidationChainValidationStepTest {
     private static final long REF_TS = 1_756_684_800L; // 2025-09-01
     private static final long CERT_END = 1_893_456_000L; // 2030-01-01
 
+    private TrustStoreService trustStoreService;
     private ValidationChainValidationStep step;
 
     @BeforeEach
     void setUp() {
-        step = new ValidationChainValidationStep();
+        trustStoreService = mock(TrustStoreService.class);
+        when(trustStoreService.isTrustedRoot(any())).thenReturn(true);
+        step = new ValidationChainValidationStep(trustStoreService);
     }
 
     @Test
     void shouldFailWhenChainLessThanTwo() throws Exception {
         KeyPair caKp = TestCertificates.rsaKeyPair(2048);
         X509Certificate ca = TestCertificates.buildCaCert(caKp, "Root", date(LEAF_START), date(CERT_END));
-        ValidationContext ctx = contextBuilder(List.of(ca),
-                List.of(TestCertificates.sha256Hex(ca))).build();
+        ValidationContext ctx = contextBuilder(List.of(ca)).build();
 
         StepResult<ValidationContext> result = step.execute(ctx);
 
@@ -48,11 +54,11 @@ class ValidationChainValidationStepTest {
     }
 
     @Test
-    void shouldFailWhenRootHashNotInTrustStore() throws Exception {
+    void shouldFailWhenRootNotInTrustStore() throws Exception {
+        when(trustStoreService.isTrustedRoot(any())).thenReturn(false);
         List<X509Certificate> chain = validChain();
-        ValidationContext ctx = contextBuilder(chain, List.of("0".repeat(64))).build();
 
-        StepResult<ValidationContext> result = step.execute(ctx);
+        StepResult<ValidationContext> result = step.execute(contextBuilder(chain).build());
 
         assertEquals(SignatureExceptionCode.CERT_NOT_TRUSTED_ROOT, assertFailure(result).code());
     }
@@ -65,10 +71,9 @@ class ValidationChainValidationStepTest {
                 date(LEAF_START), date(CERT_END));
         X509Certificate leaf = TestCertificates.buildLeafCert(leafKp, caKp, ca, "Leaf",
                 date(LEAF_START), date(CERT_END), null);
-        List<String> trust = List.of(TestCertificates.sha256Hex(ca));
 
         StepResult<ValidationContext> result = step.execute(
-                contextBuilder(List.of(leaf, ca), trust).build());
+                contextBuilder(List.of(leaf, ca)).build());
 
         assertEquals(SignatureExceptionCode.CERT_NOT_ICP_BRASIL, assertFailure(result).code());
     }
@@ -82,10 +87,9 @@ class ValidationChainValidationStepTest {
                 date(tooOld), date(CERT_END));
         X509Certificate leaf = TestCertificates.buildLeafCert(leafKp, caKp, ca, "Leaf",
                 date(tooOld), date(CERT_END), TestCertificates.ICP_BRASIL_POLICY_OID);
-        List<String> trust = List.of(TestCertificates.sha256Hex(ca));
 
         StepResult<ValidationContext> result = step.execute(
-                contextBuilder(List.of(leaf, ca), trust).build());
+                contextBuilder(List.of(leaf, ca)).build());
 
         assertEquals(SignatureExceptionCode.CERT_ISSUE_DATE_TOO_OLD, assertFailure(result).code());
     }
@@ -99,10 +103,9 @@ class ValidationChainValidationStepTest {
                 date(LEAF_START), date(CERT_END));
         X509Certificate leaf = TestCertificates.buildLeafCert(leafKp, caKp, ca, "Leaf",
                 date(LEAF_START), date(leafEnd), TestCertificates.ICP_BRASIL_POLICY_OID);
-        List<String> trust = List.of(TestCertificates.sha256Hex(ca));
 
         StepResult<ValidationContext> result = step.execute(
-                contextBuilder(List.of(leaf, ca), trust).build());
+                contextBuilder(List.of(leaf, ca)).build());
 
         assertEquals(SignatureExceptionCode.CERT_EXPIRED, assertFailure(result).code());
     }
@@ -116,10 +119,9 @@ class ValidationChainValidationStepTest {
                 date(LEAF_START), date(CERT_END));
         X509Certificate leaf = TestCertificates.buildLeafCert(leafKp, caKp, ca, "Leaf",
                 date(future), date(CERT_END), TestCertificates.ICP_BRASIL_POLICY_OID);
-        List<String> trust = List.of(TestCertificates.sha256Hex(ca));
 
         StepResult<ValidationContext> result = step.execute(
-                contextBuilder(List.of(leaf, ca), trust).build());
+                contextBuilder(List.of(leaf, ca)).build());
 
         assertEquals(SignatureExceptionCode.CERT_NOT_YET_VALID, assertFailure(result).code());
     }
@@ -132,16 +134,14 @@ class ValidationChainValidationStepTest {
         KeyPair leafKp = TestCertificates.rsaKeyPair(2048);
         X509Certificate realCa = TestCertificates.buildCaCert(realCaKp, "Root",
                 date(LEAF_START), date(CERT_END));
-        // The leaf is built using attackerCaKp (signer) but we set issuer name to realCa's subject.
+        // leaf is built using attackerCaKp (signer) but issuer name points to realCa's subject
         X509Certificate leaf = TestCertificates.buildLeafCert(leafKp, attackerCaKp, realCa, "Leaf",
                 date(LEAF_START), date(CERT_END), TestCertificates.ICP_BRASIL_POLICY_OID);
-        List<String> trust = List.of(TestCertificates.sha256Hex(realCa));
 
         StepResult<ValidationContext> result = step.execute(
-                contextBuilder(List.of(leaf, realCa), trust).build());
+                contextBuilder(List.of(leaf, realCa)).build());
 
-        assertEquals(SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED,
-                assertFailure(result).code());
+        assertEquals(SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED, assertFailure(result).code());
     }
 
     @Test
@@ -152,10 +152,9 @@ class ValidationChainValidationStepTest {
                 date(LEAF_START), date(CERT_END));
         X509Certificate leaf = TestCertificates.buildLeafCert(leafKp, caKp, ca, "Leaf",
                 date(LEAF_START), date(CERT_END), TestCertificates.ICP_BRASIL_POLICY_OID);
-        List<String> trust = List.of(TestCertificates.sha256Hex(ca));
 
         StepResult<ValidationContext> result = step.execute(
-                contextBuilder(List.of(leaf, ca), trust).build());
+                contextBuilder(List.of(leaf, ca)).build());
 
         assertEquals(SignatureExceptionCode.CERT_WEAK_KEY, assertFailure(result).code());
     }
@@ -170,9 +169,8 @@ class ValidationChainValidationStepTest {
                 date(LEAF_START), date(CERT_END));
         X509Certificate leaf = TestCertificates.buildLeafCert(leafKp, caKp, ca, "Leaf",
                 date(LEAF_START), date(leafEnd), TestCertificates.ICP_BRASIL_POLICY_OID);
-        List<String> trust = List.of(TestCertificates.sha256Hex(ca));
 
-        ValidationContext ctx = contextBuilder(List.of(leaf, ca), trust).build();
+        ValidationContext ctx = contextBuilder(List.of(leaf, ca)).build();
         StepResult<ValidationContext> result = step.execute(ctx);
 
         StepResult.Success<ValidationContext> success =
@@ -188,16 +186,11 @@ class ValidationChainValidationStepTest {
 
     @Test
     void shouldReturnSuccessForValidChain() throws Exception {
-        List<X509Certificate> chain = validChain();
-        List<String> trust = List.of(TestCertificates.sha256Hex(chain.get(1)));
-
         StepResult<ValidationContext> result = step.execute(
-                contextBuilder(chain, trust).build());
+                contextBuilder(validChain()).build());
 
         assertInstanceOf(StepResult.Success.class, result);
     }
-
-    // ===== Helpers =====
 
     private static List<X509Certificate> validChain() throws Exception {
         KeyPair caKp = TestCertificates.rsaKeyPair(2048);
@@ -213,11 +206,10 @@ class ValidationChainValidationStepTest {
         return new Date(epochSec * 1000L);
     }
 
-    private static ValidationContext.ValidationContextBuilder contextBuilder(
-            List<X509Certificate> chain, List<String> trustedHashes) {
+    private static ValidationContext.ValidationContextBuilder contextBuilder(List<X509Certificate> chain) {
         TrustStoreProps trustStore = new TrustStoreProps(
                 null, null, 30, 3, null, null, null, null,
-                1440, 2880, 10080, MIN_DATE, trustedHashes);
+                1440, 2880, 10080, MIN_DATE);
         ValidationPolicyProps validationPolicy = new ValidationPolicyProps(
                 30, 365,
                 ValidationPolicyProps.RevocationPolicy.STRICT,

@@ -165,7 +165,7 @@ class ValidationContextValidationStepTest {
 
     private static TrustStoreProps trustStore(Long minCertDate) {
         return new TrustStoreProps(null, null, 30, 3, null, null, null, null,
-                1440, 2880, 10080, minCertDate, List.of());
+                1440, 2880, 10080, minCertDate);
     }
 
     private static SecurityLimitsProps defaultSecurity() {

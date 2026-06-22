@@ -67,7 +67,7 @@ public class SafiraStepsAutoConfiguration {
         steps.add(new JwsExtractionStep());
         steps.add(new JwsHeadersValidationStep());
         steps.add(new ValidationChainBuildStep());
-        steps.add(new ValidationChainValidationStep());
+        steps.add(new ValidationChainValidationStep(trustStoreService));
         steps.add(new SignatureCryptoVerificationStep());
         steps.add(new LtvRevocationCheckStep());
         steps.add(new TimestampPolicyValidationStep());

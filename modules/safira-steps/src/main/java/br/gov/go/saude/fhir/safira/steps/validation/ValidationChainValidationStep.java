@@ -9,6 +9,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationStep;
+import br.gov.go.saude.fhir.truststore.icpbrasil.service.TrustStoreService;
 import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.x509.CertificatePolicies;
@@ -17,15 +18,12 @@ import org.bouncycastle.asn1.x509.PolicyInformation;
 
 import javax.security.auth.x500.X500Principal;
 import java.io.ByteArrayInputStream;
-import java.security.MessageDigest;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.ECPublicKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.ECParameterSpec;
-import java.util.HexFormat;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Step: valida a cadeia de certificados reconstruída pelo passo
@@ -38,6 +36,12 @@ public class ValidationChainValidationStep implements ValidationStep {
     private static final String CERTIFICATE_POLICIES_EXT_OID = Extension.certificatePolicies.getId();
     private static final String CODE_SYSTEM =
             "https://fhir.saude.go.gov.br/r4/seguranca/CodeSystem/situacao-excepcional-assinatura";
+
+    private final TrustStoreService trustStoreService;
+
+    public ValidationChainValidationStep(TrustStoreService trustStoreService) {
+        this.trustStoreService = trustStoreService;
+    }
 
     @Override
     public StepResult<ValidationContext> execute(ValidationContext context) {
@@ -55,20 +59,8 @@ public class ValidationChainValidationStep implements ValidationStep {
         X509Certificate root = chain.get(chain.size() - 1);
         long refTs = context.getReferenceTimestamp();
 
-        // §3.3 raiz ICP-Brasil (hash SHA-256 no trust store)
-        List<String> trustedHashes = trustStore.rootSha256Hashes();
-        if (trustedHashes == null) trustedHashes = List.of();
-        String rootHash;
-        try {
-            rootHash = sha256Hex(root);
-        } catch (Exception e) {
-            return StepResult.failure(getName(), SignatureExceptionCode.CERT_INVALID_FORMAT,
-                    "Falha ao calcular hash SHA-256 da raiz: " + e.getMessage(), context);
-        }
-        final String rootHashFinal = rootHash;
-        boolean rootTrusted = trustedHashes.stream()
-                .anyMatch(h -> h != null && h.equalsIgnoreCase(rootHashFinal));
-        if (!rootTrusted) {
+        // §3.3 raiz ICP-Brasil confiável
+        if (!trustStoreService.isTrustedRoot(root)) {
             return StepResult.failure(getName(), SignatureExceptionCode.CERT_NOT_TRUSTED_ROOT,
                     "Raiz da cadeia não pertence à lista confiável de ACs ICP-Brasil.", context);
         }
@@ -182,11 +174,6 @@ public class ValidationChainValidationStep implements ValidationStep {
             return false;
         }
         return false;
-    }
-
-    private static String sha256Hex(X509Certificate cert) throws Exception {
-        MessageDigest md = MessageDigest.getInstance("SHA-256");
-        return HexFormat.of().formatHex(md.digest(cert.getEncoded())).toLowerCase(Locale.ROOT);
     }
 
     private static OperationOutcome.Issue buildNearExpiryWarning(String subject, long daysRemaining) {
