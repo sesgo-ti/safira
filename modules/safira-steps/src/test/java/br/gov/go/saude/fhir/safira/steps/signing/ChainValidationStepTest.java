@@ -437,7 +437,7 @@ class ChainValidationStepTest {
     private static SafiraOperationalConfigProperties defaultConfig() {
         var trustStore = new SafiraOperationalConfigProperties.TrustStoreProps(
                 null, null, 30, 3, null, null, null, null, 1440, 2880, 10080, MIN_DATE);
-        return new SafiraOperationalConfigProperties(null, trustStore, null, null);
+        return new SafiraOperationalConfigProperties(null, trustStore, null, null, null);
     }
 
     private static SigningContext context(X509Certificate[] certs, long refTs) {

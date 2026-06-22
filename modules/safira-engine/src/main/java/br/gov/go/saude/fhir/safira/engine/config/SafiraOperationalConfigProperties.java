@@ -19,7 +19,8 @@ public record SafiraOperationalConfigProperties(
         @DefaultValue VerificationProps verification,
         @DefaultValue TrustStoreProps trustStore,
         @DefaultValue SecurityLimitsProps security,
-        @DefaultValue MiddlewareCryptoProps middlewareCrypto
+        @DefaultValue MiddlewareCryptoProps middlewareCrypto,
+        @DefaultValue ValidationPolicyProps validationPolicy
 
 ) {
 
@@ -155,5 +156,34 @@ public record SafiraOperationalConfigProperties(
                 @DefaultValue("2")  Integer intervaloRetry,
                 @DefaultValue("3")  Integer maximoRetries
         ) {}
+    }
+
+    // -------------------------------------------------------------------------
+    // Política de validação de assinaturas
+    // -------------------------------------------------------------------------
+
+    /**
+     * @param nearExpiryThresholdDays   Janela (em dias) para considerar um certificado próximo do vencimento. Padrão: 30. Intervalo: [1, 180].
+     * @param signatureAgeThresholdDays Idade máxima (em dias) aceita para uma assinatura antes de sinalizar alerta. Padrão: 365. Intervalo: [1, 1825].
+     * @param revocationPolicy          Política de tratamento para falhas de revogação. Padrão: STRICT.
+     * @param ocspUnknownHandling       Tratamento para respostas OCSP com status UNKNOWN. Padrão: TREAT_AS_REVOKED.
+     */
+    public record ValidationPolicyProps(
+            @DefaultValue("30")               Integer nearExpiryThresholdDays,
+            @DefaultValue("365")              Integer signatureAgeThresholdDays,
+            @DefaultValue("STRICT")           RevocationPolicy revocationPolicy,
+            @DefaultValue("TREAT_AS_REVOKED") OcspUnknownHandling ocspUnknownHandling
+    ) {
+
+        public enum RevocationPolicy {
+            STRICT,
+            SOFT_FAIL,
+            WARN
+        }
+
+        public enum OcspUnknownHandling {
+            TREAT_AS_REVOKED,
+            TREAT_AS_WARNING
+        }
     }
 }

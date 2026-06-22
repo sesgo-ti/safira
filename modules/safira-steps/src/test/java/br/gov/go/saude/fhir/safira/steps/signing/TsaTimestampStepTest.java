@@ -135,7 +135,7 @@ class TsaTimestampStepTest {
         var verification = new SafiraOperationalConfigProperties.VerificationProps(
                 3600, 3600, 20, 20, 20, 3, 2,
                 "https://tsa.example.com", null, null);
-        var opConfig = new SafiraOperationalConfigProperties(verification, null, null, null);
+        var opConfig = new SafiraOperationalConfigProperties(verification, null, null, null, null);
 
         return SigningContext.builder()
                 .strategy(TimestampStrategy.TSA)

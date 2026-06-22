@@ -4,6 +4,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.OperationOutcome;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepRegistry;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
+import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
 
 import java.util.List;
 import java.util.function.Function;
@@ -23,7 +24,7 @@ public class PipelineExecutor {
      * Executes the pipeline sequence for a specific configuration.
      *
      * @param politicsVersion the version of the pipeline policy to load
-     * @param operation the operation type (SIGNING, VERIFICATION, etc.)
+     * @param operation the operation type (SIGNING, VALIDATION, etc.)
      * @param initialContext current context injected by the client caller
      * @param resultExtractor function to extract the final payload T from the context
      * @return PipelineResult containing the extracted payload on success or the failure outcome
@@ -100,10 +101,14 @@ public class PipelineExecutor {
         return execute(politicsVersion, OperationType.SIGNING, context, SigningContext::getSignature);
     }
 
-    // /**
-    //  * Convenience method for executing the VERIFICATION pipeline.
-    //  */
-    // public <C extends StepContext, T> PipelineResult<T> verify(String politicsVersion, C context, Function<C, T> resultExtractor) {
-    //     return execute(politicsVersion, OperationType.VERIFICATION, context, resultExtractor);
-    // }
+    /**
+     * Convenience method for executing the VALIDATION pipeline.
+     *
+     * @param politicsVersion version of the pipeline policy to load
+     * @param context current validation context injected by the client caller
+     * @return PipelineResult containing the final OperationOutcome on success or a failure OperationOutcome on failure
+     */
+    public PipelineResult<OperationOutcome> validate(String politicsVersion, ValidationContext context) {
+        return execute(politicsVersion, OperationType.VALIDATION, context, ValidationContext::getOperationOutcome);
+    }
 }

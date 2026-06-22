@@ -1,10 +1,12 @@
 package br.gov.go.saude.fhir.safira.rest.api;
 
 import br.gov.go.saude.fhir.safira.engine.domain.PipelineResult;
-import br.gov.go.saude.fhir.safira.engine.domain.fhir.Signature;
+import br.gov.go.saude.fhir.safira.engine.domain.fhir.OperationOutcome;
 import br.gov.go.saude.fhir.safira.rest.dto.SigningInput;
 import br.gov.go.saude.fhir.safira.rest.dto.SigningInputValidator;
+import br.gov.go.saude.fhir.safira.rest.dto.ValidationInput;
 import br.gov.go.saude.fhir.safira.rest.service.SigningService;
+import br.gov.go.saude.fhir.safira.rest.service.ValidationService;
 import br.gov.go.saude.fhir.safira.rest.service.VersionsService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -21,11 +23,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class SignatureController {
     private final VersionsService versionsService;
     private final SigningService signingService;
+    private final ValidationService validationService;
     private final SigningInputValidator signingInputValidator;
 
-    public SignatureController(VersionsService versionsService, SigningService signingService, SigningInputValidator signingInputValidator) {
+    public SignatureController(VersionsService versionsService,
+                               SigningService signingService,
+                               ValidationService validationService,
+                               SigningInputValidator signingInputValidator) {
         this.versionsService = versionsService;
         this.signingService = signingService;
+        this.validationService = validationService;
         this.signingInputValidator = signingInputValidator;
     }
 
@@ -37,7 +44,7 @@ public class SignatureController {
     @PostMapping("/assinar")
     public ResponseEntity<?> sign(@Valid @RequestBody SigningInput input) {
         PipelineResult<?> result = signingService.sign(input);
-        
+
         return switch (result) {
             case PipelineResult.Success<?> success -> ResponseEntity
                     .status(HttpStatus.OK)
@@ -50,12 +57,20 @@ public class SignatureController {
         };
     }
 
-    @PostMapping("/verificar")
-    public ResponseEntity<String> verify() {
-        return ResponseEntity
-                .ok()
-                .contentType(MediaType.parseMediaType("application/fhir+json"))
-                .body("Objeto teve assinatura verificada com sucesso!");
+    @PostMapping("/validar")
+    public ResponseEntity<?> validate(@Valid @RequestBody ValidationInput input) {
+        PipelineResult<OperationOutcome> result = validationService.validate(input);
+
+        return switch (result) {
+            case PipelineResult.Success<OperationOutcome> success -> ResponseEntity
+                    .status(HttpStatus.OK)
+                    .contentType(MediaType.parseMediaType("application/fhir+json"))
+                    .body(success.getValue());
+            case PipelineResult.Failure<OperationOutcome> failure -> ResponseEntity
+                    .status(HttpStatus.UNPROCESSABLE_ENTITY)
+                    .contentType(MediaType.parseMediaType("application/fhir+json"))
+                    .body(failure.getExceptionDetails());
+        };
     }
 
     @GetMapping("/versoes")

@@ -6,7 +6,7 @@ safira:
   #   pipelines: Lista de definições de pipelines.
   #     - version: Identificador da versão do Guia de Implementação FHIR.
   #                Formato: "URL_CANONICA|VERSAO"
-  #     - operation: Tipo da operação. Valores possíveis: [SIGNING, VERIFICATION]
+  #     - operation: Tipo da operação. Valores possíveis: [SIGNING, VALIDATION]
   #     - steps: Lista ordenada de IDs dos passos (steps) a serem executados.
   # ---------------------------------------------------------------------------
   pipelines:
@@ -44,6 +44,20 @@ safira:
         - "tsa-timestamp"
         - "jws-final"
         - "fhir-signature"
+
+    - version: "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|1.1.0"
+      operation: VALIDATION
+      steps:
+        - "validation-context-validation"
+        - "jws-extraction"
+        - "jws-headers-validation"
+        - "validation-chain-build"
+        - "validation-chain-validation"
+        - "validation-signature-verification"
+        - "validation-ltv-revocation-check"
+        - "validation-timestamp-policy"
+        - "validation-payload-integrity"
+        - "validation-success"
 
   # ---------------------------------------------------------------------------
   # Configurações Operacionais do Engine de Assinatura Digital
@@ -218,3 +232,12 @@ safira:
         # Número máximo de tentativas de reconexão.
         # Padrão: 3 | Intervalo válido: [0, 10]
         maximo-retries: 3
+
+    # -------------------------------------------------------------------------
+    # Política de validação de assinaturas
+    # -------------------------------------------------------------------------
+    validation-policy:
+      near-expiry-threshold-days: 30
+      signature-age-threshold-days: 365
+      revocation-policy: STRICT
+      ocsp-unknown-handling: TREAT_AS_REVOKED
