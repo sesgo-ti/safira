@@ -6,17 +6,9 @@ import org.bouncycastle.tsp.TimeStampResponse;
 /**
  * Implementação HTTP do {@link TsaClient} para requisições RFC 3161.
  *
- * <p><b>TODO:</b> A integração HTTP real com TSA externa não está implementada nesta versão.
- * Requer:
- * <ul>
- *   <li>POST para {@code tsaUrl} com {@code Content-Type: application/timestamp-query}</li>
- *   <li>Corpo: {@code request.getEncoded()}</li>
- *   <li>Parse da resposta via {@code new TimeStampResponse(responseBytes)}</li>
- *   <li>Política de retry conforme configuração operacional</li>
- *   <li>Autenticação HTTP Basic opcional</li>
- * </ul>
- *
- * <p>Para integração com uma TSA ICP-Brasil real, consulte RFC 3161 §3.4.
+ * <p>Não implementada: lança {@link TsaUnavailableException} em todas as chamadas.
+ * Para integrar, fazer POST para {@code tsaUrl} com {@code Content-Type: application/timestamp-query},
+ * corpo {@code request.getEncoded()}, e parsear a resposta via {@code new TimeStampResponse(bytes)}.
  */
 public class HttpTsaClient implements TsaClient {
 

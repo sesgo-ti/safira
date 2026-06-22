@@ -19,13 +19,8 @@ import java.util.Map;
 /**
  * Step: valida campos de timestamp e conformidade com a política conforme spec §6.
  *
- * <p>Para a estratégia TSA, o parsing completo do token RFC 3161 é STUB.</p>
- *
- * TODO(tsa): parse completo do token RFC 3161 (TSA.INVALID-RESPONSE quando malformado)
- * TODO(tsa): validar assinatura do token contra cadeia da TSA (TSA.VALIDATION-FAILED)
- * TODO(tsa): re-emitir consulta caso o cache esteja ausente (TSA.UNAVAILABLE)
- * TODO(tsa): garantir que o timestamp do token está dentro da validade do leaf
- *            (TEMPORAL.TSA-TIMESTAMP-OUT-OF-BOUNDS)
+ * <p>Para a estratégia IAT, aplica clock skew de {@code ±300 s}. Para TSA, o parsing
+ * completo do token RFC 3161 ainda não está implementado (emite {@code warning}).
  */
 @StepId("validation-timestamp-policy")
 public class TimestampPolicyValidationStep implements ValidationStep {

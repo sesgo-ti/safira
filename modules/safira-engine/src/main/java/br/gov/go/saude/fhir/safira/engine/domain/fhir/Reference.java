@@ -2,9 +2,7 @@ package br.gov.go.saude.fhir.safira.engine.domain.fhir;
 
 import lombok.Builder;
 
-/**
- * Representation of the FHIR Reference data type.
- */
+/** Tipo de dado FHIR {@code Reference}. */
 @Builder
 public record Reference(
         String reference,

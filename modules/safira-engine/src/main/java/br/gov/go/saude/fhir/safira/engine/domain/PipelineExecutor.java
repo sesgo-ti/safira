@@ -10,8 +10,8 @@ import java.util.List;
 import java.util.function.Function;
 
 /**
- * The standard sequence executor for pipelines.
- * Resolves the appropriate steps from the registry and executes them sequentially.
+ * Executa pipelines sequencialmente a partir do {@link StepRegistry},
+ * curto-circuitando na primeira falha ou exceção técnica.
  */
 public class PipelineExecutor {
     private final StepRegistry stepRegistry;
@@ -21,13 +21,13 @@ public class PipelineExecutor {
     }
 
     /**
-     * Executes the pipeline sequence for a specific configuration.
+     * Executa o pipeline para a versão de política e operação indicadas.
      *
-     * @param politicsVersion the version of the pipeline policy to load
-     * @param operation the operation type (SIGNING, VALIDATION, etc.)
-     * @param initialContext current context injected by the client caller
-     * @param resultExtractor function to extract the final payload T from the context
-     * @return PipelineResult containing the extracted payload on success or the failure outcome
+     * @param politicsVersion versão da política (URI do pipeline)
+     * @param operation       tipo de operação (SIGNING, VALIDATION)
+     * @param initialContext  contexto inicial fornecido pelo chamador
+     * @param resultExtractor extrator do payload final a partir do contexto
+     * @return {@link PipelineResult.Success} com o payload ou {@link PipelineResult.Failure} com OperationOutcome
      */
     public <C extends StepContext, T> PipelineResult<T> execute(String politicsVersion, OperationType operation, C initialContext, Function<C, T> resultExtractor) {
         List<Step<C>> steps;
@@ -90,24 +90,12 @@ public class PipelineExecutor {
         );
     }
 
-    /**
-     * Convenience method for executing the SIGNING pipeline.
-     *
-     * @param politicsVersion version of the pipeline policy to load
-     * @param context current context injected by the client caller
-     * @return PipelineResult containing the extracted payload on success or OperationOutcome on failure
-     */
+    /** Atalho para executar o pipeline {@code SIGNING}. */
     public PipelineResult<?> sign(String politicsVersion, SigningContext context) {
         return execute(politicsVersion, OperationType.SIGNING, context, SigningContext::getSignature);
     }
 
-    /**
-     * Convenience method for executing the VALIDATION pipeline.
-     *
-     * @param politicsVersion version of the pipeline policy to load
-     * @param context current validation context injected by the client caller
-     * @return PipelineResult containing the final OperationOutcome on success or a failure OperationOutcome on failure
-     */
+    /** Atalho para executar o pipeline {@code VALIDATION}. */
     public PipelineResult<OperationOutcome> validate(String politicsVersion, ValidationContext context) {
         return execute(politicsVersion, OperationType.VALIDATION, context, ValidationContext::getOperationOutcome);
     }

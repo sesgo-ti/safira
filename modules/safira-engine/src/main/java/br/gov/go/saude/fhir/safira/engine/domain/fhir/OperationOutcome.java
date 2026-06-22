@@ -5,8 +5,8 @@ import lombok.Builder;
 import java.util.List;
 
 /**
- * Representation of the FHIR OperationOutcome data type, optimized for the
- * specialized profile reporting exceptional situations during digital signature creation.
+ * Representação do tipo FHIR {@code OperationOutcome}, restrita ao perfil de
+ * situações excepcionais na criação e validação de assinaturas digitais.
  */
 @Builder
 public record OperationOutcome(
@@ -24,13 +24,14 @@ public record OperationOutcome(
     ) {}
 
     /**
-     * Helper factory to create a compliant OperationOutcome based on the GO SES Security IG rules.
-     * @param severity "fatal", "error", "warning", or "information"
-     * @param typeCode The standard FHIR issue type code (e.g. "processing", "invalid", "security")
-     * @param exceptionCode The specialized signature exception code (e.g. "CERT.EXPIRED")
-     * @param text A plain text representation of the error (details.text)
-     * @param diagnostics Additional diagnostic information
-     * @return OperationOutcome instance
+     * Cria um {@code OperationOutcome} conforme o perfil de segurança GO SES.
+     *
+     * @param severity      severidade FHIR: {@code "fatal"}, {@code "error"}, {@code "warning"} ou {@code "information"}
+     * @param typeCode      tipo de issue FHIR padrão (ex: {@code "processing"}, {@code "invalid"})
+     * @param exceptionCode código do CodeSystem de situações excepcionais (ex: {@code "CERT.EXPIRED"})
+     * @param text          texto legível do erro, usado em {@code details.text}
+     * @param diagnostics   informação diagnóstica adicional e contextual
+     * @return instância de {@link OperationOutcome} pronta para serialização FHIR
      */
     public static OperationOutcome createSignatureError(
             String severity,

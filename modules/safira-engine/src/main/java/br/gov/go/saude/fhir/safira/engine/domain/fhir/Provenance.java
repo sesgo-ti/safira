@@ -9,8 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Simplified representation of a FHIR Provenance restricted to the exact needs
- * of the digital signature process as per Safira's architecture.
+ * Representação simplificada do recurso FHIR {@code Provenance}, restrita ao que o processo
+ * de assinatura digital precisa: targets, signatures e o JSON bruto.
  */
 @Builder
 public record Provenance(

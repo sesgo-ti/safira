@@ -12,29 +12,21 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Interface base para contextos de steps.
- * 
- * <p>
- * Define o contrato mínimo para acesso a atributos genéricos em contextos
- * de execução de steps.
- * </p>
+ * Contrato mínimo de contexto para execução de steps.
+ * Provê acesso tipado a atributos genéricos propagados ao longo do pipeline.
  */
 public interface StepContext {
 
     /**
-     * Obtém um atributo do contexto.
+     * Retorna o atributo associado à chave, convertido para o tipo solicitado.
      *
      * @param key  chave do atributo
-     * @param type tipo esperado
+     * @param type classe do tipo esperado
      * @param <T>  tipo do valor
-     * @return valor do atributo, ou vazio se não existir
+     * @return valor presente, ou vazio se a chave não existir ou o tipo não bater
      */
     <T> Optional<T> getAttribute(String key, Class<T> type);
 
-    /**
-     * Retorna todos os atributos (cópia imutável).
-     *
-     * @return mapa de atributos
-     */
+    /** Retorna todos os atributos como cópia imutável. */
     Map<String, Object> getAttributes();
 }

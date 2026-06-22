@@ -12,16 +12,10 @@ import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationStep;
 import java.util.List;
 
 /**
- * Stub atual — verificação completa é TODO.
+ * Step: verifica revogação LTV dos certificados da cadeia.
  *
- * TODO(revocation): consulta online OCSP via AIA extension (OID 1.3.6.1.5.5.7.48.1)
- * TODO(revocation): consulta online CRL via CDP extension (OID 2.5.29.31)
- * TODO(revocation): cache com metadata (fetchedAt / nextUpdate / expiresAt)
- * TODO(revocation): aplicar revocationPolicy (STRICT / SOFT_FAIL / WARN) em falhas de fetch
- * TODO(revocation): aplicar ocspUnknownHandling (TREAT_AS_REVOKED / TREAT_AS_WARNING)
- * TODO(revocation): materializar codigos CERT.REVOKED, REVOCATION.OCSP-UNAVAILABLE,
- *                   REVOCATION.CRL-UNAVAILABLE, REVOCATION.CACHE-EXPIRED quando full-check
- *                   estiver implementado
+ * <p>Stub — a consulta online OCSP/CRL ainda não está implementada.
+ * Emite um {@code warning} informativo no contexto e avança o pipeline.
  */
 @StepId("validation-ltv-revocation-check")
 public class LtvRevocationCheckStep implements ValidationStep {
