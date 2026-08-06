@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: Apache-2.0
+  Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
+-->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
@@ -13,6 +17,14 @@
 
     <name>Safira</name>
     <description>Agregador dos módulos e gerenciador centralizado de dependências do projeto Safira.</description>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <developers>
         <developer>
@@ -32,6 +44,7 @@
     </modules>
 
     <properties>
+        <project.license>Apache-2.0</project.license>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <java.version>21</java.version>
