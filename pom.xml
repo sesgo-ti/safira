@@ -39,6 +39,7 @@
 
     <modules>
         <module>modules/safira-engine</module>
+        <module>modules/safira-jades</module>
         <module>modules/safira-steps</module>
         <module>modules/safira-rest</module>
     </modules>
@@ -54,7 +55,9 @@
 
         <spring-boot.version>4.0.1</spring-boot.version>
 
-        <bouncycastle.version>1.77</bouncycastle.version>
+        <!-- Alinhado à versão usada pelo EU DSS 6.4 (inclui correções de CVEs pós-1.77) -->
+        <bouncycastle.version>1.83</bouncycastle.version>
+        <dss.version>6.4</dss.version>
         <vavr.version>0.10.4</vavr.version>
 
         <surefire.version>3.2.5</surefire.version>
@@ -68,6 +71,15 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
                 <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- EU DSS BOM (JAdES/ETSI TS 119 182-1 + validação ETSI EN 319 102-1) -->
+            <dependency>
+                <groupId>eu.europa.ec.joinup.sd-dss</groupId>
+                <artifactId>dss-bom</artifactId>
+                <version>${dss.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
