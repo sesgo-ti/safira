@@ -179,25 +179,41 @@ public final class TestPki {
         }
     }
 
-    /** Sobe uma TSA RFC 3161 local (HTTP) usando o certificado de TSA desta PKI. */
+    /** Sobe uma TSA RFC 3161 local (HTTP) com responder OCSP próprio (AIA no certificado da TSA). */
     public FakeTsa startFakeTsa() {
-        return new FakeTsa(tsaKeys, tsaCert);
+        return new FakeTsa(this);
     }
 
     /**
      * TSA RFC 3161 mínima e determinística sobre {@link HttpServer} local.
      *
-     * <p>Aceita {@code application/timestamp-query}, responde
-     * {@code application/timestamp-reply} com token assinado pelo certificado de TSA
-     * (EKU id-kp-timeStamping). Fecha com {@link #close()}.
+     * <p>Serve dois endpoints:
+     * <ul>
+     *   <li>{@code /tsa} — aceita {@code application/timestamp-query} e responde token
+     *       RFC 3161 assinado por um certificado de TSA (EKU id-kp-timeStamping) emitido
+     *       pela CA da PKI, contendo extensão AIA apontando para o responder local;</li>
+     *   <li>{@code /ocsp} — responder OCSP que responde {@code GOOD} (assinado pela CA)
+     *       para qualquer certificado consultado, ecoando o nonce quando presente.</li>
+     * </ul>
+     *
+     * <p>Permite exercitar B-T, B-LT e B-LTA sem qualquer serviço externo: a extensão LT
+     * obtém a revogação do certificado da TSA pelo AIA — resolvido neste mesmo servidor.
      */
     public static final class FakeTsa implements AutoCloseable {
 
         private final HttpServer server;
+        private final KeyPair tsaKeys;
+        private final X509Certificate tsaCert;
 
-        private FakeTsa(KeyPair tsaKeys, X509Certificate tsaCert) {
+        private FakeTsa(TestPki pki) {
             try {
                 this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+                int port = server.getAddress().getPort();
+
+                this.tsaKeys = rsa();
+                this.tsaCert = buildTsaWithAia(tsaKeys, pki.caKeys, pki.caCert,
+                        "CN=Safira Fake TSA", "http://127.0.0.1:" + port + "/ocsp");
+
                 server.createContext("/tsa", exchange -> {
                     try (exchange) {
                         byte[] requestBytes = exchange.getRequestBody().readAllBytes();
@@ -213,6 +229,21 @@ public final class TestPki {
                         exchange.sendResponseHeaders(500, -1);
                     }
                 });
+
+                server.createContext("/ocsp", exchange -> {
+                    try (exchange) {
+                        byte[] requestBytes = exchange.getRequestBody().readAllBytes();
+                        byte[] body = pki.ocspRespondGood(requestBytes);
+                        exchange.getResponseHeaders().set("Content-Type", "application/ocsp-response");
+                        exchange.sendResponseHeaders(200, body.length);
+                        try (OutputStream out = exchange.getResponseBody()) {
+                            out.write(body);
+                        }
+                    } catch (Exception e) {
+                        exchange.sendResponseHeaders(500, -1);
+                    }
+                });
+
                 server.start();
             } catch (Exception e) {
                 throw new IllegalStateException("Falha ao subir TSA fake", e);
@@ -221,6 +252,11 @@ public final class TestPki {
 
         public String url() {
             return "http://127.0.0.1:" + server.getAddress().getPort() + "/tsa";
+        }
+
+        /** Certificado da TSA fake (com AIA para o responder OCSP local). */
+        public X509Certificate tsaCert() {
+            return tsaCert;
         }
 
         @Override
@@ -246,6 +282,34 @@ public final class TestPki {
             TimeStampResponseGenerator responseGen =
                     new TimeStampResponseGenerator(tokenGen, TSPAlgorithms.ALLOWED);
             return responseGen.generate(request, BigInteger.valueOf(SERIAL.incrementAndGet()), new Date());
+        }
+    }
+
+    /** Responde uma requisição OCSP (DER) com status GOOD para o serial consultado, ecoando o nonce. */
+    byte[] ocspRespondGood(byte[] ocspRequestDer) {
+        try {
+            org.bouncycastle.cert.ocsp.OCSPReq request = new org.bouncycastle.cert.ocsp.OCSPReq(ocspRequestDer);
+            X509CertificateHolder caHolder = new JcaX509CertificateHolder(caCert);
+
+            BasicOCSPRespBuilder builder = new BasicOCSPRespBuilder(new RespID(caHolder.getSubject()));
+
+            org.bouncycastle.asn1.x509.Extension nonce = request.getExtension(
+                    org.bouncycastle.asn1.ocsp.OCSPObjectIdentifiers.id_pkix_ocsp_nonce);
+            if (nonce != null) {
+                builder.setResponseExtensions(new org.bouncycastle.asn1.x509.Extensions(nonce));
+            }
+
+            Date now = new Date();
+            Date nextUpdate = new Date(now.getTime() + 10L * 365 * 24 * 3600 * 1000);
+            for (org.bouncycastle.cert.ocsp.Req req : request.getRequestList()) {
+                builder.addResponse(req.getCertID(), CertificateStatus.GOOD, now, nextUpdate, null);
+            }
+
+            BasicOCSPResp basic = builder.build(
+                    signer(caKeys), new X509CertificateHolder[]{caHolder}, now);
+            return new OCSPRespBuilder().build(OCSPRespBuilder.SUCCESSFUL, basic).getEncoded();
+        } catch (Exception e) {
+            throw new IllegalStateException("Falha ao responder requisição OCSP de teste", e);
         }
     }
 
@@ -314,6 +378,12 @@ public final class TestPki {
 
     private static X509Certificate buildTsa(KeyPair tsaKeys, KeyPair caKeys,
                                             X509Certificate caCert, String dn) throws Exception {
+        return buildTsaWithAia(tsaKeys, caKeys, caCert, dn, null);
+    }
+
+    private static X509Certificate buildTsaWithAia(KeyPair tsaKeys, KeyPair caKeys,
+                                                   X509Certificate caCert, String dn,
+                                                   String ocspUrl) throws Exception {
         JcaX509v3CertificateBuilder builder = baseIssuedCert(tsaKeys, caCert, dn);
         JcaX509ExtensionUtils ext = new JcaX509ExtensionUtils();
 
@@ -325,6 +395,13 @@ public final class TestPki {
                 ext.createSubjectKeyIdentifier(tsaKeys.getPublic()));
         builder.addExtension(Extension.authorityKeyIdentifier, false,
                 ext.createAuthorityKeyIdentifier(caCert.getPublicKey()));
+
+        if (ocspUrl != null) {
+            builder.addExtension(Extension.authorityInfoAccess, false,
+                    new org.bouncycastle.asn1.x509.AuthorityInformationAccess(
+                            org.bouncycastle.asn1.x509.AccessDescription.id_ad_ocsp,
+                            new GeneralName(GeneralName.uniformResourceIdentifier, ocspUrl)));
+        }
 
         return convert(builder.build(signer(caKeys)));
     }

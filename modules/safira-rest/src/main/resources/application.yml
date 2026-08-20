@@ -66,6 +66,18 @@ safira:
         - "fhir-signature"
 
   # ---------------------------------------------------------------------------
+  # Perfil JAdES (política 2.0.0)
+  # ---------------------------------------------------------------------------
+  jades:
+    signing:
+      # Nível baseline alvo quando a estratégia de carimbo é "tsa" (níveis cumulativos):
+      #   B-T   — carimbo de assinatura (sigTst) apenas (padrão)
+      #   B-LT  — LTV: material completo de validação embutido (xVals/rVals/tstVD)
+      #   B-LTA — arquivamento: acrescenta carimbo de arquivo (arcTst)
+      # Na estratégia "iat" a assinatura permanece B-B independentemente deste valor.
+      target-level: B-T
+
+  # ---------------------------------------------------------------------------
   # Configurações Operacionais do Engine de Assinatura Digital
   # ---------------------------------------------------------------------------
   operational:

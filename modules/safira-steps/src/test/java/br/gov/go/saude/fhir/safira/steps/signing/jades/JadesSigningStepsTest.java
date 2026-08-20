@@ -14,9 +14,12 @@ import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifiers;
 import br.gov.go.saude.fhir.safira.jades.adapter.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.steps.config.SafiraJadesProperties;
+import br.gov.go.saude.fhir.safira.steps.signing.ChainValidationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.ContentDigestStep;
 import br.gov.go.saude.fhir.safira.steps.signing.CryptoSigningStep;
 import br.gov.go.saude.fhir.safira.steps.signing.JwsFinalStep;
+import br.gov.go.saude.fhir.safira.steps.signing.revocation.RevocationEvidence;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import eu.europa.esig.dss.enumerations.Indication;
@@ -113,14 +116,51 @@ class JadesSigningStepsTest {
         assertThat(failure.code().getCode()).startsWith("TSA.");
     }
 
+    @Test
+    void nivelBLtDeveEmbutirMaterialDeValidacaoPermitindoValidacaoOffline() throws Exception {
+        String jws = runPipeline(TimestampStrategy.TSA, SafiraJadesProperties.TargetLevel.B_LT);
+
+        List<String> components = etsiUComponentNames(jws);
+        // xVals é condicional (§5.3.5.2): omitido quando os certificados já estão noutro
+        // componente — a cadeia completa vai no x5c e o cert da TSA dentro do próprio TST
+        assertThat(components).contains("sigTst", "rVals", "tstVD");
+
+        assertThat(JAdESUtils.getInstance().validateAgainstSchema(jws)).isEmpty();
+
+        // Validação LTV genuína: verifier SEM nenhuma fonte de revogação — todo o material
+        // deve estar embutido na assinatura (rVals/tstVD)
+        assertThat(validateOffline(jws)).isEqualTo(Indication.TOTAL_PASSED);
+    }
+
+    @Test
+    void nivelBLtaDeveTerArcTstComoUltimoComponenteDoEtsiU() throws Exception {
+        String jws = runPipeline(TimestampStrategy.TSA, SafiraJadesProperties.TargetLevel.B_LTA);
+
+        List<String> components = etsiUComponentNames(jws);
+        assertThat(components).contains("sigTst", "rVals", "tstVD");
+        assertThat(components.getLast())
+                .as("arcTst deve ser o último elemento do etsiU (ETSI TS 119 182-1 §5.3.6.2.2)")
+                .isEqualTo("arcTst");
+
+        assertThat(JAdESUtils.getInstance().validateAgainstSchema(jws)).isEmpty();
+        assertThat(validateOffline(jws)).isEqualTo(Indication.TOTAL_PASSED);
+    }
+
     // ------------------------------------------------------------------
     // Infra do teste
     // ------------------------------------------------------------------
 
     private String runPipeline(TimestampStrategy strategy) throws Exception {
+        return runPipeline(strategy, SafiraJadesProperties.TargetLevel.B_T);
+    }
+
+    private String runPipeline(TimestampStrategy strategy, SafiraJadesProperties.TargetLevel targetLevel)
+            throws Exception {
         SigningContext context = signedContext(strategy, fakeTsa.url());
 
-        StepResult<SigningContext> extended = new JadesExtensionStep().execute(context);
+        JadesExtensionStep extensionStep = new JadesExtensionStep(
+                new br.gov.go.saude.fhir.safira.jades.JadesExtensionService(), targetLevel);
+        StepResult<SigningContext> extended = extensionStep.execute(context);
         assertInstanceOf(StepResult.Success.class, extended,
                 () -> "jades-extension falhou: " + ((StepResult.Failure<?>) extended).diagnostics());
 
@@ -154,6 +194,14 @@ class JadesSigningStepsTest {
                 .digest("payload-canonicalizado-teste".getBytes(StandardCharsets.UTF_8));
         String contentDigest = Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
 
+        // Evidências de revogação reais (como o chain-validation coleta em produção):
+        // resposta OCSP GOOD do signatário + CRL da CA — insumo do rVals no nível B-LT
+        byte[] leafOcsp = pki.ocspGoodFor(pki.leafCert);
+        byte[] caCrl = pki.crl();
+        List<RevocationEvidence> evidences = List.of(
+                new RevocationEvidence("OCSP", Base64.getEncoder().encodeToString(leafOcsp), sha512Hex(leafOcsp)),
+                new RevocationEvidence("CRL", Base64.getEncoder().encodeToString(caCrl), sha512Hex(caCrl)));
+
         return SigningContext.builder()
                 .strategy(strategy)
                 .referenceTimestamp(REFERENCE_TIMESTAMP)
@@ -162,7 +210,37 @@ class JadesSigningStepsTest {
                 .cryptoMaterial(new CryptoMaterial.PemMaterial(pki.leafKeyPemBase64(), null))
                 .operationalConfig(opConfig)
                 .attribute(ContentDigestStep.CONTENT_DIGEST_KEY, contentDigest)
+                .attribute(ChainValidationStep.REVOCATION_EVIDENCES_KEY, evidences)
                 .build();
+    }
+
+    /** Nomes dos componentes do etsiU, na ordem (cada elemento base64url decodificado tem um único membro). */
+    private List<String> etsiUComponentNames(String jws) throws Exception {
+        JsonNode etsiU = MAPPER.readTree(jws).get("signatures").get(0).get("header").get("etsiU");
+        List<String> names = new java.util.ArrayList<>();
+        for (JsonNode component : etsiU) {
+            String decoded = new String(Base64.getUrlDecoder().decode(component.asText()), StandardCharsets.UTF_8);
+            names.add(MAPPER.readTree(decoded).fieldNames().next());
+        }
+        return names;
+    }
+
+    /** Validação com verifier contendo APENAS o trust anchor — sem fontes de revogação. */
+    private Indication validateOffline(String jws) {
+        var verifier = CertificateVerifiers.create(List.of(pki.caCert), null, null);
+        Reports reports = new JadesValidationService().validate(jws, verifier);
+        var simple = reports.getSimpleReport();
+        String signatureId = simple.getFirstSignatureId();
+        return simple.getIndication(signatureId);
+    }
+
+    private static String sha512Hex(byte[] data) throws Exception {
+        byte[] hash = MessageDigest.getInstance("SHA-512").digest(data);
+        StringBuilder sb = new StringBuilder(hash.length * 2);
+        for (byte b : hash) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
     }
 
     private Indication validateWithDss(String jws) {

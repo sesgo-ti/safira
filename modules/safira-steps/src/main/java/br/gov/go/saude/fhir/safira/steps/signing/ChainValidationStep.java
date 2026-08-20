@@ -46,7 +46,7 @@ import java.util.List;
 @StepId("chain-validation")
 public class ChainValidationStep implements SigningStep {
 
-    static final String REVOCATION_EVIDENCES_KEY = "revocationEvidences";
+    public static final String REVOCATION_EVIDENCES_KEY = "revocationEvidences";
 
     private final TrustStoreService trustStoreService;
     private final RevocationService revocationService;
