@@ -127,6 +127,21 @@ public final class TestPki {
         return List.of(leafCert, caCert);
     }
 
+    /** Chave privada do signatário em PEM (PKCS#8), codificada em Base64 — formato aceito pelo crypto-signing. */
+    public String leafKeyPemBase64() {
+        try {
+            java.io.StringWriter writer = new java.io.StringWriter();
+            try (org.bouncycastle.openssl.jcajce.JcaPEMWriter pem =
+                         new org.bouncycastle.openssl.jcajce.JcaPEMWriter(writer)) {
+                pem.writeObject(leafKeys.getPrivate());
+            }
+            return java.util.Base64.getEncoder()
+                    .encodeToString(writer.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            throw new IllegalStateException("Falha ao serializar chave privada em PEM", e);
+        }
+    }
+
     /** Resposta OCSP {@code GOOD} (DER de {@code OCSPResponse}) para o certificado informado, assinada pela CA. */
     public byte[] ocspGoodFor(X509Certificate subject) {
         try {

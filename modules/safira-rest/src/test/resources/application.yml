@@ -1,6 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
 
+# Desativa cargas em background do trust-store nos testes: os beans TrustStoreService e
+# RevocationService são mockados (@MockitoBean) e chamadas concorrentes de scheduler ou
+# bootstrap nos mocks corrompem o stubbing do Mockito (race no @BeforeEach).
+truststore-icpbrasil:
+  scheduling:
+    enabled: false
+  bootstrap:
+    enabled: false
+
 safira:
   # ---------------------------------------------------------------------------
   # Configuração das Pipelines de Assinatura e Verificação
@@ -61,6 +70,25 @@ safira:
         - "validation-timestamp-policy"
         - "validation-payload-integrity"
         - "validation-success"
+
+    # -------------------------------------------------------------------------
+    # Política 2.0.0 — perfil JAdES-conforme (ETSI TS 119 182-1) via EU DSS
+    # -------------------------------------------------------------------------
+    - version: "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|2.0.0"
+      operation: SIGNING
+      steps:
+        - "context-validation"
+        - "payload-validation"
+        - "chain-build"
+        - "chain-validation"
+        - "payload-preparation"
+        - "json-canonicalizer"
+        - "content-digest"
+        - "jades-data-to-sign"
+        - "crypto-signing"
+        - "jades-assemble"
+        - "jades-extension"
+        - "fhir-signature"
 
   # ---------------------------------------------------------------------------
   # Configurações Operacionais do Engine de Assinatura Digital

@@ -21,6 +21,9 @@ import br.gov.go.saude.fhir.safira.steps.signing.PayloadValidationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.ProtectedHeaderStep;
 import br.gov.go.saude.fhir.safira.steps.signing.SigningInputStep;
 import br.gov.go.saude.fhir.safira.steps.signing.TsaTimestampStep;
+import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesAssembleStep;
+import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesDataToSignStep;
+import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesExtensionStep;
 import br.gov.go.saude.fhir.safira.steps.validation.JwsExtractionStep;
 import br.gov.go.saude.fhir.safira.steps.validation.JwsHeadersValidationStep;
 import br.gov.go.saude.fhir.safira.steps.validation.LtvRevocationCheckStep;
@@ -66,6 +69,11 @@ public class SafiraStepsAutoConfiguration {
         steps.add(new TsaTimestampStep());
         steps.add(new JwsFinalStep());
         steps.add(new FhirSignatureStep());
+
+        // Signing steps — política 2.0.0 (JAdES via EU DSS)
+        steps.add(new JadesDataToSignStep());
+        steps.add(new JadesAssembleStep());
+        steps.add(new JadesExtensionStep());
 
         // Validation steps
         steps.add(new ValidationContextValidationStep(pipelineDefinitions));
