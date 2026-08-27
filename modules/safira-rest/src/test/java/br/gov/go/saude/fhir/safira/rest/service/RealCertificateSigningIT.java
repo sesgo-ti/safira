@@ -44,7 +44,12 @@ import static org.junit.jupiter.api.Assertions.*;
  *     -Dpfx.password=senha
  * </pre>
  */
-@SpringBootTest
+@SpringBootTest(properties = {
+        // O YAML de teste desliga o bootstrap (beans mockados nos demais testes);
+        // aqui o trust-store REAL é necessário para chain-build/chain-validation.
+        "truststore-icpbrasil.bootstrap.enabled=true",
+        "truststore-icpbrasil.scheduling.enabled=false"
+})
 class RealCertificateSigningIT {
 
     private static final String POLICY_URI =
