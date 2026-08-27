@@ -21,13 +21,12 @@ import java.util.Base64;
 import java.util.List;
 
 /**
- * Passo {@code jades-data-to-sign} (política 2.0.0): monta os parâmetros JAdES-B-B via EU DSS
- * e publica o <em>signing input</em> para o passo {@code crypto-signing}.
+ * Passo {@code jades-data-to-sign}: monta os parâmetros JAdES-B-B via EU DSS e publica o
+ * <em>signing input</em> para o passo {@code crypto-signing}.
  *
- * <p>Lê do contexto: cadeia de certificados, {@code referenceTimestamp}, URI da política e o
- * atributo {@code contentDigest} (payload attached — requisito C15 do IG SES-GO).
- * Escreve: {@code jadesSession} (sessão DSS congelada) e {@code signingInputBytes}
- * (mesma chave consumida pelo {@code crypto-signing} da política legada — reuso integral).
+ * <p>Lê do contexto: cadeia de certificados, {@code referenceTimestamp}, URI da política e
+ * o atributo {@code contentDigest} (payload attached). Escreve: {@code jadesSession}
+ * (sessão DSS congelada) e {@code signingInputBytes}.
  */
 @StepId("jades-data-to-sign")
 public class JadesDataToSignStep implements SigningStep {

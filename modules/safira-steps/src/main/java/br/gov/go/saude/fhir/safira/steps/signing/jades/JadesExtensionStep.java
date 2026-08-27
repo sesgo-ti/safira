@@ -38,17 +38,17 @@ import java.util.Base64;
 import java.util.List;
 
 /**
- * Passo {@code jades-extension} (política 2.0.0): eleva o nível da assinatura conforme a
- * estratégia de carimbo e o nível alvo configurado (ETSI TS 119 182-1 §6.3, níveis cumulativos):
+ * Passo {@code jades-extension}: eleva o nível da assinatura conforme a estratégia de
+ * carimbo e o nível alvo configurado (ETSI TS 119 182-1 §6.3, níveis cumulativos):
  *
  * <ul>
  *   <li>estratégia {@code iat} → permanece <b>B-B</b> (no-op);</li>
- *   <li>estratégia {@code tsa} → <b>B-T</b>: {@code sigTst} (token RFC 3161 sobre o signature
- *       value) dentro do container {@code etsiU};</li>
- *   <li>{@code tsa} + {@code target-level: B-LT} → <b>B-LT</b> (LTV): o EU DSS embute
- *       {@code xVals} (certificados), {@code rVals} (OCSP/CRL) e {@code tstVD} — priorizando
- *       as evidências já verificadas pelo {@code chain-validation} e recorrendo a AIA/CDP
- *       online apenas para material fora da cadeia do signatário (ex.: certificado da TSA);</li>
+ *   <li>estratégia {@code tsa} → <b>B-T</b>: {@code sigTst} (token RFC 3161 sobre o
+ *       signature value) dentro do container {@code etsiU};</li>
+ *   <li>{@code tsa} + {@code target-level: B-LT} → <b>B-LT</b>: material completo de
+ *       validação embutido ({@code xVals}/{@code rVals}/{@code tstVD}), priorizando as
+ *       evidências coletadas pelo {@code chain-validation} com fallback online (AIA/CDP)
+ *       para material fora da cadeia do signatário — ex.: certificado da TSA;</li>
  *   <li>{@code tsa} + {@code target-level: B-LTA} → <b>B-LTA</b>: acrescenta {@code arcTst}
  *       como último elemento do {@code etsiU}.</li>
  * </ul>

@@ -16,10 +16,6 @@ import java.util.Arrays;
 /**
  * Conversão do valor de assinatura ECDSA entre as formas R||S (JWS, RFC 7515) e
  * DER/ASN.1 (JCA — {@code SEQUENCE { r INTEGER, s INTEGER }}).
- *
- * <p>O passo {@code crypto-signing} do Safira publica ES256 já transcodificado para
- * R||S (64 bytes). O DSS espera o formato JCA e faz a transcodificação inversa ao
- * montar o JWS; esta classe faz a ponte de forma determinística.
  */
 public final class EcdsaSignatureFormats {
 

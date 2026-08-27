@@ -22,13 +22,12 @@ import java.security.interfaces.ECPublicKey;
 import java.util.Base64;
 
 /**
- * Passo {@code jades-assemble} (política 2.0.0): entrega o valor de assinatura ao EU DSS e
- * publica o JWS General JSON Serialization final.
+ * Passo {@code jades-assemble}: entrega o valor de assinatura ao EU DSS e publica o JWS
+ * General JSON Serialization final no atributo {@code jwsFinal}.
  *
- * <p>Lê do contexto: {@code jadesSession} e o atributo {@code signature} (base64url) produzido
- * pelo {@code crypto-signing}. Para ES256, o valor R||S é transcodificado para DER (formato
- * JCA esperado pelo DSS, que o converte de volta ao montar o JWS). Escreve o atributo
- * {@code jwsFinal} — a mesma chave consumida pelo {@code fhir-signature} (reuso integral).
+ * <p>Lê do contexto: {@code jadesSession} e o atributo {@code signature} (base64url)
+ * produzido pelo {@code crypto-signing}. Para ES256, o valor R||S é transcodificado para
+ * DER — formato JCA esperado pelo DSS, que o converte de volta ao montar o JWS.
  */
 @StepId("jades-assemble")
 public class JadesAssembleStep implements SigningStep {

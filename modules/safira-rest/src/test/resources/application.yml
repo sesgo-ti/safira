@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
 
-# Desativa cargas em background do trust-store nos testes: os beans TrustStoreService e
-# RevocationService são mockados (@MockitoBean) e chamadas concorrentes de scheduler ou
-# bootstrap nos mocks corrompem o stubbing do Mockito (race no @BeforeEach).
+# Desativa cargas em background do trust-store: os beans são mockados nos testes e
+# chamadas concorrentes nos mocks corrompem o stubbing do Mockito.
 truststore-icpbrasil:
   scheduling:
     enabled: false

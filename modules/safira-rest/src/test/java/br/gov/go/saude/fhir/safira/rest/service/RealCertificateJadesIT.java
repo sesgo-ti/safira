@@ -43,18 +43,13 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Teste E2E condicional da política 2.0.0 (JAdES via EU DSS) com certificado PKCS#12 real
- * (ICP-Brasil A1), cobrindo assinatura e validação:
+ * Teste E2E condicional da política 2.0.0 com certificado PKCS#12 real (ICP-Brasil A1):
+ * assina pelo pipeline completo, valida a estrutura contra o schema oficial ETSI
+ * TS 119 182-1 e valida com o EU DSS (ETSI EN 319 102-1) usando a raiz ICP-Brasil do
+ * {@code x5c} como âncora e revogação online (AIA/CDP).
  *
- * <ol>
- *   <li><b>Assinatura</b>: pipeline completo da política 2.0.0 (trust-store real, resolução
- *       de cadeia, revogação OCSP/CRL reais, montagem JAdES pelo DSS);</li>
- *   <li><b>Validação estrutural</b>: JWS validado contra o schema oficial ETSI TS 119 182-1;</li>
- *   <li><b>Validação criptográfica e de cadeia</b>: validador do EU DSS (ETSI EN 319 102-1)
- *       com âncora na raiz ICP-Brasil do {@code x5c} e revogação online (AIA/CDP reais).</li>
- * </ol>
- *
- * <p>Execução (estratégia {@code iat} → JAdES-B-B):
+ * <p>Ignorado quando {@code pfx.path} e {@code pfx.password} não estão definidas.
+ * Execução (estratégia {@code iat} → JAdES-B-B):
  * <pre>
  * mvn test -pl modules/safira-rest \
  *     -Dtest=RealCertificateJadesIT \
@@ -62,19 +57,13 @@ import static org.junit.jupiter.api.Assertions.*;
  *     -Dpfx.password=senha
  * </pre>
  *
- * <p>Com TSA real (estratégia {@code tsa} → JAdES-B-T; com target-level B-LT → LTV):
+ * <p>Com TSA real ({@code tsa} → B-T; com {@code -Dsafira.jades.signing.target-level=B-LT} → LTV):
  * <pre>
- * mvn test -pl modules/safira-rest \
- *     -Dtest=RealCertificateJadesIT \
- *     -Dpfx.path=/caminho/cert.pfx \
- *     -Dpfx.password=senha \
- *     -Dtsa.url=https://freetsa.org/tsr \
- *     -Dsafira.jades.signing.target-level=B-LT
+ *     -Dtsa.url=https://freetsa.org/tsr
  * </pre>
  *
- * <p>Requer rede (revogação OCSP/CRL das ACs ICP-Brasil). A senha informada via linha de
- * comando fica no histórico do shell — prefira exportá-la em variável de ambiente ou
- * prefixar o comando com espaço (com {@code HIST_IGNORE_SPACE} ativo).
+ * <p>Requer rede. A senha em linha de comando fica no histórico do shell — prefira
+ * variável de ambiente.
  */
 @SpringBootTest(properties = {
         // O YAML de teste desliga o bootstrap (beans mockados nos demais testes);

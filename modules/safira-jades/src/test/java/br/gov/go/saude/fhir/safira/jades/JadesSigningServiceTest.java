@@ -84,8 +84,7 @@ class JadesSigningServiceTest {
         assertThat(header.get("x5c")).hasSize(2);
         // iat incondicional (ETSI TS 119 182-1 §5.1.11) com o instante declarado
         assertThat(header.get("iat").asLong()).isEqualTo(REFERENCE_TIMESTAMP);
-        // sigPId.id é um objeto oId (§5.4.1): {"id": {"id": "<uri>"}} — divergência do IG legado,
-        // que serializa {"id": "<uri>"} (string) e precisa ser atualizado
+        // sigPId.id é um objeto oId (§5.4.1): {"id": {"id": "<uri>"}}
         assertThat(header.get("sigPId").get("id").get("id").asText()).isEqualTo(POLICY_URI);
     }
 

@@ -18,8 +18,7 @@ import java.util.Objects;
  * o protected header (incluindo {@code iat}) de forma determinística a partir dela.
  *
  * @param parameters parâmetros DSS congelados para esta assinatura
- * @param payload    bytes crus do payload JWS (no perfil SES-GO, os 32 bytes do
- *                   SHA-256 da concatenação das instâncias canonicalizadas)
+ * @param payload    bytes crus do payload JWS
  */
 public record JadesSigningSession(JAdESSignatureParameters parameters, byte[] payload) {
 

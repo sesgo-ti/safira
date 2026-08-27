@@ -16,11 +16,8 @@ import eu.europa.esig.dss.spi.x509.revocation.ocsp.ExternalResourcesOCSPSource;
 import java.util.List;
 
 /**
- * Fontes de revogação <em>offline</em> alimentadas pelas evidências DER (respostas OCSP e
- * CRLs) coletadas durante a validação de cadeia do pipeline de assinatura.
- *
- * <p>Usadas na extensão B-LT: o material que o DSS embute em {@code rVals} é exatamente o
- * que o Safira já verificou — a extensão é determinística e funciona sem rede.
+ * Fontes de revogação <em>offline</em> construídas a partir de respostas OCSP e CRLs
+ * completas em DER — insumo determinístico para a extensão B-LT ({@code rVals}).
  */
 public final class EvidenceRevocationSources {
 

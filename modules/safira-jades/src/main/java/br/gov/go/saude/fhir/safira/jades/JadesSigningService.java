@@ -33,18 +33,16 @@ import java.util.Objects;
 /**
  * Produção de assinaturas JAdES-B-B (ETSI TS 119 182-1) via EU DSS, em três fases:
  * {@link #newSession(Request)} → {@link #dataToSign(JadesSigningSession)} →
- * (assinatura externa do material criptográfico) → {@link #sign(JadesSigningSession, byte[])}.
+ * (assinatura externa) → {@link #sign(JadesSigningSession, byte[])}.
  *
- * <p>A chave privada nunca entra nesta classe: o valor da assinatura é produzido fora
- * (PEM/PKCS#12 hoje; PKCS#11/remoto no futuro) e entregue pronto — o desenho preserva o
- * passo {@code crypto-signing} do Safira e o perfil do IG SES-GO:
+ * <p>A chave privada nunca entra nesta classe: o valor da assinatura é produzido pelo
+ * chamador e entregue pronto. Perfil produzido:
  *
  * <ul>
- *   <li>JWS General JSON Serialization (RFC 7515 §7.2.1) — requisito C14;</li>
- *   <li>payload <em>attached</em>: os bytes do SHA-256 das instâncias canonicalizadas
- *       (requisito C15 — sem {@code sigD}, sem {@code crit});</li>
- *   <li>{@code iat} incondicional (ETSI TS 119 182-1 §5.1.11 — obrigatório desde 2025-07-15);</li>
- *   <li>{@code x5c} com a cadeia completa (requisito C17);</li>
+ *   <li>JWS General JSON Serialization (RFC 7515 §7.2.1) com payload <em>attached</em>
+ *       (sem {@code sigD}, sem {@code crit});</li>
+ *   <li>{@code iat} incondicional (§5.1.11 — obrigatório desde 2025-07-15);</li>
+ *   <li>{@code x5c} com a cadeia completa;</li>
  *   <li>{@code sigPId} com o identificador da política (e digest quando disponível).</li>
  * </ul>
  */
@@ -53,8 +51,8 @@ public class JadesSigningService {
     /**
      * Parâmetros de criação de uma sessão de assinatura.
      *
-     * @param certificateChain      cadeia completa, folha primeiro (requisito C17)
-     * @param payload               bytes crus do payload JWS (32 bytes do SHA-256)
+     * @param certificateChain      cadeia completa, folha primeiro
+     * @param payload               bytes crus do payload JWS
      * @param referenceTimestamp    instante declarado da assinatura ({@code iat}), epoch seconds UTC
      * @param policyId              URI da política de assinatura ({@code sigPId.id})
      * @param policyDigestAlgorithm algoritmo do hash do documento da política (opcional)
@@ -92,7 +90,7 @@ public class JadesSigningService {
         parameters.setJadesSigningTimeType(JAdESSigningTimeType.IAT);
         parameters.bLevel().setSigningDate(Date.from(Instant.ofEpochSecond(request.referenceTimestamp())));
 
-        // Header mínimo do perfil SES-GO: alg, x5c (cadeia completa), iat, sigPId
+        // Header mínimo: alg, x5c (cadeia completa), iat, sigPId
         parameters.setIncludeCertificateChain(true);
         parameters.setIncludeSignatureType(false);
         parameters.setIncludeKeyIdentifier(false);
