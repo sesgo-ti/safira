@@ -21,6 +21,9 @@ import br.gov.go.saude.fhir.safira.steps.signing.PayloadValidationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.ProtectedHeaderStep;
 import br.gov.go.saude.fhir.safira.steps.signing.SigningInputStep;
 import br.gov.go.saude.fhir.safira.steps.signing.TsaTimestampStep;
+import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesAssembleStep;
+import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesDataToSignStep;
+import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesExtensionStep;
 import br.gov.go.saude.fhir.safira.steps.validation.JwsExtractionStep;
 import br.gov.go.saude.fhir.safira.steps.validation.JwsHeadersValidationStep;
 import br.gov.go.saude.fhir.safira.steps.validation.LtvRevocationCheckStep;
@@ -39,16 +42,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
 @AutoConfiguration
+@EnableConfigurationProperties(SafiraJadesProperties.class)
 public class SafiraStepsAutoConfiguration {
 
     @Bean
     public List<Step<?>> safiraAllSteps(TrustStoreService trustStoreService,
                                         RevocationService revocationService,
                                         CertificateChainResolver certificateChainResolver,
-                                        List<PipelineDefinition> pipelineDefinitions) {
+                                        List<PipelineDefinition> pipelineDefinitions,
+                                        SafiraJadesProperties jadesProperties) {
         List<Step<?>> steps = new ArrayList<>();
 
         // Signing steps
@@ -66,6 +72,13 @@ public class SafiraStepsAutoConfiguration {
         steps.add(new TsaTimestampStep());
         steps.add(new JwsFinalStep());
         steps.add(new FhirSignatureStep());
+
+        // Signing steps — política 2.0.0 (JAdES via EU DSS)
+        steps.add(new JadesDataToSignStep());
+        steps.add(new JadesAssembleStep());
+        steps.add(new JadesExtensionStep(
+                new br.gov.go.saude.fhir.safira.jades.JadesExtensionService(),
+                jadesProperties.signing().targetLevel()));
 
         // Validation steps
         steps.add(new ValidationContextValidationStep(pipelineDefinitions));
