@@ -63,6 +63,7 @@
         <vavr.version>0.10.4</vavr.version>
 
         <surefire.version>3.2.5</surefire.version>
+        <jacoco.version>0.8.12</jacoco.version>
     </properties>
 
     <dependencyManagement>
@@ -189,15 +190,62 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${surefire.version}</version>
                     <configuration>
-                        <argLine>
-                            -Xshare:off
-                            -XX:+EnableDynamicAgentLoading
-                        </argLine>
+                        <argLine>@{jacocoArgLine} -Xshare:off -XX:+EnableDynamicAgentLoading</argLine>
+                        <!-- Testes de integração (rede externa / certificado real) não rodam no build padrão -->
+                        <excludedGroups>integration</excludedGroups>
                     </configuration>
                 </plugin>
-
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco.version}</version>
+                </plugin>
             </plugins>
         </pluginManagement>
+        <plugins>
+            <!-- Cobertura de testes: relatório por módulo em target/site/jacoco/index.html -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                        <configuration>
+                            <!-- Propriedade dedicada para compor com as demais opções do surefire -->
+                            <propertyName>jacocoArgLine</propertyName>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
+
+    <profiles>
+        <!-- Executa também os testes de integração (@Tag("integration")) -->
+        <profile>
+            <id>integration-tests</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <excludedGroups combine.self="override"/>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>
