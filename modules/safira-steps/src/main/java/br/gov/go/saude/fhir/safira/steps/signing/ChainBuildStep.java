@@ -10,9 +10,9 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
-import br.gov.go.saude.fhir.truststore.icpbrasil.model.CertificateParser;
-import br.gov.go.saude.fhir.truststore.icpbrasil.service.CertificateChainResolver;
-import br.gov.go.saude.fhir.truststore.icpbrasil.service.IncompleteChainException;
+import br.gov.go.saude.truststore.icpbrasil.model.CertificateParser;
+import br.gov.go.saude.truststore.icpbrasil.service.CertificateChainResolver;
+import br.gov.go.saude.truststore.icpbrasil.service.IncompleteChainException;
 
 import java.security.cert.CertificateParsingException;
 import java.security.cert.X509Certificate;

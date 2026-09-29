@@ -11,10 +11,10 @@ import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
 import br.gov.go.saude.fhir.safira.steps.signing.revocation.RevocationEvidence;
-import br.gov.go.saude.fhir.truststore.icpbrasil.model.CertificateParser;
-import br.gov.go.saude.fhir.truststore.icpbrasil.model.RevocationStatus;
-import br.gov.go.saude.fhir.truststore.icpbrasil.service.TrustStoreService;
-import br.gov.go.saude.fhir.truststore.icpbrasil.service.revocation.RevocationService;
+import br.gov.go.saude.truststore.icpbrasil.model.CertificateParser;
+import br.gov.go.saude.truststore.icpbrasil.model.RevocationStatus;
+import br.gov.go.saude.truststore.icpbrasil.service.TrustStoreService;
+import br.gov.go.saude.truststore.icpbrasil.service.revocation.RevocationService;
 
 import javax.security.auth.x500.X500Principal;
 import java.security.MessageDigest;

@@ -58,6 +58,7 @@
         <!-- 1.84+: corrige CVE-2025-14813 (crítica), CVE-2026-5588 e CVE-2026-0636 -->
         <bouncycastle.version>1.84</bouncycastle.version>
         <dss.version>6.4</dss.version>
+        <icpbrasil-truststore.version>0.0.1</icpbrasil-truststore.version>
         <netty.version>4.2.17.Final</netty.version>
         <vavr.version>0.10.4</vavr.version>
 

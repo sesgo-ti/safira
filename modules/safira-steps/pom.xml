@@ -53,9 +53,9 @@
         </dependency>
 
         <dependency>
-            <groupId>br.gov.go.saude.fhir</groupId>
-            <artifactId>trust-store-icpbrasil</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
+            <groupId>br.gov.go.saude</groupId>
+            <artifactId>icpbrasil-truststore-autoconfigure</artifactId>
+            <version>${icpbrasil-truststore.version}</version>
         </dependency>
 
         <dependency>

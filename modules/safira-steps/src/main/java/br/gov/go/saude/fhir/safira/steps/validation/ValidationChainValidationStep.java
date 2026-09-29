@@ -14,7 +14,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationStep;
-import br.gov.go.saude.fhir.truststore.icpbrasil.service.TrustStoreService;
+import br.gov.go.saude.truststore.icpbrasil.service.TrustStoreService;
 import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.x509.CertificatePolicies;

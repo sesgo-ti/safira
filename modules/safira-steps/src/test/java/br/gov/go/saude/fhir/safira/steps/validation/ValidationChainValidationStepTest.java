@@ -12,7 +12,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.StepResult;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.OperationOutcome;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
-import br.gov.go.saude.fhir.truststore.icpbrasil.service.TrustStoreService;
+import br.gov.go.saude.truststore.icpbrasil.service.TrustStoreService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

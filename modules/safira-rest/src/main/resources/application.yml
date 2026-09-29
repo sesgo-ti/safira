@@ -1,6 +1,16 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
 
+# -----------------------------------------------------------------------------
+# Acervo ICP-Brasil (lib icpbrasil-truststore): download do ITI, cache, PKIX e revogação.
+# As URLs oficiais do ITI são defaults da biblioteca; demais propriedades no README da lib.
+# -----------------------------------------------------------------------------
+icpbrasil-truststore:
+  storage:
+    type: filesystem
+  filesystem:
+    base-dir: ${SAFIRA_TRUSTSTORE_DIR:/var/safira/icpbrasil-truststore}
+
 safira:
   # ---------------------------------------------------------------------------
   # Configuração das Pipelines de Assinatura e Verificação
@@ -128,50 +138,6 @@ safira:
 
       # (Opcional) Senha para autenticação HTTP Basic no serviço TSA.
       # tsa-password: ""
-
-    # -------------------------------------------------------------------------
-    # Trust Store: gerenciamento de certificados ICP-Brasil
-    # -------------------------------------------------------------------------
-    trust-store:
-      # URL do arquivo .zip contendo certificados das ACs vigentes da ICP-Brasil.
-      icpbrasil-url-certificados: "https://www.gov.br/iti/pt-br/acesso-a-informacao/tic/arquivos/certificados-base64/base64-certificados.zip"
-
-      # URL do arquivo de hash SHA-512 do zip disponibilizado em icpbrasil-url-certificados.
-      icpbrasil-url-hash512: "https://www.gov.br/iti/pt-br/acesso-a-informacao/tic/arquivos/certificados-base64/base64-certificados.zip.sha512"
-
-      # Timeout (em segundos) para acesso às URLs ICP-Brasil.
-      timeout: 30
-
-      # Número máximo de tentativas para recuperação de conteúdo da ICP-Brasil.
-      max-retries: 3
-
-      # Intervalos (em segundos) entre tentativas, separados por espaço (backoff progressivo).
-      backoff: "2 5 10"
-
-      # Estratégia de armazenamento do truststore.
-      # Opções: memoria (não persistente) | diretorio (sistema de arquivos local) | s3
-      repositorio: "diretorio"
-
-      # Diretório local onde dados do truststore são depositados (usado quando repositorio=diretorio).
-      diretorio: "/var/safira/truststore"
-
-      # Bucket S3 onde dados são depositados (usado quando repositorio=s3).
-      # bucket: "safira-truststore"
-
-      # Intervalo (em minutos) para verificação de novo conteúdo na ICP-Brasil.
-      refresh: 1440
-
-      # TTL de alerta (em minutos): sinaliza que o conteúdo local está próximo do vencimento.
-      ttl-critico: 2880
-
-      # TTL máximo (em minutos): a partir deste ponto o truststore local é ignorado e
-      # uma nova versão deve ser obtida obrigatoriamente.
-      ttl-maximo: 10080
-
-      # Data mínima de emissão do certificado do signatário (epoch seconds, UTC).
-      # Certificados emitidos antes desta data são rejeitados por não atenderem
-      # aos requisitos de segurança vigentes. Padrão: 1751328000 (2025-07-01T00:00:00Z).
-      minimum-certificate-date: 1751328000
 
     # -------------------------------------------------------------------------
     # Limites de segurança para processamento de Bundles FHIR

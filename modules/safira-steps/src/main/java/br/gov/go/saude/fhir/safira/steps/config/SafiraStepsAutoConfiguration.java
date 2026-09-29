@@ -34,9 +34,9 @@ import br.gov.go.saude.fhir.safira.steps.validation.ValidationChainBuildStep;
 import br.gov.go.saude.fhir.safira.steps.validation.ValidationChainValidationStep;
 import br.gov.go.saude.fhir.safira.steps.validation.ValidationContextValidationStep;
 import br.gov.go.saude.fhir.safira.steps.validation.ValidationSuccessStep;
-import br.gov.go.saude.fhir.truststore.icpbrasil.service.CertificateChainResolver;
-import br.gov.go.saude.fhir.truststore.icpbrasil.service.TrustStoreService;
-import br.gov.go.saude.fhir.truststore.icpbrasil.service.revocation.RevocationService;
+import br.gov.go.saude.truststore.icpbrasil.service.CertificateChainResolver;
+import br.gov.go.saude.truststore.icpbrasil.service.TrustStoreService;
+import br.gov.go.saude.truststore.icpbrasil.service.revocation.RevocationService;
 
 import java.util.ArrayList;
 import java.util.List;
