@@ -8,7 +8,7 @@ package br.gov.go.saude.fhir.safira.engine.domain.fhir;
 import lombok.Getter;
 
 /**
- * CodeSystem FHIR {@code situacao-excepcional-assinatura}, versão 0.1.2.
+ * CodeSystem FHIR {@code situacao-excepcional-assinatura}, versão 0.2.0.
  *
  * <p>Cada constante mapeia um código do CodeSystem publicado em
  * {@code https://fhir.saude.go.gov.br/r4/seguranca/CodeSystem/situacao-excepcional-assinatura}
@@ -21,6 +21,7 @@ public enum SignatureExceptionCode {
     POLICY_URI_INVALID("POLICY.URI-INVALID", "URI da Política Inválida", "error", "POLICY"),
     POLICY_VERSION_UNSUPPORTED("POLICY.VERSION-UNSUPPORTED", "Versão da Política Não Suportada", "error", "POLICY"),
     POLICY_VERSION_DEPRECATED("POLICY.VERSION-DEPRECATED", "Versão da Política Descontinuada", "warning", "POLICY"),
+    POLICY_SIGNATURE_POLICY_ID_INVALID("POLICY.SIGNATURE-POLICY-ID-INVALID", "Identificador da Política de Assinatura Inválido", "error", "POLICY"),
     CERT("CERT", "Problemas com Certificados Digitais", null, "CERT"),
     CERT_INVALID_FORMAT("CERT.INVALID-FORMAT", "Formato de Certificado Inválido", "error", "CERT"),
     CERT_CHAIN_VALIDATION_FAILED("CERT.CHAIN-VALIDATION-FAILED", "Validação da Cadeia de Certificados Falhou", "error", "CERT"),
@@ -38,6 +39,7 @@ public enum SignatureExceptionCode {
     REVOCATION("REVOCATION", "Problemas com Validação de Revogação", null, "REVOCATION"),
     REVOCATION_OCSP_UNAVAILABLE("REVOCATION.OCSP-UNAVAILABLE", "Serviço OCSP Indisponível", "error", "REVOCATION"),
     REVOCATION_CRL_UNAVAILABLE("REVOCATION.CRL-UNAVAILABLE", "Lista CRL Indisponível", "error", "REVOCATION"),
+    REVOCATION_STATUS_UNKNOWN("REVOCATION.STATUS-UNKNOWN", "Status de Revogação Desconhecido", "error", "REVOCATION"),
     REVOCATION_CRL_INVALID("REVOCATION.CRL-INVALID", "CRL Inválida", "error", "REVOCATION"),
     REVOCATION_OCSP_INVALID("REVOCATION.OCSP-INVALID", "OCSP Inválido", "error", "REVOCATION"),
     REVOCATION_NO_CONNECTIVITY("REVOCATION.NO-CONNECTIVITY", "Sem Conectividade Externa", "error", "REVOCATION"),
@@ -59,6 +61,8 @@ public enum SignatureExceptionCode {
     FORMAT("FORMAT", "Problemas de Formato e Estrutura", null, "FORMAT"),
     FORMAT_BUNDLE_MALFORMED("FORMAT.BUNDLE-MALFORMED", "Bundle FHIR Malformado", "error", "FORMAT"),
     FORMAT_BUNDLE_EMPTY("FORMAT.BUNDLE-EMPTY", "Bundle Vazio", "error", "FORMAT"),
+    FORMAT_JADES_COMPONENT_PLACEMENT_INVALID("FORMAT.JADES-COMPONENT-PLACEMENT-INVALID", "Posição de Componente JAdES Inválida", "error", "FORMAT"),
+    FORMAT_JADES_UNPROTECTED_HEADER_INVALID("FORMAT.JADES-UNPROTECTED-HEADER-INVALID", "Unprotected Header JAdES Inválido", "error", "FORMAT"),
     FORMAT_PROVENANCE_INVALID("FORMAT.PROVENANCE-INVALID", "Provenance Inválido", "error", "FORMAT"),
     FORMAT_TARGET_REFERENCE_MISSING("FORMAT.TARGET-REFERENCE-MISSING", "Referência de Target Ausente", "error", "FORMAT"),
     FORMAT_JSON_MALFORMED("FORMAT.JSON-MALFORMED", "JSON Malformado", "error", "FORMAT"),
@@ -129,12 +133,20 @@ public enum SignatureExceptionCode {
     CONFIG_INVALID_TIMESTAMP_FORMAT("CONFIG.INVALID-TIMESTAMP-FORMAT", "Timestamp com formato inválido.", "error", "CONFIG"),
     TSA("TSA", "Problemas com Autoridade de Carimbo de Tempo", null, "TSA"),
     TSA_UNAVAILABLE("TSA.UNAVAILABLE", "TSA Indisponível", "error", "TSA"),
+    TSA_MESSAGE_IMPRINT_MISMATCH("TSA.MESSAGE-IMPRINT-MISMATCH", "Message Imprint TSA Divergente", "error", "TSA"),
+    TSA_SIGNATURE_INVALID("TSA.SIGNATURE-INVALID", "Assinatura TSA Inválida", "error", "TSA"),
+    TSA_CHAIN_VALIDATION_FAILED("TSA.CHAIN-VALIDATION-FAILED", "Validação da Cadeia TSA Falhou", "error", "TSA"),
+    TSA_CERTIFICATE_PURPOSE_INVALID("TSA.CERTIFICATE-PURPOSE-INVALID", "Propósito do Certificado TSA Inválido", "error", "TSA"),
+    TSA_CERTIFICATE_REVOKED("TSA.CERTIFICATE-REVOKED", "Certificado TSA Revogado", "error", "TSA"),
+    TSA_POLICY_UNSUPPORTED("TSA.POLICY-UNSUPPORTED", "Política TSA Não Suportada", "error", "TSA"),
+    TSA_CERTIFICATE_TIME_INVALID("TSA.CERTIFICATE-TIME-INVALID", "Período do Certificado TSA Inválido", "error", "TSA"),
     TSA_INVALID_RESPONSE("TSA.INVALID-RESPONSE", "Resposta TSA Inválida", "error", "TSA"),
     TSA_INVALID_TOKEN("TSA.INVALID-TOKEN", "Token TSA Inválido", "error", "TSA"),
     TSA_VALIDATION_FAILED("TSA.VALIDATION-FAILED", "Validação TSA Falhou", "error", "TSA"),
     TEMPORAL("TEMPORAL", "Problemas Temporais", null, "TEMPORAL"),
     TEMPORAL_IAT_OUT_OF_CERT_PERIOD("TEMPORAL.IAT-OUT-OF-CERT-PERIOD", "IAT Fora do Período do Certificado", "error", "TEMPORAL"),
     TEMPORAL_IAT_INVALID("TEMPORAL.IAT-INVALID", "IAT Inválido", "error", "TEMPORAL"),
+    TEMPORAL_IAT_MISSING("TEMPORAL.IAT-MISSING", "IAT Ausente", "error", "TEMPORAL"),
     TEMPORAL_TSA_TIMESTAMP_OUT_OF_BOUNDS("TEMPORAL.TSA-TIMESTAMP-OUT-OF-BOUNDS", "Timestamp TSA Fora dos Limites", "error", "TEMPORAL"),
     TEMPORAL_SIGNATURE_TOO_OLD("TEMPORAL.SIGNATURE-TOO-OLD", "Assinatura Muito Antiga", "warning", "TEMPORAL"),
     TEMPORAL_CLOCK_SKEW_DETECTED("TEMPORAL.CLOCK-SKEW-DETECTED", "Diferença de Relógio Detectada", "warning", "TEMPORAL"),
@@ -144,6 +156,7 @@ public enum SignatureExceptionCode {
     CACHE_CRITICAL_STALE("CACHE.CRITICAL-STALE", "Cache Crítico", null, null),
     CACHE_EXPIRED_UNSAFE("CACHE.EXPIRED-UNSAFE", "Cache Expirado", null, null),
     CACHE_STALE_BUT_VALID("CACHE.STALE-BUT-VALID", "Cache Desatualizado Válido", null, null),
+    CACHE_UNAVAILABLE("CACHE.UNAVAILABLE", "Cache Indisponível", "error", "CACHE"),
     NETWORK_HASH_DOWNLOAD_FAILED("NETWORK.HASH-DOWNLOAD-FAILED", "Falha no Download do Hash", null, null),
     NETWORK_ZIP_DOWNLOAD_FAILED("NETWORK.ZIP-DOWNLOAD-FAILED", "Falha no Download do Zip", null, null),
     SECURITY_HASH_VALIDATION_FAILED("SECURITY.HASH-VALIDATION-FAILED", "Falha na Validação de Hash", null, null),
@@ -153,6 +166,9 @@ public enum SignatureExceptionCode {
     VALIDATION_TIMESTAMP_STRATEGY_INVALID("VALIDATION.TIMESTAMP-STRATEGY-INVALID", "Estratégia de Timestamp Inválida", "error", "VALIDATION"),
     VALIDATION_POLICY_COMPLIANCE_FAILED("VALIDATION.POLICY-COMPLIANCE-FAILED", "Conformidade com Política Falhou", "error", "VALIDATION"),
     VALIDATION_SUCCESS("VALIDATION.SUCCESS", "Validação Bem-sucedida", "information", "VALIDATION"),
+    VALIDATION_JADES_LEVEL_INVALID("VALIDATION.JADES-LEVEL-INVALID", "Nível JAdES Inválido", "error", "VALIDATION"),
+    VALIDATION_INDETERMINATE("VALIDATION.INDETERMINATE", "Resultado Indeterminado", "warning", "VALIDATION"),
+    VALIDATION_TRY_LATER("VALIDATION.TRY-LATER", "Revalidação Posterior Necessária", "warning", "VALIDATION"),
     SYSTEM("SYSTEM", "Problemas de Sistema", null, "SYSTEM"),
     SYSTEM_MEMORY_EXHAUSTED("SYSTEM.MEMORY-EXHAUSTED", "Memória Esgotada", "fatal", "SYSTEM"),
     SYSTEM_TIMEOUT("SYSTEM.TIMEOUT", "Timeout da Operação", "error", "SYSTEM"),
@@ -165,7 +181,7 @@ public enum SignatureExceptionCode {
     SECURITY_PROVENANCE_SIZE_LIMIT_EXCEEDED("SECURITY.PROVENANCE-SIZE-LIMIT-EXCEEDED", "Limite de Tamanho do Provenance Excedido", "error", "SECURITY");
 
     public static final String SYSTEM_URI = "https://fhir.saude.go.gov.br/r4/seguranca/CodeSystem/situacao-excepcional-assinatura";
-    public static final String SYSTEM_VERSION = "0.1.2";
+    public static final String SYSTEM_VERSION = "0.2.0";
   
     private final String code;
     private final String display;
