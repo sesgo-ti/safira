@@ -12,6 +12,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.Bundle;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.OperationOutcome;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.OperationOutcome.Issue;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.Provenance;
+import br.gov.go.saude.fhir.safira.engine.domain.json.JsonValue.JsonObject;
 import lombok.Builder;
 import lombok.Singular;
 import lombok.Value;
@@ -35,6 +36,12 @@ public class ValidationContext implements StepContext {
     String policyIdentifierUri;
     Bundle bundle;
     Provenance provenance;
+    /** Signature FHIR recebida (entrada 1 da validação), sem perda. */
+    JsonObject signatureJson;
+    /** Bundle recebido, sem perda — base da recomputação do artefato enquadrado. */
+    JsonObject bundleJson;
+    /** Provenance final recebido, sem perda. */
+    JsonObject provenanceJson;
 
     // Shared / operational state
     SafiraOperationalConfigProperties operationalConfig;

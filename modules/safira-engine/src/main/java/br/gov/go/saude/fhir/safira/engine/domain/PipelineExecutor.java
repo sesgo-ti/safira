@@ -97,7 +97,7 @@ public class PipelineExecutor {
 
     /** Atalho para executar o pipeline {@code SIGNING}. */
     public PipelineResult<?> sign(String politicsVersion, SigningContext context) {
-        return execute(politicsVersion, OperationType.SIGNING, context, SigningContext::getSignature);
+        return execute(politicsVersion, OperationType.SIGNING, context, SigningContext::getSigningResult);
     }
 
     /** Atalho para executar o pipeline {@code VALIDATION}. */

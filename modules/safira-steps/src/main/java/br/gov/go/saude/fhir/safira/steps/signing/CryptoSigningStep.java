@@ -12,8 +12,6 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
-import org.bouncycastle.asn1.ASN1Integer;
-import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.openssl.PEMEncryptedKeyPair;
@@ -24,7 +22,6 @@ import org.bouncycastle.openssl.jcajce.JcePEMDecryptorProviderBuilder;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
-import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.security.PrivateKey;
@@ -36,23 +33,18 @@ import java.util.Enumeration;
 /**
  * Step: cria a assinatura digital (passo 10 da especificação).
  *
- * <p>Carrega a chave privada do {@link CryptoMaterial}, executa a operação de assinatura
- * (SHA256withRSA ou SHA256withECDSA) sobre os bytes do signing input e codifica o resultado
- * em Base64Url.
+ * <p>Carrega a chave privada do {@link CryptoMaterial} e executa RSASSA-PKCS1-v1_5 com SHA-256
+ * ({@code RS256}, único algoritmo da política 0.2.0 — C18) sobre os bytes do signing input,
+ * codificando o resultado em Base64Url. Chave não RSA resulta em {@code CERT.UNSUPPORTED-ALGORITHM}.
  *
- * <p>Para ECDSA, a assinatura produzida pelo Java é DER-encoded. O JWS (RFC 7518 §3.4) exige
- * o formato raw concatenado (R || S), então aplica-se a conversão antes da codificação.
- *
- * <p><b>Tipos de material suportados:</b> PEM e PKCS#12.
- * Os tipos PKCS#11 (smartcard/token) e Remote não chegam a este step pois são rejeitados
- * no {@code SigningInputMapper} com {@link UnsupportedOperationException}.
+ * <p><b>Tipos de material suportados:</b> PEM e PKCS#12. PKCS#11 (smartcard/token) e remoto
+ * são rejeitados na leitura da requisição.
  */
 @StepId("crypto-signing")
 public class CryptoSigningStep implements SigningStep {
 
     public static final String SIGNATURE_KEY = "signature";
 
-    private static final int P256_COMPONENT_LENGTH = 32;
 
     static {
         if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
@@ -63,7 +55,7 @@ public class CryptoSigningStep implements SigningStep {
     @Override
     public StepResult<SigningContext> execute(SigningContext context) {
         byte[] signingInputBytes = context
-                .getAttribute(SigningInputStep.SIGNING_INPUT_BYTES_KEY, byte[].class)
+                .getAttribute(SigningKeys.SIGNING_INPUT_BYTES, byte[].class)
                 .orElseThrow(() -> new StepException(
                         SignatureExceptionCode.CRYPTO_SIGNATURE_CREATION_FAILED,
                         "Os bytes do signing input não foram encontrados no contexto. "
@@ -85,38 +77,21 @@ public class CryptoSigningStep implements SigningStep {
                     "Erro ao carregar a chave privada: " + e.getMessage(), e);
         }
 
-        String keyAlgorithm = privateKey.getAlgorithm();
-        String signatureAlgorithm;
-        boolean isEc;
-        if ("RSA".equals(keyAlgorithm)) {
-            signatureAlgorithm = "SHA256withRSA";
-            isEc = false;
-        } else if ("EC".equals(keyAlgorithm) || "ECDSA".equals(keyAlgorithm)) {
-            signatureAlgorithm = "SHA256withECDSA";
-            isEc = true;
-        } else {
-            return StepResult.failure(getName(),
-                    SignatureExceptionCode.CRYPTO_ALGORITHM_UNSUPPORTED,
-                    "Algoritmo de chave não suportado: " + keyAlgorithm, context);
+        if (!"RSA".equals(privateKey.getAlgorithm())) {
+            return StepResult.failure(getName(), SignatureExceptionCode.CERT_UNSUPPORTED_ALGORITHM,
+                    "A política 0.2.0 admite somente RS256 (RSASSA-PKCS1-v1_5 com SHA-256); chave fornecida: "
+                            + privateKey.getAlgorithm(), context);
         }
 
         try {
-            Signature sig = Signature.getInstance(signatureAlgorithm);
+            Signature sig = Signature.getInstance("SHA256withRSA");
             sig.initSign(privateKey);
             sig.update(signingInputBytes);
-            byte[] rawSignature = sig.sign();
-
-            if (isEc) {
-                rawSignature = derToConcatenated(rawSignature, P256_COMPONENT_LENGTH);
-            }
-
-            String signatureB64Url = Base64.getUrlEncoder().withoutPadding()
-                    .encodeToString(rawSignature);
+            String signatureB64Url = Base64.getUrlEncoder().withoutPadding().encodeToString(sig.sign());
 
             SigningContext updated = context.toBuilder()
                     .attribute(SIGNATURE_KEY, signatureB64Url)
                     .build();
-
             return StepResult.success(getName(), updated);
         } catch (Exception e) {
             throw new StepException(SignatureExceptionCode.CRYPTO_SIGNATURE_CREATION_FAILED,
@@ -218,34 +193,6 @@ public class CryptoSigningStep implements SigningStep {
             }
         }
         return null;
-    }
-
-    /**
-     * Converte uma assinatura ECDSA DER-encoded para o formato raw concatenado (R || S)
-     * exigido pelo JWS conforme RFC 7518 §3.4.
-     */
-    private byte[] derToConcatenated(byte[] derSignature, int componentLength) throws Exception {
-        ASN1Sequence sequence = ASN1Sequence.getInstance(derSignature);
-        BigInteger r = ((ASN1Integer) sequence.getObjectAt(0)).getValue();
-        BigInteger s = ((ASN1Integer) sequence.getObjectAt(1)).getValue();
-
-        byte[] concatenated = new byte[componentLength * 2];
-        copyFixedLength(r, concatenated, 0, componentLength);
-        copyFixedLength(s, concatenated, componentLength, componentLength);
-        return concatenated;
-    }
-
-    private void copyFixedLength(BigInteger value, byte[] destination, int offset, int length) {
-        byte[] bytes = value.toByteArray();
-        int srcPos = 0;
-        int srcLen = bytes.length;
-        // Remove o byte de sinal do BigInteger quando presente (0x00 de padding positivo)
-        if (bytes[0] == 0) {
-            srcPos = 1;
-            srcLen -= 1;
-        }
-        int destPos = offset + length - srcLen;
-        System.arraycopy(bytes, srcPos, destination, destPos, srcLen);
     }
 
     private static class KeyLoadingException extends Exception {

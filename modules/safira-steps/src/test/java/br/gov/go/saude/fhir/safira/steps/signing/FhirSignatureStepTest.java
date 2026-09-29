@@ -5,218 +5,92 @@
 
 package br.gov.go.saude.fhir.safira.steps.signing;
 
-import br.gov.go.saude.fhir.safira.engine.domain.StepException;
 import br.gov.go.saude.fhir.safira.engine.domain.StepResult;
-import br.gov.go.saude.fhir.safira.engine.domain.fhir.Signature;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
+import br.gov.go.saude.fhir.safira.engine.domain.json.JsonValue.JsonObject;
+import br.gov.go.saude.fhir.safira.engine.domain.json.LosslessJson;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
-import org.bouncycastle.asn1.ASN1EncodableVector;
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
-import org.bouncycastle.asn1.DERSequence;
-import org.bouncycastle.asn1.DERTaggedObject;
-import org.bouncycastle.asn1.DERUTF8String;
-import org.bouncycastle.asn1.x500.X500Name;
-import org.bouncycastle.asn1.x509.Extension;
-import org.bouncycastle.asn1.x509.GeneralName;
-import org.bouncycastle.asn1.x509.GeneralNames;
-import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
-import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.bouncycastle.operator.ContentSigner;
-import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
-import org.junit.jupiter.api.BeforeEach;
+import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
+import br.gov.go.saude.fhir.safira.steps.certificate.CertificateType;
+import br.gov.go.saude.fhir.safira.steps.certificate.SignerIdentity;
 import org.junit.jupiter.api.Test;
 
-import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.Security;
-import java.security.cert.X509Certificate;
-import java.util.Date;
+import java.util.Base64;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class FhirSignatureStepTest {
 
-    static {
-        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
-            Security.addProvider(new BouncyCastleProvider());
-        }
-    }
+    private static final String JWS = "{\"payload\":\"p\",\"signatures\":[{\"protected\":\"h\",\"signature\":\"s\"}]}";
+    private static final long IAT = 1790000000L;
+    private static final SignerIdentity SIGNER =
+            new SignerIdentity(CertificateType.A3, SignerIdentity.CPF_SYSTEM, "52998224725");
+    private static final String PROVENANCE = "{\"resourceType\":\"Provenance\",\"target\":[{\"reference\":\"urn:uuid:x\"}],"
+            + "\"recorded\":\"2026-01-01T00:00:00Z\",\"agent\":[{\"who\":{\"identifier\":{\"system\":\"urn:brasil:cpf\","
+            + "\"value\":\"52998224725\"}}}],\"extension\":[{\"url\":\"u\",\"valueDecimal\":1.50}]}";
 
-    private FhirSignatureStep step;
-
-    @BeforeEach
-    void setUp() {
-        step = new FhirSignatureStep();
-    }
-
-    @Test
-    void shouldBuildFhirSignatureWithCpfFromCertificate() throws Exception {
-        String cpfContent = "01011990" + "12345678901" + "00000000000" + "000000000000000";
-        X509Certificate cert = generateCertWithOtherName("2.16.76.1.3.1", cpfContent);
-        String jws = "{\"payload\":\"p\",\"signatures\":[]}";
-        var context = contextWith(jws, cert);
-
-        var result = step.execute(context);
-
-        assertSuccess(result);
-        Signature signature = signature(result);
-        assertEquals("application/jose", signature.sigFormat());
-        assertEquals("application/octet-stream", signature.targetFormat());
-        assertArrayEquals(jws.getBytes(StandardCharsets.UTF_8), signature.data());
-        assertNotNull(signature.when());
-        assertEquals(1754006400L, signature.when().getEpochSecond());
-        assertEquals("urn:brasil:cpf", signature.who().identifier().system());
-        assertEquals("12345678901", signature.who().identifier().value());
-        assertEquals(1, signature.type().size());
-        assertEquals("1.2.840.10065.1.12.1.1", signature.type().get(0).code());
-    }
-
-    @Test
-    void shouldBuildFhirSignatureWithCnpjFromCertificate() throws Exception {
-        String cnpjContent = "12345678000199";
-        X509Certificate cert = generateCertWithOtherName("2.16.76.1.3.3", cnpjContent);
-        String jws = "{\"payload\":\"p\",\"signatures\":[]}";
-        var context = contextWith(jws, cert);
-
-        var result = step.execute(context);
-
-        assertSuccess(result);
-        Signature signature = signature(result);
-        assertEquals("urn:brasil:cnpj", signature.who().identifier().system());
-        assertEquals("12345678000199", signature.who().identifier().value());
-    }
-
-    @Test
-    void shouldReturnFailureWhenCertificateHasNoCpfOrCnpj() throws Exception {
-        X509Certificate cert = generateCertWithoutIcpBrasilOids();
-        var context = contextWith("{}", cert);
-
-        var result = step.execute(context);
-
-        assertFailure(result, SignatureExceptionCode.CERT_MISSING_IDENTIFICATION);
-    }
-
-    @Test
-    void shouldReturnFailureWhenCertificateHasBothCpfAndCnpj() throws Exception {
-        X509Certificate cert = generateCertWithBothCpfAndCnpj(
-                "01011990" + "12345678901" + "00000000000" + "000000000000000",
-                "12345678000199");
-        var context = contextWith("{}", cert);
-
-        var result = step.execute(context);
-
-        assertFailure(result, SignatureExceptionCode.CERT_MISSING_IDENTIFICATION);
-    }
-
-    @Test
-    void shouldThrowWhenJwsFinalMissing() throws Exception {
-        X509Certificate cert = generateCertWithOtherName("2.16.76.1.3.3", "12345678000199");
-        SigningContext context = SigningContext.builder()
-                .certificateChain(new X509Certificate[]{cert})
-                .build();
-
-        assertThrows(StepException.class, () -> step.execute(context));
-    }
-
-    @Test
-    void shouldThrowWhenSignerCertificateMissing() {
-        SigningContext context = SigningContext.builder()
-                .attribute(JwsFinalStep.JWS_FINAL_KEY, "{}")
-                .build();
-
-        assertThrows(StepException.class, () -> step.execute(context));
-    }
-
-    // ===== Helpers =====
-
-    private SigningContext contextWith(String jwsFinal, X509Certificate cert) {
+    private static SigningContext context(String provenance) {
         return SigningContext.builder()
-                .certificateChain(new X509Certificate[]{cert})
-                .referenceTimestamp(1754006400L)
-                .attribute(JwsFinalStep.JWS_FINAL_KEY, jwsFinal)
+                .provenanceJson(LosslessJson.parseObject(provenance))
+                .referenceTimestamp(IAT)
+                .attribute("jwsFinal", JWS)
+                .attribute(CertificatePolicyStep.SIGNER_IDENTITY_KEY, SIGNER)
                 .build();
     }
 
-    private X509Certificate generateCertWithOtherName(String oid, String value) throws Exception {
-        KeyPair keys = generateRsaKeyPair();
-        X500Name name = new X500Name("CN=Test Signer");
-        ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSA")
-                .setProvider("BC").build(keys.getPrivate());
-
-        GeneralName otherName = buildOtherName(oid, value);
-        GeneralNames san = new GeneralNames(otherName);
-
-        var builder = new JcaX509v3CertificateBuilder(
-                name, BigInteger.valueOf(System.nanoTime()),
-                new Date(System.currentTimeMillis() - 86400000),
-                new Date(System.currentTimeMillis() + 86400000 * 365),
-                name, keys.getPublic());
-        builder.addExtension(Extension.subjectAlternativeName, false, san);
-
-        return new JcaX509CertificateConverter().setProvider("BC").getCertificate(builder.build(signer));
+    private static SigningResult result(StepResult<SigningContext> step) {
+        assertThat(step.isSuccess()).isTrue();
+        return step.context().getSigningResult();
     }
 
-    private X509Certificate generateCertWithBothCpfAndCnpj(String cpfValue, String cnpjValue) throws Exception {
-        KeyPair keys = generateRsaKeyPair();
-        X500Name name = new X500Name("CN=Test Signer");
-        ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSA")
-                .setProvider("BC").build(keys.getPrivate());
+    @Test
+    void shouldMapSignatureElementsOfPolicy020() {
+        JsonObject signature = LosslessJson.parseObject(result(new FhirSignatureStep().execute(context(PROVENANCE))).signatureJson());
 
-        GeneralName cpfName = buildOtherName("2.16.76.1.3.1", cpfValue);
-        GeneralName cnpjName = buildOtherName("2.16.76.1.3.3", cnpjValue);
-        GeneralNames san = new GeneralNames(new GeneralName[]{cpfName, cnpjName});
-
-        var builder = new JcaX509v3CertificateBuilder(
-                name, BigInteger.valueOf(System.nanoTime()),
-                new Date(System.currentTimeMillis() - 86400000),
-                new Date(System.currentTimeMillis() + 86400000 * 365),
-                name, keys.getPublic());
-        builder.addExtension(Extension.subjectAlternativeName, false, san);
-
-        return new JcaX509CertificateConverter().setProvider("BC").getCertificate(builder.build(signer));
+        assertThat(LosslessJson.write(signature.get("type").orElseThrow()))
+                .isEqualTo("[{\"system\":\"urn:iso-astm:E1762-95:2013\",\"code\":\"1.2.840.10065.1.12.1.5\"}]");
+        assertThat(signature.string("sigFormat")).contains("application/jose+json");
+        assertThat(signature.string("targetFormat")).contains("application/fhir+json");
+        assertThat(LosslessJson.write(signature.get("who").orElseThrow()))
+                .isEqualTo("{\"identifier\":{\"system\":\"urn:brasil:cpf\",\"value\":\"52998224725\"}}");
+        assertThat(new String(Base64.getDecoder().decode(signature.string("data").orElseThrow()), StandardCharsets.UTF_8))
+                .isEqualTo(JWS);
     }
 
-    private X509Certificate generateCertWithoutIcpBrasilOids() throws Exception {
-        KeyPair keys = generateRsaKeyPair();
-        X500Name name = new X500Name("CN=Test Signer");
-        ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSA")
-                .setProvider("BC").build(keys.getPrivate());
+    @Test
+    void shouldDeriveWhenFromIat() {
+        JsonObject signature = LosslessJson.parseObject(result(new FhirSignatureStep().execute(context(PROVENANCE))).signatureJson());
 
-        var builder = new JcaX509v3CertificateBuilder(
-                name, BigInteger.valueOf(System.nanoTime()),
-                new Date(System.currentTimeMillis() - 86400000),
-                new Date(System.currentTimeMillis() + 86400000 * 365),
-                name, keys.getPublic());
-
-        return new JcaX509CertificateConverter().setProvider("BC").getCertificate(builder.build(signer));
+        assertThat(signature.string("when")).contains("2026-09-21T14:13:20Z");
     }
 
-    private GeneralName buildOtherName(String oid, String value) {
-        ASN1EncodableVector vector = new ASN1EncodableVector();
-        vector.add(new ASN1ObjectIdentifier(oid));
-        vector.add(new DERTaggedObject(true, 0, new DERUTF8String(value)));
-        return new GeneralName(GeneralName.otherName, new DERSequence(vector));
+    @Test
+    void shouldReplaceSignatureInProvenanceCopyPreservingOtherMembers() {
+        SigningResult result = result(new FhirSignatureStep().execute(context(
+                PROVENANCE.replace("}]}}}],", "}]}}}],\"signature\":[{\"data\":\"antiga\"}],"))));
+
+        JsonObject provenance = LosslessJson.parseObject(result.provenanceJson());
+        assertThat(provenance.array("signature").orElseThrow().items())
+                .containsExactly(LosslessJson.parseObject(result.signatureJson()));
+        assertThat(result.provenanceJson()).contains("\"valueDecimal\":1.50").contains("\"recorded\":\"2026-01-01T00:00:00Z\"");
     }
 
-    private KeyPair generateRsaKeyPair() throws Exception {
-        KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
-        gen.initialize(2048);
-        return gen.generateKeyPair();
+    @Test
+    void shouldNotMutateInputProvenance() {
+        SigningContext context = context(PROVENANCE);
+
+        new FhirSignatureStep().execute(context);
+
+        assertThat(LosslessJson.write(context.getProvenanceJson())).isEqualTo(PROVENANCE);
     }
 
-    private void assertSuccess(StepResult<SigningContext> result) {
-        assertInstanceOf(StepResult.Success.class, result);
-    }
+    @Test
+    void shouldFailWhenNoAgentMatchesSigner() {
+        StepResult<SigningContext> result = new FhirSignatureStep()
+                .execute(context(PROVENANCE.replace("\"value\":\"52998224725\"", "\"value\":\"11144477735\"")));
 
-    private void assertFailure(StepResult<SigningContext> result, SignatureExceptionCode expectedCode) {
-        assertInstanceOf(StepResult.Failure.class, result);
-        assertEquals(expectedCode, ((StepResult.Failure<SigningContext>) result).code());
-    }
-
-    private Signature signature(StepResult<SigningContext> result) {
-        return ((StepResult.Success<SigningContext>) result).context().getSignature();
+        assertThat(((StepResult.Failure<SigningContext>) result).code())
+                .isEqualTo(SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED);
     }
 }

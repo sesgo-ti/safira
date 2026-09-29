@@ -5,10 +5,7 @@
 
 package br.gov.go.saude.fhir.safira.rest.api;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,88 +14,73 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
+import java.time.Instant;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/** Contrato HTTP de {@code /validar} e {@code /versoes} para entradas inválidas (política 0.2.0). */
 @SpringBootTest
 class SignatureControllerValidationTest {
 
-    private static final String VALID_POLICY_URI =
-            "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|1.1.0";
-    private static final long VALID_REFERENCE_TS = 1760000000L;
+    private static final String POLICY_URI = "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0";
+    private static final String CODE = "$.issue[0].details.coding[0].code";
 
     @Autowired
     private WebApplicationContext webApplicationContext;
 
     private MockMvc mockMvc;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
     @BeforeEach
     void setUp() {
         this.mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
     }
 
-    @Test
-    void shouldReturn400WhenSignedDataBase64IsBlank() throws Exception {
-        ObjectNode body = objectMapper.createObjectNode();
-        body.put("signedDataBase64", "");
-        body.put("referenceTimestamp", VALID_REFERENCE_TS);
-        body.put("policyIdentifierUri", VALID_POLICY_URI);
-
-        mockMvc.perform(post("/validar")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body.toString()))
-                .andExpect(status().isBadRequest());
+    private static String body(String policyUri, long referenceTimestamp) {
+        return "{\"signature\":{\"data\":\"eA==\"},\"bundle\":{\"resourceType\":\"Bundle\"},"
+                + "\"provenance\":{\"resourceType\":\"Provenance\"},\"referenceTimestamp\":" + referenceTimestamp
+                + ",\"policyIdentifierUri\":\"" + policyUri + "\"}";
     }
 
     @Test
-    void shouldReturn400WhenReferenceTimestampOutOfRange() throws Exception {
-        ObjectNode body = objectMapper.createObjectNode();
-        body.put("signedDataBase64", "eyJhbGciOiJSUzI1NiJ9..signature");
-        body.put("referenceTimestamp", 100L);
-        body.put("policyIdentifierUri", VALID_POLICY_URI);
-
-        mockMvc.perform(post("/validar")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body.toString()))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void shouldReturn400WhenPolicyIdentifierUriInvalid() throws Exception {
-        ObjectNode body = objectMapper.createObjectNode();
-        body.put("signedDataBase64", "eyJhbGciOiJSUzI1NiJ9..signature");
-        body.put("referenceTimestamp", VALID_REFERENCE_TS);
-        body.put("policyIdentifierUri", "not-a-valid-uri");
-
-        mockMvc.perform(post("/validar")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body.toString()))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void shouldReturn422WhenJwsIsMalformed() throws Exception {
-        ObjectNode body = objectMapper.createObjectNode();
-        body.put("signedDataBase64", "bm90LWEtandz");
-        body.put("referenceTimestamp", VALID_REFERENCE_TS);
-        body.put("policyIdentifierUri", VALID_POLICY_URI);
-
-        mockMvc.perform(post("/validar")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body.toString()))
+    void shouldReturn422WhenSignatureIsMissing() throws Exception {
+        mockMvc.perform(post("/validar").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bundle\":{},\"provenance\":{},\"referenceTimestamp\":" + Instant.now().getEpochSecond()
+                                + ",\"policyIdentifierUri\":\"" + POLICY_URI + "\"}"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(content().contentTypeCompatibleWith("application/fhir+json"))
-                .andExpect(jsonPath("$.resourceType").value("OperationOutcome"))
-                .andExpect(jsonPath("$.issue").isArray());
+                .andExpect(jsonPath(CODE).value("FORMAT.SIGNATURE-MISSING"));
     }
 
     @Test
-    @Disabled("TODO: add E2E happy-path once fixture generation from SigningService is available")
-    void shouldReturn200WhenSignatureIsValid() {
-        // Placeholder for future end-to-end happy path test
+    void shouldReturn422WhenReferenceTimestampOutOfRange() throws Exception {
+        mockMvc.perform(post("/validar").contentType(MediaType.APPLICATION_JSON).content(body(POLICY_URI, 1000L)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath(CODE).value("FORMAT.INVALID-TIMESTAMP"));
+    }
+
+    @Test
+    void shouldReturn422WhenPolicyIdentifierUriInvalid() throws Exception {
+        mockMvc.perform(post("/validar").contentType(MediaType.APPLICATION_JSON)
+                        .content(body("not-a-valid-uri", Instant.now().getEpochSecond())))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath(CODE).value("POLICY.URI-INVALID"));
+    }
+
+    @Test
+    void shouldReturn422WhenBodyIsNotJson() throws Exception {
+        mockMvc.perform(post("/validar").contentType(MediaType.APPLICATION_JSON).content("não é json"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath(CODE).value("FORMAT.BUNDLE-MALFORMED"));
+    }
+
+    @Test
+    void shouldListOnlyPolicy020() throws Exception {
+        mockMvc.perform(get("/versoes"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("[" + POLICY_URI + "]"));
     }
 }

@@ -74,10 +74,10 @@ class CryptoSigningStepTest {
         assertTrue(verifyRsa(keys.getPublic(), signingInput, signatureBytes));
     }
 
-    // ===== Happy path ECDSA via PEM =====
+    // ===== ECDSA não é admitido pela política 0.2.0 (somente RS256) =====
 
     @Test
-    void shouldSignWithEcPemMaterialAndProduce64BytesRawSignature() throws Exception {
+    void shouldRejectEcPrivateKeyBecausePolicyAdmitsOnlyRs256() throws Exception {
         KeyPair keys = generateEcKeyPair();
         String pemBase64 = toPemBase64(keys.getPrivate());
         var material = new CryptoMaterial.PemMaterial(pemBase64, null);
@@ -86,9 +86,7 @@ class CryptoSigningStepTest {
 
         var result = step.execute(context);
 
-        assertSuccess(result);
-        byte[] signatureBytes = Base64.getUrlDecoder().decode(getSignature(result));
-        assertEquals(64, signatureBytes.length);
+        assertFailure(result, SignatureExceptionCode.CERT_UNSUPPORTED_ALGORITHM);
     }
 
     // ===== Happy path RSA via PKCS12 =====

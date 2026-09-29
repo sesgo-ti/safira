@@ -23,69 +23,65 @@ safira:
   #     - steps: Lista ordenada de IDs dos passos (steps) a serem executados.
   # ---------------------------------------------------------------------------
   pipelines:
-    - version: "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|1.1.0"
+    # -------------------------------------------------------------------------
+    # Política de assinatura 0.2.0 — única versão implementada (IG seguranca SES-GO).
+    # JAdES-B-B (resultado "iat") ou JAdES-B-T cumulativo (resultado "tsa") via EU DSS.
+    # -------------------------------------------------------------------------
+    - version: "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0"
       operation: SIGNING
       steps:
         - "context-validation"
         - "payload-validation"
-        - "chain-build"
-        - "chain-validation"
-        - "payload-preparation"
-        - "json-canonicalizer"
-        - "content-digest"
-        - "protected-header"
-        - "signing-input"
-        - "crypto-signing"
-        - "jws-preliminary"
-        - "tsa-timestamp"
-        - "jws-final"
-        - "fhir-signature"
-
-    - version: "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|1.1.0"
-      operation: VALIDATION
-      steps:
-        - "validation-context-validation"
-        - "jws-extraction"
-        - "jws-headers-validation"
-        - "validation-chain-build"
-        - "validation-chain-validation"
-        - "validation-signature-verification"
-        - "validation-ltv-revocation-check"
-        - "validation-timestamp-policy"
-        - "validation-payload-integrity"
-        - "validation-success"
-
-    # -------------------------------------------------------------------------
-    # Política 2.0.0 — perfil JAdES-conforme (ETSI TS 119 182-1) via EU DSS.
-    # Estratégia iat => JAdES-B-B; estratégia tsa => JAdES-B-T (sigTst em etsiU).
-    # -------------------------------------------------------------------------
-    - version: "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|2.0.0"
-      operation: SIGNING
-      steps:
-        - "context-validation"
-        - "payload-validation"
-        - "chain-build"
-        - "chain-validation"
-        - "payload-preparation"
-        - "json-canonicalizer"
-        - "content-digest"
+        - "pkix-chain-validation"
+        - "certificate-policy"
+        - "framed-content-digest"
         - "jades-data-to-sign"
         - "crypto-signing"
         - "jades-assemble"
         - "jades-extension"
+        - "tsa-token-verification"
         - "fhir-signature"
 
+    - version: "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0"
+      operation: VALIDATION
+      steps:
+        - "validation-context"
+        - "signature-binding"
+        - "jws-structure"
+        - "content-integrity"
+        - "signer-certificate"
+        - "current-chain"
+        - "dss-validation"
+        - "timestamp-validation"
+        - "validation-outcome"
+
   # ---------------------------------------------------------------------------
-  # Perfil JAdES (política 2.0.0)
+  # Política de assinatura 0.2.0 — entrada 8 dos casos de uso (criar/validar)
   # ---------------------------------------------------------------------------
-  jades:
-    signing:
-      # Nível baseline alvo quando a estratégia de carimbo é "tsa" (níveis cumulativos):
-      #   B-T   — carimbo de assinatura (sigTst) apenas (padrão)
-      #   B-LT  — LTV: material completo de validação embutido (xVals/rVals/tstVD)
-      #   B-LTA — arquivamento: acrescenta carimbo de arquivo (arcTst)
-      # Na estratégia "iat" a assinatura permanece B-B independentemente deste valor.
-      target-level: B-T
+  policy:
+    # Allowlist de políticas de certificado folha: OID completo (7 arcos), tipo (A3 | A4 | SE-S | SE-H)
+    # e SHA-256 (hex minúsculo) do DER do certificado da AC emissora imediata. Obrigatória:
+    # sem ela toda operação retorna CONFIG.INVALID-PARAMETER. Exemplo:
+    #   accepted-certificate-policies:
+    #     - oid: "2.16.76.1.2.3.<n>"
+    #       type: A3
+    #       issuer-sha256: "<64 dígitos hexadecimais>"
+    accepted-certificate-policies: []
+
+    # Políticas TSA aceitas (obrigatórias no resultado "tsa" e para validar JAdES-B-T).
+    # trust-store.reference: bundle PEM (file:... | classpath:...) com as âncoras da TSA,
+    # separado do acervo ICP-Brasil do signatário. Exemplo:
+    #   tsa-policies:
+    #     version: "1.0.0"
+    #     policies:
+    #       - oid: "<OID da política da ACT>"
+    #         max-accuracy-seconds: 1
+    #         trust-store:
+    #           reference: "file:/etc/safira/tsa-anchors.pem"
+
+    temporal-policy:
+      # Data mínima de emissão do certificado folha (epoch seconds UTC). Padrão: 1751328000 (2025-07-01).
+      min-cert-issue-date: 1751328000
 
   # ---------------------------------------------------------------------------
   # Configurações Operacionais do Engine de Assinatura Digital
@@ -155,11 +151,6 @@ safira:
       # Padrão: 10 | Intervalo válido: [5, 300]
       timout-verification-bundle: 10
 
-      # Limite inferior (epoch seconds) do timestamp de referência. Padrão: 1751328000 (2025-07-01T00:00:00Z).
-      min-reference-timestamp: 1751328000
-
-      # Limite superior (epoch seconds) do timestamp de referência. Padrão: 4102444800 (2100-01-01T00:00:00Z).
-      max-reference-timestamp: 4102444800
 
     # -------------------------------------------------------------------------
     # Middleware criptográfico para SMARTCARD / TOKEN (PKCS#11)
@@ -218,23 +209,3 @@ safira:
         # Número máximo de tentativas de reconexão.
         # Padrão: 3 | Intervalo válido: [0, 10]
         maximo-retries: 3
-
-    # -------------------------------------------------------------------------
-    # Política de validação de assinaturas
-    # -------------------------------------------------------------------------
-    validation-policy:
-      # Janela (em dias) para considerar um certificado próximo do vencimento.
-      # Padrão: 30 | Intervalo válido: [1, 180]
-      near-expiry-threshold-days: 30
-
-      # Idade máxima (em dias) aceita para uma assinatura antes de sinalizar alerta.
-      # Padrão: 365 | Intervalo válido: [1, 1825]
-      signature-age-threshold-days: 365
-
-      # Política de tratamento para falhas de revogação.
-      # Valores: STRICT | SOFT_FAIL | WARN. Padrão: STRICT
-      revocation-policy: STRICT
-
-      # Tratamento para respostas OCSP com status UNKNOWN.
-      # Valores: TREAT_AS_REVOKED | TREAT_AS_WARNING. Padrão: TREAT_AS_REVOKED
-      ocsp-unknown-handling: TREAT_AS_REVOKED

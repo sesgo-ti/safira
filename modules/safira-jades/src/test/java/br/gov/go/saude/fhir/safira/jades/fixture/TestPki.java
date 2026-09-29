@@ -45,6 +45,7 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
 import org.bouncycastle.tsp.TSPAlgorithms;
 import org.bouncycastle.tsp.TimeStampRequest;
+import org.bouncycastle.tsp.TimeStampRequestGenerator;
 import org.bouncycastle.tsp.TimeStampResponse;
 import org.bouncycastle.tsp.TimeStampResponseGenerator;
 import org.bouncycastle.tsp.TimeStampTokenGenerator;
@@ -78,7 +79,59 @@ public final class TestPki {
 
     public static final long CERT_START = 1751328000L; // 2025-07-01T00:00:00Z
     public static final long CERT_END = 4102444800L;   // 2100-01-01T00:00:00Z
-    public static final String TEST_CPF = "12345678901";
+    public static final String TEST_CPF = "52998224725";
+    public static final String TEST_CNPJ = "11222333000181";
+    /** OID de política TSA usado pela {@link FakeTsa} quando a requisição não informa {@code reqPolicy}. */
+    public static final String TSA_POLICY_OID = "1.3.6.1.4.1.13762.3";
+
+    /**
+     * Perfil do certificado folha gerado.
+     *
+     * @param policyOid   OID em certificatePolicies
+     * @param keyUsage    bits de KeyUsage (constantes de {@link KeyUsage})
+     * @param subjectDn   DN do titular
+     * @param sanOid      OID do otherName ICP-Brasil no SAN (nulo omite o SAN)
+     * @param sanValue    conteúdo do otherName
+     * @param keyAlgorithm {@code RSA} ou {@code EC}
+     * @param rsaBits     tamanho da chave RSA
+     */
+    public record LeafProfile(String policyOid, int keyUsage, String subjectDn, String sanOid,
+                              String sanValue, String keyAlgorithm, int rsaBits) {
+
+        /** A3 conforme a política 0.2.0: RSA-2048, digitalSignature, CPF em SERIALNUMBER e SAN. */
+        public static LeafProfile a3() {
+            return new LeafProfile("2.16.76.1.2.3.1", KeyUsage.digitalSignature | KeyUsage.nonRepudiation,
+                    "CN=Fulano de Tal:" + TEST_CPF + ",SERIALNUMBER=" + TEST_CPF,
+                    "2.16.76.1.3.1", "01011990" + TEST_CPF + "000000000000000000", "RSA", 2048);
+        }
+
+        /** SE-S (selo): RSA-2048, digitalSignature, CNPJ em SERIALNUMBER e SAN. */
+        public static LeafProfile seS() {
+            return new LeafProfile("2.16.76.1.2.201.1", KeyUsage.digitalSignature,
+                    "CN=Estabelecimento Teste:" + TEST_CNPJ + ",SERIALNUMBER=" + TEST_CNPJ,
+                    "2.16.76.1.3.3", TEST_CNPJ, "RSA", 2048);
+        }
+
+        public LeafProfile withPolicyOid(String oid) {
+            return new LeafProfile(oid, keyUsage, subjectDn, sanOid, sanValue, keyAlgorithm, rsaBits);
+        }
+
+        public LeafProfile withKeyUsage(int bits) {
+            return new LeafProfile(policyOid, bits, subjectDn, sanOid, sanValue, keyAlgorithm, rsaBits);
+        }
+
+        public LeafProfile withSubjectDn(String dn) {
+            return new LeafProfile(policyOid, keyUsage, dn, sanOid, sanValue, keyAlgorithm, rsaBits);
+        }
+
+        public LeafProfile withSan(String oid, String value) {
+            return new LeafProfile(policyOid, keyUsage, subjectDn, oid, value, keyAlgorithm, rsaBits);
+        }
+
+        public LeafProfile withKey(String algorithm, int bits) {
+            return new LeafProfile(policyOid, keyUsage, subjectDn, sanOid, sanValue, algorithm, bits);
+        }
+    }
 
     private static final AtomicLong SERIAL = new AtomicLong(System.nanoTime());
 
@@ -107,12 +160,16 @@ public final class TestPki {
     }
 
     public static TestPki create() {
+        return create(LeafProfile.a3());
+    }
+
+    public static TestPki create(LeafProfile profile) {
         try {
             KeyPair caKeys = rsa();
             X509Certificate caCert = buildCa(caKeys, "CN=Safira Test Root CA");
 
-            KeyPair leafKeys = rsa();
-            X509Certificate leafCert = buildLeaf(leafKeys, caKeys, caCert, "CN=Safira Test Signer");
+            KeyPair leafKeys = "EC".equals(profile.keyAlgorithm()) ? ec() : rsa(profile.rsaBits());
+            X509Certificate leafCert = buildLeaf(leafKeys, caKeys, caCert, profile);
 
             KeyPair tsaKeys = rsa();
             X509Certificate tsaCert = buildTsa(tsaKeys, caKeys, caCert, "CN=Safira Test TSA");
@@ -120,6 +177,16 @@ public final class TestPki {
             return new TestPki(caKeys, caCert, leafKeys, leafCert, tsaKeys, tsaCert);
         } catch (Exception e) {
             throw new IllegalStateException("Falha ao montar PKI de teste", e);
+        }
+    }
+
+    /** SHA-256 (hex minúsculo) do DER da CA — valor de {@code issuerSha256} na allowlist. */
+    public String issuerSha256() {
+        try {
+            return java.util.HexFormat.of().formatHex(
+                    java.security.MessageDigest.getInstance("SHA-256").digest(caCert.getEncoded()));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
         }
     }
 
@@ -176,6 +243,66 @@ public final class TestPki {
             return builder.build(signer(caKeys)).getEncoded();
         } catch (Exception e) {
             throw new IllegalStateException("Falha ao gerar CRL de teste", e);
+        }
+    }
+
+    /**
+     * Opções de um {@code TimeStampToken} gerado diretamente (sem HTTP).
+     *
+     * @param policyOid        OID de política do TSTInfo
+     * @param genTime          instante do carimbo
+     * @param accuracySeconds  accuracy em segundos (nulo omite o campo)
+     */
+    public record TokenOptions(String policyOid, Date genTime, Integer accuracySeconds) {
+
+        public static TokenOptions at(Date genTime) {
+            return new TokenOptions(TSA_POLICY_OID, genTime, null);
+        }
+
+        public TokenOptions withPolicy(String oid) {
+            return new TokenOptions(oid, genTime, accuracySeconds);
+        }
+
+        public TokenOptions withAccuracy(Integer seconds) {
+            return new TokenOptions(policyOid, genTime, seconds);
+        }
+    }
+
+    /** Certificado da TSA com EKU id-kp-timeStamping NÃO crítico (mesma chave da TSA de teste). */
+    public X509Certificate tsaCertWithNonCriticalEku() {
+        try {
+            return buildTsaCertificate(tsaKeys, caKeys, caCert, "CN=Safira Test TSA", null, false);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /**
+     * {@code TimeStampToken} (CMS ContentInfo DER) sobre o hash SHA-256 informado, assinado por
+     * um certificado de TSA emitido pela CA desta PKI.
+     */
+    public byte[] timestampToken(byte[] sha256Imprint, TokenOptions options) {
+        try {
+            X509Certificate certificate = tsaCert;
+            DigestCalculatorProvider digests = new JcaDigestCalculatorProviderBuilder()
+                    .setProvider(BouncyCastleProvider.PROVIDER_NAME).build();
+            SignerInfoGenerator signerInfo = new JcaSignerInfoGeneratorBuilder(digests)
+                    .build(signer(tsaKeys), certificate);
+            TimeStampTokenGenerator generator = new TimeStampTokenGenerator(signerInfo,
+                    digests.get(new AlgorithmIdentifier(NISTObjectIdentifiers.id_sha256)),
+                    new ASN1ObjectIdentifier(options.policyOid()));
+            if (options.accuracySeconds() != null) {
+                generator.setAccuracySeconds(options.accuracySeconds());
+            }
+            generator.addCertificates(new CollectionStore<>(List.of(new JcaX509CertificateHolder(certificate))));
+            TimeStampRequestGenerator requestGenerator = new TimeStampRequestGenerator();
+            requestGenerator.setCertReq(true);
+            TimeStampRequest request = requestGenerator.generate(TSPAlgorithms.SHA256, sha256Imprint,
+                    BigInteger.valueOf(SERIAL.incrementAndGet()));
+            return generator.generate(request, BigInteger.valueOf(SERIAL.incrementAndGet()), options.genTime())
+                    .getEncoded();
+        } catch (Exception e) {
+            throw new IllegalStateException("Falha ao gerar TimeStampToken de teste", e);
         }
     }
 
@@ -318,8 +445,18 @@ public final class TestPki {
     // ------------------------------------------------------------------
 
     private static KeyPair rsa() throws Exception {
+        return rsa(2048);
+    }
+
+    private static KeyPair rsa(int bits) throws Exception {
         KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
-        gen.initialize(2048);
+        gen.initialize(bits);
+        return gen.generateKeyPair();
+    }
+
+    private static KeyPair ec() throws Exception {
+        KeyPairGenerator gen = KeyPairGenerator.getInstance("EC");
+        gen.initialize(256);
         return gen.generateKeyPair();
     }
 
@@ -349,24 +486,26 @@ public final class TestPki {
     }
 
     private static X509Certificate buildLeaf(KeyPair leafKeys, KeyPair caKeys,
-                                             X509Certificate caCert, String dn) throws Exception {
-        JcaX509v3CertificateBuilder builder = baseIssuedCert(leafKeys, caCert, dn);
+                                             X509Certificate caCert, LeafProfile profile) throws Exception {
+        JcaX509v3CertificateBuilder builder = baseIssuedCert(leafKeys, caCert, profile.subjectDn());
         JcaX509ExtensionUtils ext = new JcaX509ExtensionUtils();
 
-        builder.addExtension(Extension.certificatePolicies, false,
-                new CertificatePolicies(new PolicyInformation[]{
-                        new PolicyInformation(new ASN1ObjectIdentifier("2.16.76.1.2.1.1"))
-                }));
-        builder.addExtension(Extension.keyUsage, true,
-                new KeyUsage(KeyUsage.digitalSignature | KeyUsage.nonRepudiation));
+        if (profile.policyOid() != null) {
+            builder.addExtension(Extension.certificatePolicies, false,
+                    new CertificatePolicies(new PolicyInformation[]{
+                            new PolicyInformation(new ASN1ObjectIdentifier(profile.policyOid()))
+                    }));
+        }
+        builder.addExtension(Extension.keyUsage, true, new KeyUsage(profile.keyUsage()));
 
-        // otherName ICP-Brasil OID 2.16.76.1.3.1: DDMMYYYY(8) + CPF(11) + complemento
-        String cpfContent = "01011990" + TEST_CPF + "000000000000000000";
-        ASN1EncodableVector vec = new ASN1EncodableVector();
-        vec.add(new ASN1ObjectIdentifier("2.16.76.1.3.1"));
-        vec.add(new DERTaggedObject(true, 0, new DERUTF8String(cpfContent)));
-        builder.addExtension(Extension.subjectAlternativeName, false,
-                new GeneralNames(new GeneralName(GeneralName.otherName, new DERSequence(vec))));
+        if (profile.sanOid() != null) {
+            // otherName ICP-Brasil (2.16.76.1.3.1: DDMMYYYY + CPF + complemento; 2.16.76.1.3.3: CNPJ)
+            ASN1EncodableVector vec = new ASN1EncodableVector();
+            vec.add(new ASN1ObjectIdentifier(profile.sanOid()));
+            vec.add(new DERTaggedObject(true, 0, new DERUTF8String(profile.sanValue())));
+            builder.addExtension(Extension.subjectAlternativeName, false,
+                    new GeneralNames(new GeneralName(GeneralName.otherName, new DERSequence(vec))));
+        }
 
         builder.addExtension(Extension.subjectKeyIdentifier, false,
                 ext.createSubjectKeyIdentifier(leafKeys.getPublic()));
@@ -384,12 +523,18 @@ public final class TestPki {
     private static X509Certificate buildTsaWithAia(KeyPair tsaKeys, KeyPair caKeys,
                                                    X509Certificate caCert, String dn,
                                                    String ocspUrl) throws Exception {
+        return buildTsaCertificate(tsaKeys, caKeys, caCert, dn, ocspUrl, true);
+    }
+
+    private static X509Certificate buildTsaCertificate(KeyPair tsaKeys, KeyPair caKeys,
+                                                       X509Certificate caCert, String dn,
+                                                       String ocspUrl, boolean criticalEku) throws Exception {
         JcaX509v3CertificateBuilder builder = baseIssuedCert(tsaKeys, caCert, dn);
         JcaX509ExtensionUtils ext = new JcaX509ExtensionUtils();
 
         builder.addExtension(Extension.keyUsage, true, new KeyUsage(KeyUsage.digitalSignature));
         // RFC 3161 §2.3: EKU id-kp-timeStamping, marcado crítico
-        builder.addExtension(Extension.extendedKeyUsage, true,
+        builder.addExtension(Extension.extendedKeyUsage, criticalEku,
                 new ExtendedKeyUsage(KeyPurposeId.id_kp_timeStamping));
         builder.addExtension(Extension.subjectKeyIdentifier, false,
                 ext.createSubjectKeyIdentifier(tsaKeys.getPublic()));

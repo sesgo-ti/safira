@@ -1,0 +1,34 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "paciente-1",
+        "meta": { "versionId": "3", "lastUpdated": "2026-01-10T10:00:00Z", "profile": ["http://hl7.org/fhir/StructureDefinition/Patient"] },
+        "identifier": [ { "system": "urn:brasil:cpf", "value": "11144477735" } ],
+        "name": [ { "family": "Souza", "given": ["Maria"] } ],
+        "gender": "female",
+        "birthDate": "1985-04-12"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:9b2b8c1e-2f4a-4d5b-8c6d-7e8f9a0b1c2d",
+      "resource": {
+        "resourceType": "Observation",
+        "status": "final",
+        "code": { "coding": [ { "system": "http://loinc.org", "code": "718-7", "display": "Hemoglobina" } ] },
+        "subject": { "reference": "urn:uuid:3fa85f64-5717-4562-b3fc-2c963f66afa6" },
+        "effectiveDateTime": "2026-01-10T09:30:00-03:00",
+        "valueQuantity": { "value": 13.50, "unit": "g/dL", "system": "http://unitsofmeasure.org", "code": "g/dL" },
+        "performer": [ { "identifier": { "system": "urn:brasil:cpf", "value": "52998224725" } } ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "resource": { "resourceType": "Organization", "name": "Laboratório não assinado" }
+    }
+  ]
+}

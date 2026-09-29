@@ -6,6 +6,7 @@
 package br.gov.go.saude.fhir.safira.engine.domain.signing;
 
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.Bundle;
+import br.gov.go.saude.fhir.safira.engine.domain.json.JsonValue.JsonObject;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.Provenance;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.Signature;
 import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties;
@@ -28,6 +29,10 @@ import java.util.Optional;
 @Builder(toBuilder = true)
 public class SigningContext implements StepContext {
     Bundle bundle;
+    /** Bundle recebido, sem perda (tokens numéricos preservados) — base da canonicalização 0.2.0. */
+    JsonObject bundleJson;
+    /** Provenance recebido, sem perda — origem da cópia assinada. */
+    JsonObject provenanceJson;
     Provenance provenance;
     CryptoMaterial cryptoMaterial;
     List<String> rawCertificateChain;
@@ -41,6 +46,8 @@ public class SigningContext implements StepContext {
     Instant signingTime;
 
     Signature signature;
+    /** Resultado final (Signature + cópia do Provenance assinada) da política 0.2.0. */
+    SigningResult signingResult;
 
     @Singular("attribute")
     Map<String, Object> attributes;

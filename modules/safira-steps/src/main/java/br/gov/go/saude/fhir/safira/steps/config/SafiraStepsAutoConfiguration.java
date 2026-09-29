@@ -6,91 +6,86 @@
 package br.gov.go.saude.fhir.safira.steps.config;
 
 import br.gov.go.saude.fhir.safira.engine.domain.Step;
-import br.gov.go.saude.fhir.safira.engine.domain.pipelines.PipelineDefinition;
-import br.gov.go.saude.fhir.safira.steps.signing.ChainBuildStep;
-import br.gov.go.saude.fhir.safira.steps.signing.ChainValidationStep;
-import br.gov.go.saude.fhir.safira.steps.signing.ContentDigestStep;
+import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
+import br.gov.go.saude.fhir.safira.steps.signing.CertificatePolicyStep;
 import br.gov.go.saude.fhir.safira.steps.signing.ContextValidationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.CryptoSigningStep;
 import br.gov.go.saude.fhir.safira.steps.signing.FhirSignatureStep;
-import br.gov.go.saude.fhir.safira.steps.signing.JsonCanonicalizationStep;
-import br.gov.go.saude.fhir.safira.steps.signing.JwsFinalStep;
-import br.gov.go.saude.fhir.safira.steps.signing.JwsPreliminaryStep;
-import br.gov.go.saude.fhir.safira.steps.signing.PayloadPreparationStep;
+import br.gov.go.saude.fhir.safira.steps.signing.FramedContentDigestStep;
 import br.gov.go.saude.fhir.safira.steps.signing.PayloadValidationStep;
-import br.gov.go.saude.fhir.safira.steps.signing.ProtectedHeaderStep;
-import br.gov.go.saude.fhir.safira.steps.signing.SigningInputStep;
-import br.gov.go.saude.fhir.safira.steps.signing.TsaTimestampStep;
+import br.gov.go.saude.fhir.safira.steps.signing.PkixChainValidationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesAssembleStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesDataToSignStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesExtensionStep;
-import br.gov.go.saude.fhir.safira.steps.validation.JwsExtractionStep;
-import br.gov.go.saude.fhir.safira.steps.validation.JwsHeadersValidationStep;
-import br.gov.go.saude.fhir.safira.steps.validation.LtvRevocationCheckStep;
-import br.gov.go.saude.fhir.safira.steps.validation.PayloadIntegrityVerificationStep;
-import br.gov.go.saude.fhir.safira.steps.validation.SignatureCryptoVerificationStep;
-import br.gov.go.saude.fhir.safira.steps.validation.TimestampPolicyValidationStep;
-import br.gov.go.saude.fhir.safira.steps.validation.ValidationChainBuildStep;
-import br.gov.go.saude.fhir.safira.steps.validation.ValidationChainValidationStep;
-import br.gov.go.saude.fhir.safira.steps.validation.ValidationContextValidationStep;
-import br.gov.go.saude.fhir.safira.steps.validation.ValidationSuccessStep;
-import br.gov.go.saude.truststore.icpbrasil.service.CertificateChainResolver;
-import br.gov.go.saude.truststore.icpbrasil.service.TrustStoreService;
+import br.gov.go.saude.fhir.safira.steps.signing.jades.TsaTokenVerificationStep;
+import br.gov.go.saude.fhir.safira.steps.validation.jades.ContentIntegrityStep;
+import br.gov.go.saude.fhir.safira.steps.validation.jades.CurrentChainStep;
+import br.gov.go.saude.fhir.safira.steps.validation.jades.DssValidationStep;
+import br.gov.go.saude.fhir.safira.steps.validation.jades.JwsStructureStep;
+import br.gov.go.saude.fhir.safira.steps.validation.jades.SignatureBindingStep;
+import br.gov.go.saude.fhir.safira.steps.validation.jades.SignerCertificateStep;
+import br.gov.go.saude.fhir.safira.steps.validation.jades.TimestampValidationStep;
+import br.gov.go.saude.fhir.safira.steps.validation.jades.ValidationOutcomeStep;
+import br.gov.go.saude.fhir.safira.steps.validation.jades.ValidationRequestContextStep;
+import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
+import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
 import br.gov.go.saude.truststore.icpbrasil.service.revocation.RevocationService;
-
-import java.util.ArrayList;
-import java.util.List;
-
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
+import java.time.Clock;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Registra os steps da política de assinatura 0.2.0 — única versão implementada. A composição
+ * das pipelines fica no YAML ({@code safira.pipelines}).
+ */
 @AutoConfiguration
-@EnableConfigurationProperties(SafiraJadesProperties.class)
+@EnableConfigurationProperties(SafiraPolicyProperties.class)
 public class SafiraStepsAutoConfiguration {
 
+    /** Fonte de tempo controlada pelo serviço (política C20/C22); sobrescrevível em testes. */
     @Bean
-    public List<Step<?>> safiraAllSteps(TrustStoreService trustStoreService,
+    @ConditionalOnMissingBean
+    public Clock safiraClock() {
+        return Clock.systemUTC();
+    }
+
+    @Bean
+    public List<Step<?>> safiraAllSteps(PkixCertificateValidator pkixCertificateValidator,
                                         RevocationService revocationService,
-                                        CertificateChainResolver certificateChainResolver,
-                                        List<PipelineDefinition> pipelineDefinitions,
-                                        SafiraJadesProperties jadesProperties) {
+                                        TrustMaterialSource trustMaterialSource,
+                                        SafiraPolicyProperties policyProperties,
+                                        Clock clock) {
         List<Step<?>> steps = new ArrayList<>();
 
-        // Signing steps
-        steps.add(new ContextValidationStep());
+        // Assinatura — política 0.2.0 (JAdES-B-B/B-T via EU DSS)
+        steps.add(new ContextValidationStep(policyProperties, clock));
         steps.add(new PayloadValidationStep());
-        steps.add(new ChainBuildStep(certificateChainResolver));
-        steps.add(new ChainValidationStep(trustStoreService, revocationService));
-        steps.add(new PayloadPreparationStep());
-        steps.add(new JsonCanonicalizationStep());
-        steps.add(new ContentDigestStep());
-        steps.add(new ProtectedHeaderStep());
-        steps.add(new SigningInputStep());
+        steps.add(new PkixChainValidationStep(pkixCertificateValidator));
+        steps.add(new CertificatePolicyStep(policyProperties));
+        steps.add(new FramedContentDigestStep());
+        steps.add(new JadesDataToSignStep());
         steps.add(new CryptoSigningStep());
-        steps.add(new JwsPreliminaryStep());
-        steps.add(new TsaTimestampStep());
-        steps.add(new JwsFinalStep());
+        steps.add(new JadesAssembleStep());
+        steps.add(new JadesExtensionStep(new JadesExtensionService(), policyProperties));
+        steps.add(new TsaTokenVerificationStep(pkixCertificateValidator, policyProperties));
         steps.add(new FhirSignatureStep());
 
-        // Signing steps — política 2.0.0 (JAdES via EU DSS)
-        steps.add(new JadesDataToSignStep());
-        steps.add(new JadesAssembleStep());
-        steps.add(new JadesExtensionStep(
-                new br.gov.go.saude.fhir.safira.jades.JadesExtensionService(),
-                jadesProperties.signing().targetLevel()));
-
-        // Validation steps
-        steps.add(new ValidationContextValidationStep(pipelineDefinitions));
-        steps.add(new JwsExtractionStep());
-        steps.add(new JwsHeadersValidationStep());
-        steps.add(new ValidationChainBuildStep());
-        steps.add(new ValidationChainValidationStep(trustStoreService));
-        steps.add(new SignatureCryptoVerificationStep());
-        steps.add(new LtvRevocationCheckStep());
-        steps.add(new TimestampPolicyValidationStep());
-        steps.add(new PayloadIntegrityVerificationStep());
-        steps.add(new ValidationSuccessStep());
+        // Validação — política 0.2.0 (EU DSS com âncoras e revogação da icpbrasil-truststore)
+        steps.add(new ValidationRequestContextStep(policyProperties, trustMaterialSource, clock));
+        steps.add(new SignatureBindingStep());
+        steps.add(new JwsStructureStep());
+        steps.add(new ContentIntegrityStep());
+        steps.add(new SignerCertificateStep(policyProperties, trustMaterialSource));
+        steps.add(new CurrentChainStep(pkixCertificateValidator));
+        steps.add(new DssValidationStep(revocationService, trustMaterialSource, policyProperties));
+        steps.add(new TimestampValidationStep(policyProperties));
+        steps.add(new ValidationOutcomeStep());
 
         return steps;
     }

@@ -1,0 +1,11 @@
+{
+  "resourceType": "Provenance",
+  "target": [
+    { "reference": "urn:uuid:9b2b8c1e-2f4a-4d5b-8c6d-7e8f9a0b1c2d" },
+    { "reference": "urn:uuid:3fa85f64-5717-4562-b3fc-2c963f66afa6" }
+  ],
+  "recorded": "2026-01-10T10:05:00-03:00",
+  "agent": [
+    { "who": { "identifier": { "system": "urn:brasil:cpf", "value": "52998224725" } } }
+  ]
+}

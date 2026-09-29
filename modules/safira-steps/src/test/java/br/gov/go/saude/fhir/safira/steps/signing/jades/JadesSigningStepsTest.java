@@ -5,59 +5,67 @@
 
 package br.gov.go.saude.fhir.safira.steps.signing.jades;
 
-import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties;
 import br.gov.go.saude.fhir.safira.engine.domain.CryptoMaterial;
 import br.gov.go.saude.fhir.safira.engine.domain.StepResult;
 import br.gov.go.saude.fhir.safira.engine.domain.TimestampStrategy;
+import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
+import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifiers;
 import br.gov.go.saude.fhir.safira.jades.adapter.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
-import br.gov.go.saude.fhir.safira.steps.config.SafiraJadesProperties;
-import br.gov.go.saude.fhir.safira.steps.signing.ChainValidationStep;
-import br.gov.go.saude.fhir.safira.steps.signing.ContentDigestStep;
+import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.signing.CryptoSigningStep;
-import br.gov.go.saude.fhir.safira.steps.signing.JwsFinalStep;
-import br.gov.go.saude.fhir.safira.steps.signing.revocation.RevocationEvidence;
+import br.gov.go.saude.fhir.safira.steps.signing.SigningKeys;
+import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
+import br.gov.go.saude.truststore.icpbrasil.model.ValidationResult;
+import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import eu.europa.esig.dss.enumerations.Indication;
+import eu.europa.esig.dss.enumerations.SignatureLevel;
 import eu.europa.esig.dss.validation.reports.Reports;
-import eu.europa.esig.jades.JAdESUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.security.cert.PKIXReason;
 import java.security.cert.X509Certificate;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
- * Pipeline JAdES 2.0.0 encadeando os steps reais:
- * {@code jades-data-to-sign} → {@code crypto-signing} → {@code jades-assemble} →
- * {@code jades-extension} — com oráculo de conformidade (validador EU DSS + schema ETSI)
- * e TSA fake local (RFC 3161) para o nível B-T.
+ * Steps JAdES da política 0.2.0 em sequência: jades-data-to-sign → crypto-signing →
+ * jades-assemble → jades-extension → tsa-token-verification, com TSA local (RFC 3161).
  */
 class JadesSigningStepsTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final String POLICY_URI =
-            "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|2.0.0";
-    private static final long REFERENCE_TIMESTAMP = 1755000000L;
 
+    @TempDir
+    static Path tempDir;
     private static TestPki pki;
     private static TestPki.FakeTsa fakeTsa;
+    private static SafiraPolicyProperties policy;
 
     @BeforeAll
-    static void setup() {
+    static void setUp() {
         pki = TestPki.create();
         fakeTsa = pki.startFakeTsa();
+        policy = TestConfigs.policy(pki, TestConfigs.tsaPolicies(tempDir, TestPki.TSA_POLICY_OID, 1, pki.caCert));
     }
 
     @AfterAll
@@ -66,198 +74,106 @@ class JadesSigningStepsTest {
     }
 
     @Test
-    void estrategiaIatDeveProduzirJadesBBValidoSemUnprotectedHeader() throws Exception {
-        String jws = runPipeline(TimestampStrategy.IAT);
+    void shouldProduceJadesBaselineBWithoutHeaderForIatStrategy() throws Exception {
+        String jws = jws(extend(signedContext(TimestampStrategy.IAT, fakeTsa.url())));
 
-        JsonNode root = MAPPER.readTree(jws);
-        assertThat(root.get("signatures").get(0).has("header")).isFalse();
-
-        assertThat(JAdESUtils.getInstance().validateAgainstSchema(jws)).isEmpty();
-        assertThat(validateWithDss(jws)).isEqualTo(Indication.TOTAL_PASSED);
+        assertThat(MAPPER.readTree(jws).get("signatures").get(0).has("header")).isFalse();
+        assertThat(dssFormat(jws)).isEqualTo(SignatureLevel.JAdES_BASELINE_B);
     }
 
     @Test
-    void estrategiaTsaDeveProduzirJadesBTComSigTstDentroDeEtsiU() throws Exception {
-        String jws = runPipeline(TimestampStrategy.TSA);
+    void shouldProduceJadesBaselineTWithClearEtsiUForTsaStrategy() throws Exception {
+        StepResult<SigningContext> extended = extend(signedContext(TimestampStrategy.TSA, fakeTsa.url()));
+        String jws = jws(extended);
 
-        JsonNode header = MAPPER.readTree(jws).get("signatures").get(0).get("header");
-        assertThat(header).isNotNull();
-        // etsiU deve ser o ÚNICO parâmetro do unprotected header (ETSI TS 119 182-1 §4)
-        assertThat(header.properties()).hasSize(1);
-        JsonNode etsiU = header.get("etsiU");
-        assertThat(etsiU).isNotNull();
-        assertThat(etsiU.isArray()).isTrue();
-        assertThat(etsiU.size()).isGreaterThanOrEqualTo(1);
-
-        // Componentes incorporados em base64url: o primeiro deve ser {"sigTst": {"tstTokens": [{"val": ...}]}}
-        String firstComponent = new String(
-                Base64.getUrlDecoder().decode(etsiU.get(0).asText()), StandardCharsets.UTF_8);
-        JsonNode sigTst = MAPPER.readTree(firstComponent).get("sigTst");
-        assertThat(sigTst).isNotNull();
-        assertThat(sigTst.get("tstTokens").isArray()).isTrue();
-        assertThat(sigTst.get("tstTokens").get(0).has("val")).isTrue();
-
-        // iat permanece presente na estratégia TSA (B-T adiciona sigTst, não substitui o iat)
-        JsonNode protectedHeader = decodeProtectedHeader(jws);
-        assertThat(protectedHeader.get("iat").asLong()).isEqualTo(REFERENCE_TIMESTAMP);
-
-        assertThat(JAdESUtils.getInstance().validateAgainstSchema(jws)).isEmpty();
-        assertThat(validateWithDss(jws)).isEqualTo(Indication.TOTAL_PASSED);
+        JsonNode etsiU = MAPPER.readTree(jws).get("signatures").get(0).get("header").get("etsiU");
+        assertThat(etsiU).hasSize(1);
+        assertThat(etsiU.get(0).get("sigTst").get("tstTokens").get(0).get("val").isTextual()).isTrue();
+        assertThat(dssFormat(jws)).isEqualTo(SignatureLevel.JAdES_BASELINE_T);
+        assertThat(extended.context().getAttribute(JadesExtensionStep.TSA_POLICY_OID_KEY, String.class))
+                .contains(TestPki.TSA_POLICY_OID);
     }
 
     @Test
-    void estrategiaTsaComTsaIndisponivelDeveFalharComTsaUnavailable() throws Exception {
-        SigningContext context = signedContext(TimestampStrategy.TSA, "http://127.0.0.1:1/tsa");
+    void shouldFailWithTsaUnavailableWhenTsaIsUnreachable() throws Exception {
+        StepResult<SigningContext> result = extend(signedContext(TimestampStrategy.TSA, "https://127.0.0.1:9/tsa"));
 
-        StepResult<SigningContext> result = new JadesExtensionStep().execute(context);
-
-        assertInstanceOf(StepResult.Failure.class, result);
-        var failure = (StepResult.Failure<SigningContext>) result;
-        assertThat(failure.code().getCode()).startsWith("TSA.");
+        assertThat(((StepResult.Failure<SigningContext>) result).code()).isEqualTo(SignatureExceptionCode.TSA_UNAVAILABLE);
     }
 
     @Test
-    void nivelBLtDeveEmbutirMaterialDeValidacaoPermitindoValidacaoOffline() throws Exception {
-        String jws = runPipeline(TimestampStrategy.TSA, SafiraJadesProperties.TargetLevel.B_LT);
+    void shouldAcceptTimestampTokenAnchoredInTsaTrustStore() throws Exception {
+        PkixCertificateValidator validator = mock(PkixCertificateValidator.class);
+        when(validator.validate(any(), anyCollection(), any()))
+                .thenReturn(new ValidationResult.Valid(List.of(fakeTsa.tsaCert()), pki.caCert, List.of()));
 
-        List<String> components = etsiUComponentNames(jws);
-        // xVals é condicional (§5.3.5.2): omitido quando os certificados já estão noutro
-        // componente — a cadeia completa vai no x5c e o cert da TSA dentro do próprio TST
-        assertThat(components).contains("sigTst", "rVals", "tstVD");
+        StepResult<SigningContext> result = new TsaTokenVerificationStep(validator, policy)
+                .execute(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context());
 
-        assertThat(JAdESUtils.getInstance().validateAgainstSchema(jws)).isEmpty();
-
-        // Validação LTV genuína: verifier SEM nenhuma fonte de revogação — todo o material
-        // deve estar embutido na assinatura (rVals/tstVD)
-        assertThat(validateOffline(jws)).isEqualTo(Indication.TOTAL_PASSED);
+        assertThat(result.isSuccess()).isTrue();
     }
 
     @Test
-    void nivelBLtaDeveTerArcTstComoUltimoComponenteDoEtsiU() throws Exception {
-        String jws = runPipeline(TimestampStrategy.TSA, SafiraJadesProperties.TargetLevel.B_LTA);
+    void shouldRejectTimestampTokenOutsideTsaTrustStore() throws Exception {
+        PkixCertificateValidator validator = mock(PkixCertificateValidator.class);
+        when(validator.validate(any(), anyCollection(), any()))
+                .thenReturn(new ValidationResult.Untrusted(PKIXReason.NO_TRUST_ANCHOR, "fora do trust store TSA"));
 
-        List<String> components = etsiUComponentNames(jws);
-        assertThat(components).contains("sigTst", "rVals", "tstVD");
-        assertThat(components.getLast())
-                .as("arcTst deve ser o último elemento do etsiU (ETSI TS 119 182-1 §5.3.6.2.2)")
-                .isEqualTo("arcTst");
+        StepResult<SigningContext> result = new TsaTokenVerificationStep(validator, policy)
+                .execute(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context());
 
-        assertThat(JAdESUtils.getInstance().validateAgainstSchema(jws)).isEmpty();
-        assertThat(validateOffline(jws)).isEqualTo(Indication.TOTAL_PASSED);
+        assertThat(((StepResult.Failure<SigningContext>) result).code())
+                .isEqualTo(SignatureExceptionCode.TSA_CHAIN_VALIDATION_FAILED);
+    }
+
+    @Test
+    void shouldSkipTokenVerificationForIatStrategy() throws Exception {
+        PkixCertificateValidator validator = mock(PkixCertificateValidator.class);
+
+        StepResult<SigningContext> result = new TsaTokenVerificationStep(validator, policy)
+                .execute(extend(signedContext(TimestampStrategy.IAT, fakeTsa.url())).context());
+
+        assertThat(result.isSuccess()).isTrue();
     }
 
     // ------------------------------------------------------------------
-    // Infra do teste
-    // ------------------------------------------------------------------
 
-    private String runPipeline(TimestampStrategy strategy) throws Exception {
-        return runPipeline(strategy, SafiraJadesProperties.TargetLevel.B_T);
+    private StepResult<SigningContext> extend(SigningContext context) {
+        return new JadesExtensionStep(new JadesExtensionService(), policy).execute(context);
     }
 
-    private String runPipeline(TimestampStrategy strategy, SafiraJadesProperties.TargetLevel targetLevel)
-            throws Exception {
-        SigningContext context = signedContext(strategy, fakeTsa.url());
-
-        JadesExtensionStep extensionStep = new JadesExtensionStep(
-                new br.gov.go.saude.fhir.safira.jades.JadesExtensionService(), targetLevel);
-        StepResult<SigningContext> extended = extensionStep.execute(context);
-        assertInstanceOf(StepResult.Success.class, extended,
-                () -> "jades-extension falhou: " + ((StepResult.Failure<?>) extended).diagnostics());
-
-        return extended.context()
-                .getAttribute(JwsFinalStep.JWS_FINAL_KEY, String.class)
-                .orElseThrow();
+    private static String jws(StepResult<SigningContext> result) {
+        assertThat(result.isSuccess()).isTrue();
+        return result.context().getAttribute(SigningKeys.JWS_FINAL, String.class).orElseThrow();
     }
 
     /** Executa jades-data-to-sign → crypto-signing → jades-assemble e retorna o contexto resultante. */
     private SigningContext signedContext(TimestampStrategy strategy, String tsaUrl) throws Exception {
-        SigningContext initial = baseContext(strategy, tsaUrl);
+        byte[] hash = MessageDigest.getInstance("SHA-256").digest("conteudo".getBytes(StandardCharsets.UTF_8));
+        SigningContext initial = SigningContext.builder()
+                .strategy(strategy)
+                .referenceTimestamp(Instant.now().getEpochSecond())
+                .policyIdentifierUri(Policy020.POLICY_URI)
+                .certificateChain(new X509Certificate[]{pki.leafCert, pki.caCert})
+                .cryptoMaterial(new CryptoMaterial.PemMaterial(pki.leafKeyPemBase64(), null))
+                .operationalConfig(TestConfigs.operational(tsaUrl))
+                .attribute(SigningKeys.CONTENT_DIGEST, Base64.getUrlEncoder().withoutPadding().encodeToString(hash))
+                .build();
 
         StepResult<SigningContext> dataToSign = new JadesDataToSignStep().execute(initial);
-        assertInstanceOf(StepResult.Success.class, dataToSign);
-
         StepResult<SigningContext> signed = new CryptoSigningStep().execute(dataToSign.context());
-        assertInstanceOf(StepResult.Success.class, signed);
-
         StepResult<SigningContext> assembled = new JadesAssembleStep().execute(signed.context());
-        assertInstanceOf(StepResult.Success.class, assembled);
-
+        assertThat(assembled.isSuccess()).isTrue();
         return assembled.context();
     }
 
-    private SigningContext baseContext(TimestampStrategy strategy, String tsaUrl) throws Exception {
-        var verification = new SafiraOperationalConfigProperties.VerificationProps(
-                3600, 3600, 20, 20, 20, 3, 2, tsaUrl, null, null);
-        var opConfig = new SafiraOperationalConfigProperties(verification, null, null, null, null);
-
-        byte[] hash = MessageDigest.getInstance("SHA-256")
-                .digest("payload-canonicalizado-teste".getBytes(StandardCharsets.UTF_8));
-        String contentDigest = Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
-
-        // Evidências de revogação reais (como o chain-validation coleta em produção):
-        // resposta OCSP GOOD do signatário + CRL da CA — insumo do rVals no nível B-LT
-        byte[] leafOcsp = pki.ocspGoodFor(pki.leafCert);
-        byte[] caCrl = pki.crl();
-        List<RevocationEvidence> evidences = List.of(
-                new RevocationEvidence("OCSP", Base64.getEncoder().encodeToString(leafOcsp), sha512Hex(leafOcsp)),
-                new RevocationEvidence("CRL", Base64.getEncoder().encodeToString(caCrl), sha512Hex(caCrl)));
-
-        return SigningContext.builder()
-                .strategy(strategy)
-                .referenceTimestamp(REFERENCE_TIMESTAMP)
-                .policyIdentifierUri(POLICY_URI)
-                .certificateChain(new X509Certificate[]{pki.leafCert, pki.caCert})
-                .cryptoMaterial(new CryptoMaterial.PemMaterial(pki.leafKeyPemBase64(), null))
-                .operationalConfig(opConfig)
-                .attribute(ContentDigestStep.CONTENT_DIGEST_KEY, contentDigest)
-                .attribute(ChainValidationStep.REVOCATION_EVIDENCES_KEY, evidences)
-                .build();
-    }
-
-    /** Nomes dos componentes do etsiU, na ordem (cada elemento base64url decodificado tem um único membro). */
-    private List<String> etsiUComponentNames(String jws) throws Exception {
-        JsonNode etsiU = MAPPER.readTree(jws).get("signatures").get(0).get("header").get("etsiU");
-        List<String> names = new java.util.ArrayList<>();
-        for (JsonNode component : etsiU) {
-            String decoded = new String(Base64.getUrlDecoder().decode(component.asText()), StandardCharsets.UTF_8);
-            names.add(MAPPER.readTree(decoded).fieldNames().next());
-        }
-        return names;
-    }
-
-    /** Validação com verifier contendo APENAS o trust anchor — sem fontes de revogação. */
-    private Indication validateOffline(String jws) {
-        var verifier = CertificateVerifiers.create(List.of(pki.caCert), null, null);
-        Reports reports = new JadesValidationService().validate(jws, verifier);
-        var simple = reports.getSimpleReport();
-        String signatureId = simple.getFirstSignatureId();
-        return simple.getIndication(signatureId);
-    }
-
-    private static String sha512Hex(byte[] data) throws Exception {
-        byte[] hash = MessageDigest.getInstance("SHA-512").digest(data);
-        StringBuilder sb = new StringBuilder(hash.length * 2);
-        for (byte b : hash) {
-            sb.append(String.format("%02x", b));
-        }
-        return sb.toString();
-    }
-
-    private Indication validateWithDss(String jws) {
-        var verifier = CertificateVerifiers.create(
-                List.of(pki.caCert),
-                EvidenceRevocationSources.ocspFromEvidence(List.of(
-                        pki.ocspGoodFor(pki.leafCert), pki.ocspGoodFor(pki.tsaCert))),
+    private SignatureLevel dssFormat(String jws) {
+        var verifier = CertificateVerifiers.create(List.of(pki.caCert),
+                EvidenceRevocationSources.ocspFromEvidence(List.of(pki.ocspGoodFor(pki.leafCert), pki.ocspGoodFor(fakeTsa.tsaCert()))),
                 EvidenceRevocationSources.crlFromEvidence(List.of(pki.crl())));
-
         Reports reports = new JadesValidationService().validate(jws, verifier);
-        String signatureId = reports.getSimpleReport().getFirstSignatureId();
-        return reports.getSimpleReport().getIndication(signatureId);
-    }
-
-    private static JsonNode decodeProtectedHeader(String jws) throws Exception {
-        JsonNode root = MAPPER.readTree(jws);
-        String protectedB64 = root.get("signatures").get(0).get("protected").asText();
-        return MAPPER.readTree(new String(Base64.getUrlDecoder().decode(protectedB64), StandardCharsets.UTF_8));
+        String id = reports.getSimpleReport().getFirstSignatureId();
+        assertThat(reports.getSimpleReport().getIndication(id)).isEqualTo(Indication.TOTAL_PASSED);
+        return reports.getSimpleReport().getSignatureFormat(id);
     }
 }

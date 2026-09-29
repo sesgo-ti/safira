@@ -62,6 +62,14 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- PKI de teste e TSA local compartilhadas pelo módulo safira-jades -->
+        <dependency>
+            <groupId>br.gov.go.saude.fhir</groupId>
+            <artifactId>safira-jades</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
