@@ -33,7 +33,6 @@ import br.gov.go.saude.fhir.safira.steps.validation.jades.SignerCertificateStep;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.TimestampValidationStep;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.ValidationOutcomeStep;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.ValidationRequestContextStep;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -82,8 +81,7 @@ public class SafiraStepsAutoConfiguration {
     }
 
     @Bean
-    public List<Step<?>> safiraAllSteps(PkixCertificateValidator pkixCertificateValidator,
-                                        TrustMaterialSource trustMaterialSource,
+    public List<Step<?>> safiraAllSteps(TrustMaterialSource trustMaterialSource,
                                         IcpBrasilCertificateVerifiers certificateVerifiers,
                                         SafiraPolicyProperties policyProperties,
                                         Clock clock) {
@@ -99,7 +97,7 @@ public class SafiraStepsAutoConfiguration {
         steps.add(new CryptoSigningStep());
         steps.add(new JadesAssembleStep());
         steps.add(new JadesExtensionStep(new JadesExtensionService(), policyProperties));
-        steps.add(new TsaTokenVerificationStep(pkixCertificateValidator, policyProperties));
+        steps.add(new TsaTokenVerificationStep(certificateVerifiers, policyProperties));
         steps.add(new FhirSignatureStep());
 
         // Validação — política 0.2.0 (EU DSS decide cadeia, revogação e carimbo sobre o acervo ICP-Brasil)

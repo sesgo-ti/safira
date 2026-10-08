@@ -12,6 +12,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.jades.fixture.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
 import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
@@ -19,12 +20,14 @@ import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.signing.CryptoSigningStep;
 import br.gov.go.saude.fhir.safira.steps.signing.SigningKeys;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
-import br.gov.go.saude.truststore.icpbrasil.model.ValidationResult;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
+import br.gov.go.saude.fhir.safira.steps.trust.IcpBrasilCertificateVerifiers;
+import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import eu.europa.esig.dss.enumerations.Indication;
 import eu.europa.esig.dss.enumerations.SignatureLevel;
+import eu.europa.esig.dss.model.x509.revocation.ocsp.OCSP;
+import eu.europa.esig.dss.spi.x509.revocation.RevocationSource;
 import eu.europa.esig.dss.validation.reports.Reports;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -34,17 +37,13 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.MessageDigest;
-import java.security.cert.PKIXReason;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * Steps JAdES da política 0.2.0 em sequência: jades-data-to-sign → crypto-signing →
@@ -100,13 +99,15 @@ class JadesSigningStepsTest {
         assertThat(((StepResult.Failure<SigningContext>) result).code()).isEqualTo(SignatureExceptionCode.TSA_UNAVAILABLE);
     }
 
+    /** Verificador do DSS offline sobre o acervo de teste, com OCSP GOOD para qualquer certificado. */
+    private static IcpBrasilCertificateVerifiers verifiers(RevocationSource<OCSP> ocsp) {
+        return new IcpBrasilCertificateVerifiers(() -> Optional.of(TrustMaterial.of(List.of(pki.caCert))),
+                CertificateVerifierFactory.offline(ocsp, null));
+    }
+
     @Test
     void shouldAcceptTimestampTokenAnchoredInTsaTrustStore() throws Exception {
-        PkixCertificateValidator validator = mock(PkixCertificateValidator.class);
-        when(validator.validate(any(), anyCollection(), any()))
-                .thenReturn(new ValidationResult.Valid(List.of(fakeTsa.tsaCert()), pki.caCert, List.of()));
-
-        StepResult<SigningContext> result = new TsaTokenVerificationStep(validator, policy)
+        StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.ocspGoodSource()), policy)
                 .execute(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context());
 
         assertThat(result.isSuccess()).isTrue();
@@ -114,11 +115,10 @@ class JadesSigningStepsTest {
 
     @Test
     void shouldRejectTimestampTokenOutsideTsaTrustStore() throws Exception {
-        PkixCertificateValidator validator = mock(PkixCertificateValidator.class);
-        when(validator.validate(any(), anyCollection(), any()))
-                .thenReturn(new ValidationResult.Untrusted(PKIXReason.NO_TRUST_ANCHOR, "fora do trust store TSA"));
+        SafiraPolicyProperties otherAnchor = TestConfigs.policy(pki,
+                TestConfigs.tsaPolicies(tempDir, TestPki.TSA_POLICY_OID, 1, TestPki.create().caCert));
 
-        StepResult<SigningContext> result = new TsaTokenVerificationStep(validator, policy)
+        StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.ocspGoodSource()), otherAnchor)
                 .execute(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context());
 
         assertThat(((StepResult.Failure<SigningContext>) result).code())
@@ -126,10 +126,21 @@ class JadesSigningStepsTest {
     }
 
     @Test
-    void shouldSkipTokenVerificationForIatStrategy() throws Exception {
-        PkixCertificateValidator validator = mock(PkixCertificateValidator.class);
+    void shouldRejectTimestampTokenWhenTsaIsRevoked() throws Exception {
+        RevocationSource<OCSP> tsaRevoked = TestPki.ocspSource(certificate -> certificate.equals(fakeTsa.tsaCert())
+                ? pki.ocspRevokedFor(certificate)
+                : pki.ocspGoodFor(certificate));
 
-        StepResult<SigningContext> result = new TsaTokenVerificationStep(validator, policy)
+        StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(tsaRevoked), policy)
+                .execute(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context());
+
+        assertThat(((StepResult.Failure<SigningContext>) result).code())
+                .isEqualTo(SignatureExceptionCode.TSA_CERTIFICATE_REVOKED);
+    }
+
+    @Test
+    void shouldSkipTokenVerificationForIatStrategy() throws Exception {
+        StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.ocspGoodSource()), policy)
                 .execute(extend(signedContext(TimestampStrategy.IAT, fakeTsa.url())).context());
 
         assertThat(result.isSuccess()).isTrue();

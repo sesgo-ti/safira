@@ -58,15 +58,23 @@ public final class DssOutcomes {
      * O carimbo da assinatura precisa ser {@code PASSED} no DSS e sua cadeia, montada pelo DSS,
      * precisa terminar numa âncora do trust store TSA da política (não basta uma raiz do acervo).
      */
-    public static Optional<PolicyViolation> timestamp(Reports reports, String signatureId,
-                                                      List<X509Certificate> tsaAnchors, String tsaPolicyOid) {
-        SimpleReport report = reports.getSimpleReport();
-        List<XmlTimestamp> timestamps = report.getSignatureTimestamps(signatureId);
+    public static Optional<PolicyViolation> signatureTimestamp(Reports reports, String signatureId,
+                                                               List<X509Certificate> tsaAnchors, String tsaPolicyOid) {
+        List<XmlTimestamp> timestamps = reports.getSimpleReport().getSignatureTimestamps(signatureId);
         if (timestamps.size() != 1) {
             return Optional.of(new PolicyViolation(SignatureExceptionCode.TSA_INVALID_TOKEN,
                     "EU DSS identificou " + timestamps.size() + " carimbos de assinatura; esperado 1."));
         }
-        String timestampId = timestamps.getFirst().getId();
+        return timestamp(reports, timestamps.getFirst().getId(), tsaAnchors, tsaPolicyOid);
+    }
+
+    /**
+     * Mesmo critério para um carimbo identificado — também o token avulso validado pelo
+     * {@code DetachedTimestampValidator}.
+     */
+    public static Optional<PolicyViolation> timestamp(Reports reports, String timestampId,
+                                                      List<X509Certificate> tsaAnchors, String tsaPolicyOid) {
+        SimpleReport report = reports.getSimpleReport();
         Indication indication = report.getIndication(timestampId);
         List<CertificateWrapper> chain = reports.getDiagnosticData().getTimestampById(timestampId).getCertificateChain();
         if (indication != Indication.PASSED) {

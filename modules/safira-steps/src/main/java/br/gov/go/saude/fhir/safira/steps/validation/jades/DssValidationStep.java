@@ -93,7 +93,7 @@ public class DssValidationStep implements ValidationStep {
         String id = report.getFirstSignatureId();
 
         if (level == JadesLevel.B_T) {
-            Optional<PolicyViolation> timestampFailure = DssOutcomes.timestamp(reports, id, tsaAnchors, tsaPolicy.oid());
+            Optional<PolicyViolation> timestampFailure = DssOutcomes.signatureTimestamp(reports, id, tsaAnchors, tsaPolicy.oid());
             if (timestampFailure.isPresent()) {
                 return fail(timestampFailure.get().code(), timestampFailure.get().diagnostics(), context);
             }
