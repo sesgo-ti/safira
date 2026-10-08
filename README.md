@@ -130,6 +130,17 @@ java -jar modules/safira-rest/target/safira-rest-*.jar
 
 Relatório de cobertura (JaCoCo) por módulo em `modules/<módulo>/target/site/jacoco/index.html`.
 
+## Release
+
+Uma tag `vX.Y.Z` em commit da `main` dispara o workflow `release.yml`, que fixa a versão do pom a partir da tag, roda `./mvnw verify` e publica `hubsaude-safira-X.Y.Z.jar` com `checksums.txt` na release `hubsaude-safira-vX.Y.Z` de `sesgo-ti/hubsaude`. É de lá que o [hubsaude-cli](https://github.com/sesgo-ti/hubsaude-cli) provisiona o Safira, depois que a versão entra no manifesto dele.
+
+```bash
+git tag -a v0.2.0 -m "safira 0.2.0"
+git push origin v0.2.0
+```
+
+A publicação exige o secret `HUBSAUDE_DIST_TOKEN` no environment `hubsaude-distribution`, com deployment policy restrita a tags `v*.*.*`.
+
 ### Testes de integração com certificado ICP-Brasil real
 
 Marcados com `@Tag("integration")`: não rodam no build padrão e exigem rede (ITI, AIA, OCSP/CRL) e um PKCS#12 real. Como a política aceita apenas A3, A4, SE-S e SE-H, um certificado A1 é recusado pela pipeline (`CERT.NOT-ICP-BRASIL`) após a validação PKIX real; o oráculo DSS valida um JAdES produzido com esse certificado fora da pipeline.

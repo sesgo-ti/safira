@@ -18,6 +18,7 @@ e o projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 - Maven Wrapper, workflow de CI (GitHub Actions), Dependabot, JaCoCo e separação de testes de integração por `@Tag("integration")` (perfil `integration-tests`).
 - Health e probes via Spring Boot Actuator (`/actuator/health/readiness` e `/liveness`; só o endpoint `health` é exposto). A readiness só fica `UP` depois que o acervo ICP-Brasil carrega.
 - `safira-rest` empacotado como JAR executável (`java -jar`), com o goal `repackage` do `spring-boot-maven-plugin`.
+- Workflow de release (`release.yml`): a tag `vX.Y.Z` publica `hubsaude-safira-X.Y.Z.jar` e `checksums.txt` em `sesgo-ti/hubsaude`, consumido pelo hubsaude-cli.
 
 ### Alterado
 
