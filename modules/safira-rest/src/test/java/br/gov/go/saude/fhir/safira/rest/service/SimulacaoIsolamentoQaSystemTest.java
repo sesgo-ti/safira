@@ -157,6 +157,18 @@ class SimulacaoIsolamentoQaSystemTest {
     }
 
     @Test
+    void shouldFailStartupWhenSimulationAllowlistIssuerIsEmpty() {
+        assertThatThrownBy(() -> new SpringApplicationBuilder(Application.class)
+                .web(WebApplicationType.NONE)
+                .profiles("simulacao")
+                .properties(ambiente())
+                .run("--SAFIRA_SIMULACAO_ISSUER_SHA256=",
+                        "--icpbrasil-truststore.filesystem.base-dir=target/icpbrasil-truststore-simulacao-qa-allowlist")
+                .close())
+                .hasStackTraceContaining("issuer-sha256");
+    }
+
+    @Test
     void shouldNotTrustSimulatedSignerWhenProfileIsActiveButModeIsOverriddenOff() throws Exception {
         try (ConfigurableApplicationContext parcial = new SpringApplicationBuilder(Application.class)
                 .web(WebApplicationType.NONE)

@@ -7,11 +7,15 @@ package br.gov.go.saude.fhir.safira.simulador;
 
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.steps.config.SafiraStepsAutoConfiguration;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
 import br.gov.go.saude.truststore.icpbrasil.config.TrustStoreAutoConfiguration;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -20,7 +24,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 
+import org.springframework.util.StringUtils;
+
 import java.security.cert.TrustAnchor;
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -55,6 +62,24 @@ public class SafiraSimulacaoAutoConfiguration {
                 Raízes simuladas: {}""", raizes);
         Optional<TrustMaterial> atual = Optional.of(material);
         return () -> atual;
+    }
+
+    /**
+     * No modo simulação a allowlist {@code safira.policy.accepted-certificate-policies} precisa
+     * fixar o emissor ({@code issuer-sha256}) de cada política: sem ele o startup falha, em vez de
+     * recusar cada requisição. Só confere quando a política dos steps está no contexto.
+     */
+    @Bean
+    SmartInitializingSingleton simulacaoAllowlistComEmissor(ObjectProvider<SafiraPolicyProperties> politica) {
+        return () -> politica.ifAvailable(SafiraSimulacaoAutoConfiguration::exigirEmissores);
+    }
+
+    static void exigirEmissores(SafiraPolicyProperties politica) {
+        List<AcceptedCertificatePolicy> allowlist = politica.acceptedCertificatePolicies();
+        if (allowlist.isEmpty() || allowlist.stream().anyMatch(entrada -> !StringUtils.hasText(entrada.issuerSha256()))) {
+            throw new IllegalStateException("Modo simulação: safira.policy.accepted-certificate-policies[*].issuer-sha256 "
+                    + "(SAFIRA_SIMULACAO_ISSUER_SHA256) é obrigatório — informe o SHA-256 da AC simulada emissora.");
+        }
     }
 
     /**
