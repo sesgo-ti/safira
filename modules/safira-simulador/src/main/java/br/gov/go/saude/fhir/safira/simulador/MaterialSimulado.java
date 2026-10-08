@@ -27,6 +27,17 @@ final class MaterialSimulado {
     }
 
     static TrustMaterial carregar(SafiraSimulacaoProperties propriedades) {
+        List<X509Certificate> todos = conferidos(propriedades);
+        TrustMaterial material = TrustMaterial.of(todos);
+        long raizes = todos.stream().filter(MaterialSimulado::autoassinado).count();
+        if (material.anchors().size() != raizes) {
+            throw new IllegalStateException("safira.simulacao.trust-anchors: nem todas as raízes foram aceitas como âncora.");
+        }
+        return material;
+    }
+
+    /** Raízes e ACs configuradas, já conferidas (raízes primeiro). */
+    static List<X509Certificate> conferidos(SafiraSimulacaoProperties propriedades) {
         if (propriedades.trustAnchors() == null) {
             throw new IllegalStateException("Modo simulação ligado sem safira.simulacao.trust-anchors "
                     + "(SAFIRA_SIMULACAO_TRUST_ANCHORS): informe o bundle PEM com as raízes da PKI simulada.");
@@ -63,11 +74,7 @@ final class MaterialSimulado {
         }
         List<X509Certificate> todos = new ArrayList<>(raizes);
         todos.addAll(acs);
-        TrustMaterial material = TrustMaterial.of(todos);
-        if (material.anchors().size() != raizes.size()) {
-            throw new IllegalStateException("safira.simulacao.trust-anchors: nem todas as raízes foram aceitas como âncora.");
-        }
-        return material;
+        return List.copyOf(todos);
     }
 
     private static List<X509Certificate> certificados(Resource recurso, String propriedade) {

@@ -68,7 +68,8 @@ public class SafiraSimulacaoAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean
         CertificateVerifierFactory simulacaoCertificateVerifierFactory(SafiraSimulacaoProperties propriedades) {
-            return CertificateVerifierFactory.offline(null, LcrsSimuladas.fonte(propriedades.crls()));
+            return CertificateVerifierFactory.offline(null,
+                    LcrsSimuladas.fonte(propriedades.crls(), MaterialSimulado.conferidos(propriedades)));
         }
     }
 }

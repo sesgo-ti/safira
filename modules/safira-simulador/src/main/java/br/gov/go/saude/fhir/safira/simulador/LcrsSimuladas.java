@@ -19,10 +19,13 @@ import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.GeneralSecurityException;
 import java.security.cert.CRLException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509CRL;
+import java.security.cert.X509Certificate;
+import java.util.Date;
 import java.util.List;
 
 /** LCRs locais (DER ou PEM) da PKI de simulação como fonte offline de revogação do DSS. */
@@ -31,21 +34,51 @@ final class LcrsSimuladas {
     private LcrsSimuladas() {
     }
 
-    static ExternalResourcesCRLSource fonte(List<Resource> lcrs) {
-        return new ExternalResourcesCRLSource(lcrs.stream().map(LcrsSimuladas::documento).toArray(DSSDocument[]::new));
+    /**
+     * @param emissores raízes e ACs configuradas: cada LCR deve ser assinada por uma delas e ter
+     *                  {@code nextUpdate} no futuro, senão o startup falha
+     */
+    static ExternalResourcesCRLSource fonte(List<Resource> lcrs, List<X509Certificate> emissores) {
+        return new ExternalResourcesCRLSource(lcrs.stream().map(lcr -> documento(lcr, emissores))
+                .toArray(DSSDocument[]::new));
     }
 
-    private static DSSDocument documento(Resource recurso) {
+    private static DSSDocument documento(Resource recurso, List<X509Certificate> emissores) {
         RecursoLocal.exigir(recurso, "safira.simulacao.crls");
         if (!recurso.exists() || !recurso.isReadable()) {
             throw new IllegalStateException("safira.simulacao.crls: arquivo não encontrado ou ilegível: "
                     + recurso.getDescription());
         }
+        X509CRL lcr;
         try (InputStream in = recurso.getInputStream()) {
-            byte[] der = ((X509CRL) CertificateFactory.getInstance("X.509").generateCRL(in)).getEncoded();
-            return new InMemoryDocument(der, recurso.getFilename());
+            lcr = (X509CRL) CertificateFactory.getInstance("X.509").generateCRL(in);
         } catch (IOException | CertificateException | CRLException | RuntimeException e) {
             throw new IllegalStateException("safira.simulacao.crls: LCR ilegível em " + recurso.getDescription(), e);
+        }
+        if (emissores.stream().noneMatch(emissor -> assinadaPor(lcr, emissor))) {
+            throw new IllegalStateException("safira.simulacao.crls: LCR " + recurso.getDescription()
+                    + " não é assinada por nenhuma raiz ou AC configurada (" + lcr.getIssuerX500Principal().getName() + ").");
+        }
+        if (lcr.getNextUpdate() == null || !lcr.getNextUpdate().after(new Date())) {
+            throw new IllegalStateException("safira.simulacao.crls: LCR " + recurso.getDescription()
+                    + " vencida ou sem nextUpdate (" + lcr.getNextUpdate() + ").");
+        }
+        try {
+            return new InMemoryDocument(lcr.getEncoded(), recurso.getFilename());
+        } catch (CRLException e) {
+            throw new IllegalStateException("safira.simulacao.crls: LCR ilegível em " + recurso.getDescription(), e);
+        }
+    }
+
+    private static boolean assinadaPor(X509CRL lcr, X509Certificate emissor) {
+        if (!lcr.getIssuerX500Principal().equals(emissor.getSubjectX500Principal())) {
+            return false;
+        }
+        try {
+            lcr.verify(emissor.getPublicKey());
+            return true;
+        } catch (GeneralSecurityException e) {
+            return false;
         }
     }
 

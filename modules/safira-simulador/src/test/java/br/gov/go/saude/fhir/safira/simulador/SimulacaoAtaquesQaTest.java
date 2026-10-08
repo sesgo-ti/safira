@@ -234,7 +234,7 @@ class SimulacaoAtaquesQaTest {
     }
 
     @Test
-    void shouldNotPassLeafWhenIssuerCrlIsForgedByAnotherKey() throws Exception {
+    void shouldFailStartupWhenIssuerCrlIsForgedByAnotherKeyAmongValidOnes() throws Exception {
         X509Certificate ac = certificadoPem(pki.ac());
         KeyPair atacante = rsa(2048);
         Instant agora = Instant.now();
@@ -244,15 +244,10 @@ class SimulacaoAtaquesQaTest {
         runner.withPropertyValues(habilitado())
                 .withPropertyValues("safira.simulacao.crls[0]=" + pki.lcrRaiz().toUri(),
                         "safira.simulacao.crls[1]=" + forjada.toUri())
-                .run(context -> {
-                    X509Certificate revogado = folha(pki.revogado(), GeradorPkiSimulada.ALIAS_REVOGADO);
-                    assertThat(indicacao(context.getBean(CertificateVerifierFactory.class), revogado))
-                            .isNotEqualTo(Indication.PASSED);
-                });
+                .run(context -> assertThat(context).hasFailed());
     }
 
     @Test
-    @Disabled("VULN-S4: LCR forjada (assinatura de outra chave) é aceita no startup sem conferência do emissor")
     void shouldFailStartupWhenCrlIsNotSignedByAnyConfiguredCa() throws Exception {
         X509Certificate ac = certificadoPem(pki.ac());
         KeyPair atacante = rsa(2048);
@@ -265,7 +260,7 @@ class SimulacaoAtaquesQaTest {
     }
 
     @Test
-    void shouldNotPassLeafWhenOnlyCrlIsExpired() throws Exception {
+    void shouldFailStartupWhenIssuerCrlIsExpiredAmongValidOnes() throws Exception {
         MiniPki mini = MiniPki.criar();
         Instant agora = Instant.now();
         Path vencida = Files.write(saida.resolve("lcr-vencida.crl"), lcr(mini.ac, mini.chavesAc.getPrivate(),
@@ -275,13 +270,12 @@ class SimulacaoAtaquesQaTest {
 
         runner.withPropertyValues("safira.simulacao.enabled=true",
                         "safira.simulacao.trust-anchors=" + escreverPem("mini-raiz.pem", mini.raiz).toUri(),
+                        "safira.simulacao.intermediates=" + escreverPem("mini-ac.pem", mini.ac).toUri(),
                         "safira.simulacao.crls[0]=" + lcrRaiz.toUri(), "safira.simulacao.crls[1]=" + vencida.toUri())
-                .run(context -> assertThat(indicacao(context.getBean(CertificateVerifierFactory.class), mini.folha,
-                        mini.raiz, mini.ac)).isNotEqualTo(Indication.PASSED));
+                .run(context -> assertThat(context).hasFailed());
     }
 
     @Test
-    @Disabled("VULN-S4: LCR vencida (nextUpdate no passado) é aceita no startup sem aviso")
     void shouldFailStartupWhenCrlIsExpired() throws Exception {
         MiniPki mini = MiniPki.criar();
         Instant agora = Instant.now();
@@ -290,6 +284,7 @@ class SimulacaoAtaquesQaTest {
 
         runner.withPropertyValues("safira.simulacao.enabled=true",
                         "safira.simulacao.trust-anchors=" + escreverPem("mini-raiz-2.pem", mini.raiz).toUri(),
+                        "safira.simulacao.intermediates=" + escreverPem("mini-ac-2.pem", mini.ac).toUri(),
                         "safira.simulacao.crls[0]=" + vencida.toUri())
                 .run(context -> assertThat(context).hasFailed());
     }
