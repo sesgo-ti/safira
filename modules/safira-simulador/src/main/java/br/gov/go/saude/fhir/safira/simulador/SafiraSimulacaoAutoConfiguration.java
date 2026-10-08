@@ -5,6 +5,7 @@
 
 package br.gov.go.saude.fhir.safira.simulador;
 
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.steps.config.SafiraStepsAutoConfiguration;
 import br.gov.go.saude.truststore.icpbrasil.config.TrustStoreAutoConfiguration;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
@@ -12,9 +13,12 @@ import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
+import org.springframework.context.annotation.Configuration;
 
 import java.security.cert.TrustAnchor;
 import java.util.Optional;
@@ -51,5 +55,20 @@ public class SafiraSimulacaoAutoConfiguration {
                 Raízes simuladas: {}""", raizes);
         Optional<TrustMaterial> atual = Optional.of(material);
         return () -> atual;
+    }
+
+    /**
+     * Com {@code safira.simulacao.crls}, a revogação vem só das LCRs locais (sem rede); sem elas,
+     * vale a fábrica online padrão de {@link SafiraStepsAutoConfiguration}.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @Conditional(LcrsSimuladas.Configuradas.class)
+    static class LcrsLocaisConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        CertificateVerifierFactory simulacaoCertificateVerifierFactory(SafiraSimulacaoProperties propriedades) {
+            return CertificateVerifierFactory.offline(null, LcrsSimuladas.fonte(propriedades.crls()));
+        }
     }
 }

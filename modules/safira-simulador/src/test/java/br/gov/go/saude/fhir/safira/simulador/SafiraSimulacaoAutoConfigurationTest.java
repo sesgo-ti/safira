@@ -5,11 +5,18 @@
 
 package br.gov.go.saude.fhir.safira.simulador;
 
+import br.gov.go.saude.fhir.safira.jades.CertificateValidationService;
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada.Opcoes;
 import br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada.Resultado;
 import br.gov.go.saude.truststore.icpbrasil.config.TrustStoreAutoConfiguration;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import eu.europa.esig.dss.enumerations.Indication;
+import eu.europa.esig.dss.enumerations.SubIndication;
+import eu.europa.esig.dss.model.x509.CertificateToken;
+import eu.europa.esig.dss.simplecertificatereport.SimpleCertificateReport;
+import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -19,6 +26,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.KeyStore;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.security.cert.TrustAnchor;
@@ -122,5 +130,71 @@ class SafiraSimulacaoAutoConfigurationTest {
             assertThat(context).hasFailed();
             assertThat(context.getStartupFailure()).rootCause().hasMessageContaining("autoassinad");
         });
+    }
+
+    private static X509Certificate folha(Path p12, String alias) throws Exception {
+        KeyStore keyStore = KeyStore.getInstance("PKCS12");
+        try (InputStream in = Files.newInputStream(p12)) {
+            keyStore.load(in, pki.senha().toCharArray());
+        }
+        return (X509Certificate) keyStore.getCertificate(alias);
+    }
+
+    private static SimpleCertificateReport relatorio(CertificateVerifierFactory factory, X509Certificate folha)
+            throws Exception {
+        CommonCertificateVerifier verifier = factory.create(CertificateVerifierFactory.acervo(
+                List.of(certificado(pki.raiz())), List.of(certificado(pki.ac()))), List.of());
+        return new CertificateValidationService().validate(folha, List.of(), verifier).getSimpleReport();
+    }
+
+    private static String[] comLcrs() {
+        return new String[]{"safira.simulacao.crls[0]=" + pki.lcrRaiz().toUri(),
+                "safira.simulacao.crls[1]=" + pki.lcrAc().toUri()};
+    }
+
+    @Test
+    void shouldKeepOnlineVerifierFactoryWhenCrlsAreAbsent() {
+        runner.withPropertyValues(habilitado(pki.raiz().toUri().toString())).run(context ->
+                assertThat(context).doesNotHaveBean(CertificateVerifierFactory.class));
+    }
+
+    @Test
+    void shouldKeepOnlineVerifierFactoryWhenCrlsAreBlank() {
+        runner.withPropertyValues(habilitado(pki.raiz().toUri().toString()))
+                .withPropertyValues("safira.simulacao.crls=")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).doesNotHaveBean(CertificateVerifierFactory.class);
+                });
+    }
+
+    @Test
+    void shouldDecideRevocationFromLocalCrlsWhenConfigured() {
+        runner.withPropertyValues(habilitado(pki.raiz().toUri().toString())).withPropertyValues(comLcrs())
+                .run(context -> {
+                    CertificateVerifierFactory factory = context.getBean(CertificateVerifierFactory.class);
+                    X509Certificate valido = folha(pki.signatario(), GeradorPkiSimulada.ALIAS_SIGNATARIO);
+                    X509Certificate revogado = folha(pki.revogado(), GeradorPkiSimulada.ALIAS_REVOGADO);
+
+                    SimpleCertificateReport okReport = relatorio(factory, valido);
+                    SimpleCertificateReport revokedReport = relatorio(factory, revogado);
+
+                    String idValido = new CertificateToken(valido).getDSSIdAsString();
+                    String idRevogado = new CertificateToken(revogado).getDSSIdAsString();
+                    assertThat(okReport.getCertificateIndication(idValido)).isEqualTo(Indication.PASSED);
+                    assertThat(revokedReport.getCertificateSubIndication(idRevogado)).isEqualTo(SubIndication.REVOKED_NO_POE);
+                });
+    }
+
+    @Test
+    void shouldFailStartupWhenCrlIsUnreadable() throws Exception {
+        Path invalida = Files.writeString(saida.resolve("invalida.crl"), "nao e uma LCR");
+
+        runner.withPropertyValues(habilitado(pki.raiz().toUri().toString()))
+                .withPropertyValues("safira.simulacao.crls[0]=" + invalida.toUri())
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasStackTraceContaining("LCR ilegível").hasStackTraceContaining("invalida.crl");
+                });
     }
 }
