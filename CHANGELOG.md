@@ -32,3 +32,4 @@ e o projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 - Pipelines das políticas `0.1.0`, `1.1.0` e `2.0.0` (implementação manual de JWS e perfil JAdES com níveis B-LT/B-LTA).
 - Assinatura ECDSA/ES256 (a política admite somente `RS256`).
 - Propriedades `safira.jades.*`, `safira.operational.trust-store.*`, `safira.operational.validation-policy.*` (permitia revogação não estrita) e `safira.operational.security.min/max-reference-timestamp`.
+- Código legado sem uso nas pipelines: steps manuais de assinatura (JWS, canonicalização JCS, cadeia, carimbo via `HttpTsaClient`) e de validação (pacote `steps.validation` fora de `jades`), `OnlineRevocationSources` e a dependência `java-json-canonicalization`. Acervo, PKIX e revogação ficam só com a icpbrasil-truststore e o EU DSS.
