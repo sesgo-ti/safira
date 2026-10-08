@@ -88,7 +88,7 @@ public final class GeradorPkiSimulada {
      * @param senha        senha dos PKCS#12
      * @param politicaOid  OID de política A3 ({@code 2.16.76.1.2.3.n}) no certificado folha
      * @param cpf          CPF do titular (dígitos verificadores válidos)
-     * @param validadeDias validade dos certificados folha e das LCRs
+     * @param validadeDias validade dos certificados folha e das LCRs (limitada à validade da AC, 1825 dias)
      */
     public record Opcoes(String senha, String politicaOid, String cpf, int validadeDias) {
 
@@ -186,12 +186,17 @@ public final class GeradorPkiSimulada {
             Path dir = saida.toAbsolutePath().normalize();
             Instant agora = Instant.now();
             Instant inicio = agora.minus(Duration.ofHours(1));
+            Instant fimAc = agora.plus(Duration.ofDays(1825));
+            // A folha nunca sobrevive à AC emissora (cadeia bem aninhada).
             Instant fimFolha = agora.plus(Duration.ofDays(opcoes.validadeDias()));
+            if (fimFolha.isAfter(fimAc)) {
+                fimFolha = fimAc;
+            }
 
             KeyPair chavesRaiz = rsa();
             X509Certificate raiz = raiz(chavesRaiz, inicio, agora.plus(Duration.ofDays(3650)));
             KeyPair chavesAc = rsa();
-            X509Certificate ac = ac(chavesAc, chavesRaiz, raiz, inicio, agora.plus(Duration.ofDays(1825)));
+            X509Certificate ac = ac(chavesAc, chavesRaiz, raiz, inicio, fimAc);
 
             KeyPair chavesSignatario = rsa();
             X509Certificate signatario = folha(chavesSignatario, chavesAc, ac, opcoes, "FULANO SIMULADO",

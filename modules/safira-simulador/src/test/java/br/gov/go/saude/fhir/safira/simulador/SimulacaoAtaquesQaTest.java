@@ -365,7 +365,6 @@ class SimulacaoAtaquesQaTest {
     }
 
     @Test
-    @Disabled("VULN-S6: --validade-dias grande gera folha que vence depois da AC (cadeia mal aninhada)")
     void shouldNotIssueLeafOutlivingIssuerWhenValidityIsLarge(@TempDir Path destino) throws Exception {
         Resultado longo = GeradorPkiSimulada.gerar(destino, Opcoes.padrao().comSenha("senha-qa").comValidadeDias(4000));
         X509Certificate ac = certificadoPem(longo.ac());
