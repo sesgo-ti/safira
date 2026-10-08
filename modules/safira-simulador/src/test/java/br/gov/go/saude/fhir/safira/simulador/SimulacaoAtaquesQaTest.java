@@ -186,7 +186,6 @@ class SimulacaoAtaquesQaTest {
     }
 
     @Test
-    @Disabled("VULN-S2: qualquer AC raiz autoassinada vira âncora, inclusive uma raiz ICP-Brasil real ou sósia")
     void shouldFailStartupWhenAnchorIsNotMarkedAsSimulation() throws Exception {
         KeyPair chaves = rsa(2048);
         String nome = "CN=Autoridade Certificadora Raiz Brasileira v10,OU=Instituto Nacional de Tecnologia da Informacao"

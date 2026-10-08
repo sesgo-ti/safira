@@ -34,6 +34,11 @@ final class MaterialSimulado {
                 throw new IllegalStateException("safira.simulacao.trust-anchors: " + nome(raiz)
                         + " não é AC raiz autoassinada (BasicConstraints cA=true).");
             }
+            // Marca obrigatória no titular: impede que uma raiz ICP-Brasil real (ou sósia) vire âncora simulada.
+            if (!nome(raiz).contains(GeradorPkiSimulada.MARCA)) {
+                throw new IllegalStateException("safira.simulacao.trust-anchors: " + nome(raiz)
+                        + " não contém a marca '" + GeradorPkiSimulada.MARCA + "' no titular.");
+            }
         }
         List<X509Certificate> acs = propriedades.intermediates() == null ? List.of()
                 : certificados(propriedades.intermediates(), "safira.simulacao.intermediates");
