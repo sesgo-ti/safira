@@ -32,6 +32,7 @@ e o projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 ### Removido
 
 - Passo `current-chain` (PKIX e revogação da lib no instante atual), coberto pelo `dss-validation`; a validação não usa mais `RevocationService` da icpbrasil-truststore nem monta manualmente a cadeia da TSA.
+- Uso do `PkixCertificateValidator` da icpbrasil-truststore na assinatura: `pkix-chain-validation` passa a usar o `CertificateValidator` do EU DSS e `tsa-token-verification` o `DetachedTimestampValidator`, ambos sobre o verificador central; a lib fica restrita a carregar o acervo (e à política de download).
 
 - Pipelines das políticas `0.1.0`, `1.1.0` e `2.0.0` (implementação manual de JWS e perfil JAdES com níveis B-LT/B-LTA).
 - Assinatura ECDSA/ES256 (a política admite somente `RS256`).

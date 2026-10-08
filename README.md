@@ -13,7 +13,7 @@ Implementação da criação e da validação de assinaturas eletrônicas qualif
 - política `https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0` — única versão implementada;
 - JWS General JSON Serialization, **JAdES-B-B** (resultado `iat`) ou **JAdES-B-T** (resultado `tsa`), gerados e validados pelo [EU DSS](https://github.com/esig/dss) 6.4;
 - canonicalização `fhir-json-lossless/0.2.0` (tokens `decimal` preservados) e artefato enquadrado `UINT64_BE` → SHA-256 como payload attached;
-- certificados ICP-Brasil A3, A4, SE-S e SE-H (RSA, `RS256`), com acervo, validação PKIX (RFC 5280) e revogação OCSP/CRL da biblioteca [icpbrasil-truststore](https://github.com/sesgo-ti/icpbrasil-truststore).
+- certificados ICP-Brasil A3, A4, SE-S e SE-H (RSA, `RS256`): acervo carregado pela biblioteca [icpbrasil-truststore](https://github.com/sesgo-ti/icpbrasil-truststore); cadeia, revogação OCSP/CRL e carimbos decididos pelo EU DSS.
 
 ## Requisitos
 
@@ -38,7 +38,7 @@ Definidas em `safira.pipelines` (`application.yml`), chaveadas pela URI da polí
 | SIGNING | `context-validation` → `payload-validation` → `pkix-chain-validation` → `certificate-policy` → `framed-content-digest` → `jades-data-to-sign` → `crypto-signing` → `jades-assemble` → `jades-extension` → `tsa-token-verification` → `fhir-signature` |
 | VALIDATION | `validation-context` → `signature-binding` → `jws-structure` → `content-integrity` → `signer-certificate` → `dss-validation` → `timestamp-validation` → `validation-outcome` |
 
-Na validação, o EU DSS decide cadeia, revogação e carimbo: as raízes do acervo ICP-Brasil (e, em B-T, o trust store TSA da política) são as âncoras, as ACs do acervo completam a cadeia junto com o `x5c` (sem AIA) e o próprio DSS consulta OCSP/CRL — só para cadeias que terminam numa âncora, em HTTP/HTTPS nas portas 80/443 e com destinos filtrados por `icpbrasil-truststore.download-policy.*`. A icpbrasil-truststore entra como carregadora do acervo.
+Na assinatura (`pkix-chain-validation`, `tsa-token-verification`) e na validação, o EU DSS decide cadeia, revogação e carimbo: as raízes do acervo ICP-Brasil (e, em B-T, o trust store TSA da política) são as âncoras, as ACs do acervo completam a cadeia junto com o `x5c` (sem AIA) e o próprio DSS consulta OCSP/CRL — só para cadeias que terminam numa âncora, em HTTP/HTTPS nas portas 80/443 e com destinos filtrados por `icpbrasil-truststore.download-policy.*`. A icpbrasil-truststore entra como carregadora do acervo.
 
 ## API
 
@@ -132,7 +132,7 @@ Relatório de cobertura (JaCoCo) por módulo em `modules/<módulo>/target/site/j
 
 ### Testes de integração com certificado ICP-Brasil real
 
-Marcados com `@Tag("integration")`: não rodam no build padrão e exigem rede (ITI, AIA, OCSP/CRL) e um PKCS#12 real. Como a política aceita apenas A3, A4, SE-S e SE-H, um certificado A1 é recusado pela pipeline (`CERT.NOT-ICP-BRASIL`) após a validação PKIX real; o oráculo DSS valida um JAdES produzido com esse certificado fora da pipeline.
+Marcados com `@Tag("integration")`: não rodam no build padrão e exigem rede (ITI, OCSP/CRL) e um PKCS#12 real. Como a política aceita apenas A3, A4, SE-S e SE-H, um certificado A1 é recusado pela pipeline (`CERT.NOT-ICP-BRASIL`) após a validação real da cadeia; o oráculo DSS valida um JAdES produzido com esse certificado fora da pipeline.
 
 ```bash
 ./mvnw -Pintegration-tests test -pl modules/safira-rest -am \
