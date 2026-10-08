@@ -10,7 +10,6 @@ import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.service.crl.OnlineCRLSource;
 import eu.europa.esig.dss.service.ocsp.OnlineOCSPSource;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
-import eu.europa.esig.dss.spi.x509.aia.DefaultAIASource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -70,24 +69,24 @@ class CertificateVerifierFactoryTest {
     }
 
     @Test
-    void shouldUseDssOnlineSourcesWhenOnline() {
+    void shouldUseDssOnlineRevocationWithoutAiaWhenOnline() {
         CommonCertificateVerifier verifier = CertificateVerifierFactory.online(7, 9, (host, address) -> { }).create(acervo(), List.of());
 
         assertThat(verifier.getOcspSource()).isInstanceOf(OnlineOCSPSource.class);
         assertThat(verifier.getCrlSource()).isInstanceOf(OnlineCRLSource.class);
-        assertThat(verifier.getAIASource()).isInstanceOf(DefaultAIASource.class);
+        assertThat(verifier.getAIASource()).isNull();
+        assertThat(verifier.isCheckRevocationForUntrustedChains()).isFalse();
     }
 
     @Test
     void shouldApplyConfiguredTimeoutsWhenOnline() {
         List<RestrictedDataLoader> loaders = CertificateVerifierFactory.online(7, 9, (host, address) -> { }).dataLoaders();
 
-        assertThat(loaders).hasSize(3);
+        assertThat(loaders).hasSize(2);
         assertThat(loaders.get(0).getTimeoutConnection()).isEqualTo(7000);
         assertThat(loaders.get(0).getTimeoutResponse()).isEqualTo(7000);
         assertThat(loaders.get(1).getTimeoutConnection()).isEqualTo(9000);
         assertThat(loaders.get(1).getTimeoutResponse()).isEqualTo(9000);
-        assertThat(loaders.get(2).getTimeoutConnection()).isEqualTo(9000);
         assertThat(loaders).allSatisfy(loader -> {
             assertThat(loader.isRedirectsEnabled()).isFalse();
             assertThat(loader.getMaxResponseBytes()).isEqualTo(CertificateVerifierFactory.MAX_RESPONSE_BYTES);

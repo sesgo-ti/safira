@@ -22,6 +22,7 @@ import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -87,14 +88,27 @@ class RestrictedDataLoaderTest {
         }
     }
 
-    private static RestrictedDataLoader loader() {
-        return new RestrictedDataLoader(null, 5, 1024, new RecordingGuard(true));
+    private RestrictedDataLoader loader() {
+        return new RestrictedDataLoader(null, 5, 1024, new RecordingGuard(true), Set.of(port));
+    }
+
+    @Test
+    void shouldRefusePortOutsideDefaultsWithoutResolvingOrConnecting() {
+        RecordingGuard guard = new RecordingGuard(true);
+        RestrictedDataLoader loader = new RestrictedDataLoader(null, 5, 1024, guard);
+
+        assertThatThrownBy(() -> loader.get(base + "/small")).isInstanceOf(DSSExternalResourceException.class)
+                .hasMessageContaining("Porta");
+        assertThatThrownBy(() -> loader.post("http://ocsp.example.com:8080/", new byte[1]))
+                .isInstanceOf(DSSExternalResourceException.class);
+        assertThat(hits).hasValue(0);
+        assertThat(guard.seen).isEmpty();
     }
 
     @Test
     void shouldRefuseInternalLiteralWithoutConnectingWhenGuardRejectsIt() {
         RecordingGuard guard = new RecordingGuard(false);
-        RestrictedDataLoader loader = new RestrictedDataLoader(null, 5, 1024, guard);
+        RestrictedDataLoader loader = new RestrictedDataLoader(null, 5, 1024, guard, Set.of(port));
 
         assertThatThrownBy(() -> loader.get(base + "/small")).isInstanceOf(DSSExternalResourceException.class);
         assertThat(hits).hasValue(0);
@@ -116,7 +130,7 @@ class RestrictedDataLoaderTest {
     @Test
     void shouldRefuseHostnameResolvingToInternalAddressWhenGuardRejectsIt() {
         RecordingGuard guard = new RecordingGuard(false);
-        RestrictedDataLoader loader = new RestrictedDataLoader(null, 5, 1024, guard,
+        RestrictedDataLoader loader = new RestrictedDataLoader(null, 5, 1024, guard, Set.of(port),
                 fakeDns("ocsp.example", InetAddress.getLoopbackAddress()));
 
         assertThatThrownBy(() -> loader.get("http://ocsp.example:" + port + "/small"))
@@ -126,7 +140,7 @@ class RestrictedDataLoaderTest {
 
     @Test
     void shouldConnectThroughGuardedResolverWhenGuardAcceptsAddress() {
-        RestrictedDataLoader loader = new RestrictedDataLoader(null, 5, 1024, new RecordingGuard(true),
+        RestrictedDataLoader loader = new RestrictedDataLoader(null, 5, 1024, new RecordingGuard(true), Set.of(port),
                 fakeDns("ocsp.example", InetAddress.getLoopbackAddress()));
 
         assertThat(loader.get("http://ocsp.example:" + port + "/small")).hasSize(16);

@@ -26,11 +26,14 @@ import org.apache.hc.core5.util.Timeout;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * {@link CommonsDataLoader} para downloads disparados por URLs presentes em certificados
- * (AIA {@code caIssuers}, OCSP, CDP): somente HTTP/HTTPS, sem redirecionamentos, com timeouts,
+ * (OCSP, CDP): somente HTTP/HTTPS nas portas 80 e 443, sem redirecionamentos, com timeouts,
  * teto de tamanho de resposta e {@link DestinationGuard} aplicado a cada endereço resolvido na
  * conexão (as URLs vêm de quem envia a assinatura: SSRF).
  *
@@ -45,8 +48,12 @@ public class RestrictedDataLoader extends CommonsDataLoader {
 
     private static final long serialVersionUID = 1L;
 
+    /** Portas admitidas em produção. */
+    public static final Set<Integer> DEFAULT_PORTS = Set.of(80, 443);
+
     private final int maxResponseBytes;
     private final transient DnsResolver dnsResolver;
+    private final Set<Integer> allowedPorts;
 
     /**
      * @param contentType      {@code Content-Type} das requisições POST (nulo para GET puro)
@@ -55,12 +62,18 @@ public class RestrictedDataLoader extends CommonsDataLoader {
      * @param guard            política de destino aplicada a cada endereço resolvido
      */
     public RestrictedDataLoader(String contentType, int timeoutSeconds, int maxResponseBytes, DestinationGuard guard) {
-        this(contentType, timeoutSeconds, maxResponseBytes, guard, SystemDefaultDnsResolver.INSTANCE);
+        this(contentType, timeoutSeconds, maxResponseBytes, guard, DEFAULT_PORTS);
     }
 
     RestrictedDataLoader(String contentType, int timeoutSeconds, int maxResponseBytes, DestinationGuard guard,
-                         DnsResolver resolver) {
+                         Set<Integer> allowedPorts) {
+        this(contentType, timeoutSeconds, maxResponseBytes, guard, allowedPorts, SystemDefaultDnsResolver.INSTANCE);
+    }
+
+    RestrictedDataLoader(String contentType, int timeoutSeconds, int maxResponseBytes, DestinationGuard guard,
+                         Set<Integer> allowedPorts, DnsResolver resolver) {
         super(contentType);
+        this.allowedPorts = Set.copyOf(allowedPorts);
         this.dnsResolver = new GuardedDnsResolver(resolver, Objects.requireNonNull(guard, "guard"));
         int timeoutMillis = Math.multiplyExact(timeoutSeconds, 1000);
         setTimeoutConnection(timeoutMillis);
@@ -93,10 +106,29 @@ public class RestrictedDataLoader extends CommonsDataLoader {
         return manager;
     }
 
-    /** Rota sempre direta: ignora {@code http(s).proxyHost} e qualquer {@code ProxySelector}. */
+    /**
+     * Recusa portas fora de {@link #DEFAULT_PORTS} antes de criar o cliente; rota sempre direta
+     * (ignora {@code http(s).proxyHost} e qualquer {@code ProxySelector}).
+     */
     @Override
     protected synchronized HttpClientBuilder getHttpClientBuilder(String url) {
+        int port = port(url);
+        if (!allowedPorts.contains(port)) {
+            throw new DSSExternalResourceException("Porta não admitida (somente 80/443): " + url);
+        }
         return super.getHttpClientBuilder(url).setRoutePlanner(new DefaultRoutePlanner(DefaultSchemePortResolver.INSTANCE));
+    }
+
+    private static int port(String url) {
+        try {
+            URI uri = new URI(url.trim());
+            if (uri.getPort() != -1) {
+                return uri.getPort();
+            }
+            return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
+        } catch (URISyntaxException e) {
+            throw new DSSExternalResourceException("URL inválida: " + url);
+        }
     }
 
     @Override
