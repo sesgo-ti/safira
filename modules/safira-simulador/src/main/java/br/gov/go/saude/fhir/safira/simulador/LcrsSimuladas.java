@@ -36,6 +36,7 @@ final class LcrsSimuladas {
     }
 
     private static DSSDocument documento(Resource recurso) {
+        RecursoLocal.exigir(recurso, "safira.simulacao.crls");
         if (!recurso.exists() || !recurso.isReadable()) {
             throw new IllegalStateException("safira.simulacao.crls: arquivo não encontrado ou ilegível: "
                     + recurso.getDescription());

@@ -157,7 +157,6 @@ class SimulacaoAtaquesQaTest {
     }
 
     @Test
-    @Disabled("VULN-S1: âncora remota (http:) é baixada no startup — SSRF e raiz de confiança sem integridade")
     void shouldRefuseRemoteAnchorWithoutAnyRequestWhenUrlIsHttp() throws Exception {
         AtomicInteger acessos = new AtomicInteger();
         HttpServer servidor = servir(Files.readAllBytes(pki.raiz()), acessos);
@@ -172,7 +171,6 @@ class SimulacaoAtaquesQaTest {
     }
 
     @Test
-    @Disabled("VULN-S1: LCR remota (http:) é baixada no startup — SSRF fora do DownloadPolicyGuard")
     void shouldRefuseRemoteCrlWithoutAnyRequestWhenUrlIsHttp() throws Exception {
         AtomicInteger acessos = new AtomicInteger();
         HttpServer servidor = servir(Files.readAllBytes(pki.lcrAc()), acessos);

@@ -53,6 +53,7 @@ final class MaterialSimulado {
     }
 
     private static List<X509Certificate> certificados(Resource recurso, String propriedade) {
+        RecursoLocal.exigir(recurso, propriedade);
         if (!recurso.exists() || !recurso.isReadable()) {
             throw new IllegalStateException(propriedade + ": arquivo não encontrado ou ilegível: " + recurso.getDescription());
         }
