@@ -117,6 +117,13 @@ As demais propriedades da biblioteca (rede, revogação, política de download, 
 ./mvnw verify
 ```
 
+O `package` gera o JAR executável do serviço em `modules/safira-rest/target/safira-rest-<versão>.jar`:
+
+```bash
+./mvnw -DskipTests package
+java -jar modules/safira-rest/target/safira-rest-*.jar
+```
+
 Relatório de cobertura (JaCoCo) por módulo em `modules/<módulo>/target/site/jacoco/index.html`.
 
 ### Testes de integração com certificado ICP-Brasil real

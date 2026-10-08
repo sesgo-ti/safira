@@ -74,9 +74,19 @@
 
     <build>
         <plugins>
+            <!-- O pom raiz não herda de spring-boot-starter-parent, então o goal
+                 repackage precisa ser ligado explicitamente para `package` gerar
+                 um JAR executável com `java -jar`. -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
