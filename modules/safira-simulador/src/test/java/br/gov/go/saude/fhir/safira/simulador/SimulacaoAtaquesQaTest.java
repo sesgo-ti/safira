@@ -198,7 +198,6 @@ class SimulacaoAtaquesQaTest {
     }
 
     @Test
-    @Disabled("VULN-S3: âncora simulada com RSA-512 é aceita — a raiz pode ser fatorada e a PKI forjada")
     void shouldFailStartupWhenAnchorKeyIsWeak() throws Exception {
         KeyPair fraca = rsa(512);
         String nome = "CN=Raiz fraca " + GeradorPkiSimulada.MARCA + ",C=BR";
@@ -210,7 +209,6 @@ class SimulacaoAtaquesQaTest {
     }
 
     @Test
-    @Disabled("VULN-S3: âncora simulada vencida é aceita no startup (falha só por requisição)")
     void shouldFailStartupWhenAnchorIsExpired() throws Exception {
         KeyPair chaves = rsa(2048);
         String nome = "CN=Raiz vencida " + GeradorPkiSimulada.MARCA + ",C=BR";

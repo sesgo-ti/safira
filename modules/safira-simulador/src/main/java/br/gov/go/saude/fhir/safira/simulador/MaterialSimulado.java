@@ -11,9 +11,12 @@ import org.springframework.core.io.Resource;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
+import java.security.PublicKey;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.security.interfaces.ECPublicKey;
+import java.security.interfaces.RSAPublicKey;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -38,6 +41,16 @@ final class MaterialSimulado {
             if (!nome(raiz).contains(GeradorPkiSimulada.MARCA)) {
                 throw new IllegalStateException("safira.simulacao.trust-anchors: " + nome(raiz)
                         + " não contém a marca '" + GeradorPkiSimulada.MARCA + "' no titular.");
+            }
+            if (!chaveForte(raiz.getPublicKey())) {
+                throw new IllegalStateException("safira.simulacao.trust-anchors: " + nome(raiz)
+                        + " tem chave fraca ou não suportada (exigido RSA >= 2048 ou EC >= 256 bits).");
+            }
+            try {
+                raiz.checkValidity();
+            } catch (CertificateException e) {
+                throw new IllegalStateException("safira.simulacao.trust-anchors: " + nome(raiz)
+                        + " está fora do período de validade.", e);
             }
         }
         List<X509Certificate> acs = propriedades.intermediates() == null ? List.of()
@@ -85,6 +98,14 @@ final class MaterialSimulado {
         } catch (GeneralSecurityException e) {
             return false;
         }
+    }
+
+    private static boolean chaveForte(PublicKey chave) {
+        return switch (chave) {
+            case RSAPublicKey rsa -> rsa.getModulus().bitLength() >= 2048;
+            case ECPublicKey ec -> ec.getParams().getOrder().bitLength() >= 256;
+            default -> false;
+        };
     }
 
     private static String nome(X509Certificate certificado) {
