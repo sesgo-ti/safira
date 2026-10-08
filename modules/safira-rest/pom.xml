@@ -33,6 +33,12 @@
             <artifactId>safira-steps</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Modo simulação (perfil "simulacao"): inerte enquanto safira.simulacao.enabled não for true -->
+        <dependency>
+            <groupId>br.gov.go.saude.fhir</groupId>
+            <artifactId>safira-simulador</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         
         <dependency>
             <groupId>org.springframework.boot</groupId>
