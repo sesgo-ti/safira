@@ -39,8 +39,8 @@ public class JadesExtensionService {
         Objects.requireNonNull(jwsJson, "jwsJson não pode ser nulo");
         Objects.requireNonNull(tspSource, "tspSource não pode ser nulo");
 
-        // B-T não consulta revogação: verificador vazio é suficiente
-        JAdESService service = new JAdESService(new CommonCertificateVerifier());
+        // B-T não consulta revogação nem AIA; a única rede é a TSA (tspSource)
+        JAdESService service = new JAdESService(new CommonCertificateVerifier(true));
         service.setTspSource(tspSource);
 
         JAdESSignatureParameters parameters = new JAdESSignatureParameters();

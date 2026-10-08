@@ -141,8 +141,8 @@ public class JadesSigningService {
     }
 
     private JAdESService newService() {
-        // Assinatura B-B não consulta fontes externas: verifier vazio é suficiente.
-        return new JAdESService(new CommonCertificateVerifier());
+        // B-B não consulta fontes externas; o construtor padrão do DSS ligaria o AIA (rede)
+        return new JAdESService(new CommonCertificateVerifier(true));
     }
 
     private DSSDocument document(JadesSigningSession session) {
