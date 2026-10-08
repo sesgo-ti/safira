@@ -1,23 +1,7 @@
 name: Release
 
-# Publica o JAR executável do safira-rest no repositório de distribuição
-# `sesgo-ti/hubsaude`, de onde o hubsaude-cli o provisiona (componente
-# `safira`, comandos `hubsaude safira` e `hubsaude signature`).
-#
-# Disparo: tag `v<MAJOR>.<MINOR>.<PATCH>` em commit que já está na `main`.
-#
-#   1. `validar-tag` confere o formato da tag, que ela ainda aponta para o
-#      commit executado e que esse commit está na `main`;
-#   2. `build` fixa a versão do pom a partir da tag (só durante o run, sem
-#      commit), roda `./mvnw verify` e prepara `hubsaude-safira-<ver>.jar`
-#      com `checksums.txt`. Não tem environment nem credencial;
-#   3. `publicar` é o único job com o PAT `HUBSAUDE_DIST_TOKEN` (environment
-#      `hubsaude-distribution`). Não compila nem faz checkout; confere os
-#      checksums e anexa os assets à release `hubsaude-safira-v<ver>`.
-#
-# O nome do asset e o prefixo da release são o contrato com o hubsaude-cli
-# (AssetPrefix `hubsaude-safira`). A versão só chega aos usuários quando o
-# manifesto `release.json` do hubsaude-cli passa a referenciá-la.
+# Tag vX.Y.Z na main publica hubsaude-safira-X.Y.Z.jar em sesgo-ti/hubsaude,
+# de onde o hubsaude-cli provisiona o Safira. Só o job publicar tem o PAT.
 
 on:
   push:
@@ -118,7 +102,6 @@ jobs:
           origem="modules/safira-rest/target/safira-rest-${VERSAO}.jar"
           jar="hubsaude-safira-${VERSAO}.jar"
           [ -f "$origem" ] || { echo "::error::JAR ausente: $origem"; ls -la modules/safira-rest/target/ || true; exit 1; }
-          # Sem BOOT-INF/lib o JAR não é executável e o `java -jar` falha.
           if ! unzip -l "$origem" | grep -q 'BOOT-INF/lib/'; then
             echo "::error::$origem não é um JAR executável do Spring Boot"
             exit 1
@@ -140,7 +123,6 @@ jobs:
     needs: [validar-tag, build]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    # A deployment policy do environment deve admitir só tags `v*.*.*`.
     environment: hubsaude-distribution
     steps:
       - name: Recuperar assets do build
@@ -167,8 +149,7 @@ jobs:
           grep -q "  ${jar}\$" checksums.txt || { echo "::error::checksums.txt não referencia $jar"; exit 1; }
           sha256sum -c checksums.txt
 
-          # Rerun é seguro: asset já publicado com os mesmos bytes segue como
-          # no-op; com bytes diferentes falha, porque releases são imutáveis.
+          # Mesmos bytes já publicados: no-op. Bytes diferentes: falha.
           tag="hubsaude-safira-v${VERSAO}"
           resp="${RUNNER_TEMP}/release.json"
           url=""

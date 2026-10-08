@@ -2,15 +2,8 @@
 # Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
 
 # -----------------------------------------------------------------------------
-# Health e probes (Spring Boot Actuator). Só o endpoint health é exposto.
-# /actuator/health/readiness usa o readinessState padrão, que só passa a
-# ACCEPTING_TRAFFIC depois dos ApplicationRunners, entre eles o bootstrap
-# síncrono do acervo ICP-Brasil da icpbrasil-truststore. Assim orquestradores
-# (e o hubsaude-cli) não enviam tráfego antes de o acervo carregar.
-#
-# O indicador trustStoreCache da biblioteca não é incluído: a versão 0.0.1 o
-# condiciona a org.springframework.boot.actuate.health.HealthIndicator (Spring
-# Boot 3), ausente no Spring Boot 4, e incluí-lo num grupo aborta o startup.
+# Health e probes. A readiness só fica UP depois que o acervo ICP-Brasil carrega.
+# O indicador trustStoreCache fica de fora: aborta a partida no Spring Boot 4.
 # -----------------------------------------------------------------------------
 management:
   endpoints:
