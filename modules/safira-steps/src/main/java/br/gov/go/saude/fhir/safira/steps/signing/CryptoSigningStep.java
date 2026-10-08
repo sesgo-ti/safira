@@ -25,7 +25,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.security.PrivateKey;
-import java.security.Security;
+import java.security.Provider;
 import java.security.Signature;
 import java.util.Base64;
 import java.util.Enumeration;
@@ -46,11 +46,8 @@ public class CryptoSigningStep implements SigningStep {
     public static final String SIGNATURE_KEY = "signature";
 
 
-    static {
-        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
-            Security.addProvider(new BouncyCastleProvider());
-        }
-    }
+    // Instância própria: o provider não é registrado na JVM (a icpbrasil-truststore 0.0.2 também não o registra).
+    private static final Provider BOUNCY_CASTLE = new BouncyCastleProvider();
 
     @Override
     public StepResult<SigningContext> execute(SigningContext context) {
@@ -123,7 +120,7 @@ public class CryptoSigningStep implements SigningStep {
                         "O conteúdo PEM fornecido está vazio ou não contém um objeto reconhecível.");
             }
 
-            JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider(BouncyCastleProvider.PROVIDER_NAME);
+            JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider(BOUNCY_CASTLE);
 
             if (object instanceof PEMEncryptedKeyPair encrypted) {
                 if (pem.password() == null || pem.password().isEmpty()) {
@@ -131,7 +128,7 @@ public class CryptoSigningStep implements SigningStep {
                             "A chave PEM está criptografada mas a senha não foi fornecida.");
                 }
                 PEMKeyPair decrypted = encrypted.decryptKeyPair(
-                        new JcePEMDecryptorProviderBuilder().build(pem.password().toCharArray()));
+                        new JcePEMDecryptorProviderBuilder().setProvider(BOUNCY_CASTLE).build(pem.password().toCharArray()));
                 return converter.getKeyPair(decrypted).getPrivate();
             } else if (object instanceof PEMKeyPair keyPair) {
                 return converter.getKeyPair(keyPair).getPrivate();
