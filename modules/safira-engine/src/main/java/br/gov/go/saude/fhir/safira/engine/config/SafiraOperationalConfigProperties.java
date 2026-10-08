@@ -22,7 +22,6 @@ import java.util.List;
 public record SafiraOperationalConfigProperties(
 
         @DefaultValue VerificationProps verification,
-        @DefaultValue TrustStoreProps trustStore,
         @DefaultValue SecurityLimitsProps security,
         @DefaultValue MiddlewareCryptoProps middlewareCrypto,
         @DefaultValue ValidationPolicyProps validationPolicy
@@ -56,40 +55,6 @@ public record SafiraOperationalConfigProperties(
             String tsaUrl,
             String tsaUsername,
             String tsaPassword
-    ) {}
-
-    // -------------------------------------------------------------------------
-    // Trust Store: gerenciamento de certificados ICP-Brasil
-    // -------------------------------------------------------------------------
-
-    /**
-     * @param icpbrasilUrlCertificados URL do .zip com certificados das ACs vigentes da ICP-Brasil.
-     * @param icpbrasilUrlHash512      URL do arquivo SHA-512 do zip da ICP-Brasil.
-     * @param timeout                  Timeout (segundos) para acesso às URLs ICP-Brasil. Padrão: 30.
-     * @param maxRetries               Número máximo de tentativas para obtenção de conteúdo da ICP-Brasil. Padrão: 3.
-     * @param backoff                  Intervalos de backoff entre tentativas, em segundos separados por espaço. Ex: "2 5 10".
-     * @param repositorio              Estratégia de armazenamento do truststore. Opções: {@code memoria} | {@code diretorio} | {@code s3}.
-     * @param diretorio                Diretório local onde dados do truststore são depositados (repositorio=diretorio).
-     * @param bucket                   Bucket S3 onde dados são depositados (repositorio=s3).
-     * @param refresh                  Intervalo (minutos) para verificação de novo conteúdo na ICP-Brasil. Padrão: 1440.
-     * @param ttlCritico               TTL de alerta (minutos): sinaliza conteúdo local próximo do vencimento. Padrão: 2880.
-     * @param ttlMaximo                TTL máximo (minutos): após este ponto o truststore local é ignorado. Padrão: 10080.
-     * @param minimumCertificateDate   Data mínima de emissão do certificado (epoch seconds). Certificados emitidos antes desta data
-     *                                 são rejeitados por não atenderem aos requisitos de segurança vigentes. Padrão: 1751328000 (2025-07-01T00:00:00Z).
-     */
-    public record TrustStoreProps(
-            String icpbrasilUrlCertificados,
-            String icpbrasilUrlHash512,
-            @DefaultValue("30")    Integer timeout,
-            @DefaultValue("3")     Integer maxRetries,
-            String backoff,
-            String repositorio,
-            String diretorio,
-            String bucket,
-            @DefaultValue("1440")  Integer refresh,
-            @DefaultValue("2880")  Integer ttlCritico,
-            @DefaultValue("10080") Integer ttlMaximo,
-            @DefaultValue("1751328000") Long minimumCertificateDate
     ) {}
 
     // -------------------------------------------------------------------------
