@@ -40,10 +40,15 @@ import java.util.Optional;
  * recebidos, revogação OCSP/CRL obtida pelo próprio DSS. Os certificados recebidos são apenas
  * candidatos: a confiança vem exclusivamente do acervo.
  *
+ * <p>Recusa entradas com mais de {@link #MAX_CHAIN_LENGTH} certificados antes de decodificá-los.
+ *
  * <p>Escreve {@code certificateChain} = caminho validado pelo DSS (folha primeiro, raiz por último).
  */
 @StepId("pkix-chain-validation")
 public class PkixChainValidationStep implements SigningStep {
+
+    /** Máximo de certificados aceitos na entrada 4 (folha + ACs); caminhos ICP-Brasil têm 3 a 4 níveis. */
+    public static final int MAX_CHAIN_LENGTH = 10;
 
     private final IcpBrasilCertificateVerifiers verifiers;
     private final CertificateValidationService validationService = new CertificateValidationService();
@@ -57,6 +62,10 @@ public class PkixChainValidationStep implements SigningStep {
         List<String> raw = context.getRawCertificateChain();
         if (raw == null || raw.isEmpty()) {
             return fail(SignatureExceptionCode.CERT_CHAIN_INCOMPLETE, "Nenhum certificado do signatário foi informado.", context);
+        }
+        if (raw.size() > MAX_CHAIN_LENGTH) {
+            return fail(SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED,
+                    "A cadeia informada excede o limite de " + MAX_CHAIN_LENGTH + " certificados.", context);
         }
         List<X509Certificate> certificates = new ArrayList<>();
         for (int i = 0; i < raw.size(); i++) {

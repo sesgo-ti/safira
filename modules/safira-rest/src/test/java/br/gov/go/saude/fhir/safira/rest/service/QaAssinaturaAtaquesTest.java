@@ -670,7 +670,6 @@ class QaAssinaturaAtaquesTest {
     }
 
     @Test
-    @Disabled("VULN-A3: certificateChain sem limite de itens — 2000 certificados extras são decodificados e entregues ao DSS")
     void shouldRejectSigningWhenCertificateChainIsAbsurdlyLong() throws Exception {
         KeyPair junkKeys = rsa(2048);
         List<X509Certificate> certificates = new ArrayList<>(List.of(PKI.leafCert));
