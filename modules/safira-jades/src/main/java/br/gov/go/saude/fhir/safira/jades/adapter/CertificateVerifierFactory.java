@@ -32,7 +32,8 @@ import java.util.List;
  *       trata certificado confiável como âncora e não verifica sua revogação;</li>
  *   <li><b>adjuntos</b> ({@link CommonCertificateSource}): ACs do acervo, candidatas à cadeia
  *       e revalidadas pelo DSS como qualquer outro certificado;</li>
- *   <li><b>rede</b>: OCSP, CRL e AIA pelo {@link RestrictedDataLoader}.</li>
+ *   <li><b>rede</b>: OCSP, CRL e AIA pelo {@link RestrictedDataLoader}, com o
+ *       {@link DestinationGuard} recebido.</li>
  * </ul>
  */
 public final class CertificateVerifierFactory {
@@ -60,11 +61,13 @@ public final class CertificateVerifierFactory {
      *
      * @param ocspTimeoutSeconds timeout das consultas OCSP
      * @param crlTimeoutSeconds  timeout dos downloads de CRL e de certificados via AIA
+     * @param guard              política de destino (anti-SSRF) aplicada na conexão
      */
-    public static CertificateVerifierFactory online(int ocspTimeoutSeconds, int crlTimeoutSeconds) {
-        RestrictedDataLoader ocspLoader = new RestrictedDataLoader(OCSP_CONTENT_TYPE, ocspTimeoutSeconds, MAX_RESPONSE_BYTES);
-        RestrictedDataLoader crlLoader = new RestrictedDataLoader(null, crlTimeoutSeconds, MAX_RESPONSE_BYTES);
-        RestrictedDataLoader aiaLoader = new RestrictedDataLoader(null, crlTimeoutSeconds, MAX_RESPONSE_BYTES);
+    public static CertificateVerifierFactory online(int ocspTimeoutSeconds, int crlTimeoutSeconds,
+                                                    DestinationGuard guard) {
+        RestrictedDataLoader ocspLoader = new RestrictedDataLoader(OCSP_CONTENT_TYPE, ocspTimeoutSeconds, MAX_RESPONSE_BYTES, guard);
+        RestrictedDataLoader crlLoader = new RestrictedDataLoader(null, crlTimeoutSeconds, MAX_RESPONSE_BYTES, guard);
+        RestrictedDataLoader aiaLoader = new RestrictedDataLoader(null, crlTimeoutSeconds, MAX_RESPONSE_BYTES, guard);
         DefaultAIASource aia = new DefaultAIASource(aiaLoader);
         aia.setAcceptedProtocols(List.of(Protocol.HTTP, Protocol.HTTPS));
         return new CertificateVerifierFactory(new OnlineOCSPSource(ocspLoader), new OnlineCRLSource(crlLoader), aia,

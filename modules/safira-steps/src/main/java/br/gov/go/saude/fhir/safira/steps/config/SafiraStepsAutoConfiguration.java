@@ -22,7 +22,9 @@ import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesAssembleStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesDataToSignStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesExtensionStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.TsaTokenVerificationStep;
+import br.gov.go.saude.fhir.safira.steps.trust.DownloadPolicyGuard;
 import br.gov.go.saude.fhir.safira.steps.trust.IcpBrasilCertificateVerifiers;
+import br.gov.go.saude.truststore.icpbrasil.config.TrustStoreConfig;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.ContentIntegrityStep;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.CurrentChainStep;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.DssValidationStep;
@@ -60,14 +62,17 @@ public class SafiraStepsAutoConfiguration {
     }
 
     /**
-     * Fontes online do DSS (OCSP, CRL, AIA) com os timeouts de {@code safira.operational.verification};
-     * sobrescrevível em testes por {@link CertificateVerifierFactory#offline}.
+     * Fontes online do DSS (OCSP, CRL, AIA) com os timeouts de {@code safira.operational.verification}
+     * e destinos filtrados por {@code icpbrasil-truststore.download-policy.*}; sobrescrevível em
+     * testes por {@link CertificateVerifierFactory#offline}.
      */
     @Bean
     @ConditionalOnMissingBean
-    public CertificateVerifierFactory safiraCertificateVerifierFactory(SafiraOperationalConfigProperties operational) {
+    public CertificateVerifierFactory safiraCertificateVerifierFactory(SafiraOperationalConfigProperties operational,
+                                                                       TrustStoreConfig trustStoreConfig) {
         VerificationProps verification = operational.verification();
-        return CertificateVerifierFactory.online(verification.ocspTimeout(), verification.crlTimeout());
+        return CertificateVerifierFactory.online(verification.ocspTimeout(), verification.crlTimeout(),
+                DownloadPolicyGuard.of(trustStoreConfig.getDownloadPolicy()));
     }
 
     /** Verificador do DSS sobre o acervo ICP-Brasil; a lib entra só como carregadora de certificados. */

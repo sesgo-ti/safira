@@ -8,35 +8,66 @@ package br.gov.go.saude.fhir.safira.jades.adapter;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import eu.europa.esig.dss.spi.exception.DSSExternalResourceException;
+import org.apache.hc.client5.http.DnsResolver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RestrictedDataLoaderTest {
 
+    /** Guarda de teste: recusa loopback, privados (RFC 1918), link-local e registra o que viu. */
+    private static final class RecordingGuard implements DestinationGuard {
+        private final List<InetAddress> seen = new CopyOnWriteArrayList<>();
+        private final boolean allowLoopback;
+
+        private RecordingGuard(boolean allowLoopback) {
+            this.allowLoopback = allowLoopback;
+        }
+
+        @Override
+        public void check(String host, InetAddress address) {
+            seen.add(address);
+            if ((address.isLoopbackAddress() && !allowLoopback) || address.isSiteLocalAddress()
+                    || address.isLinkLocalAddress() || address.isAnyLocalAddress()) {
+                throw new IllegalArgumentException("destino interno " + address.getHostAddress());
+            }
+        }
+    }
+
+    private final AtomicInteger hits = new AtomicInteger();
     private HttpServer server;
     private String base;
+    private int port;
 
     @BeforeEach
     void start() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/small", exchange -> respond(exchange, 200, new byte[16]));
+        server.createContext("/small", exchange -> {
+            hits.incrementAndGet();
+            respond(exchange, 200, new byte[16]);
+        });
         server.createContext("/big", exchange -> respond(exchange, 200, new byte[4096]));
         server.createContext("/redirect", exchange -> {
             exchange.getResponseHeaders().set("Location", base + "/small");
             respond(exchange, 302, new byte[0]);
         });
         server.start();
-        base = "http://127.0.0.1:" + server.getAddress().getPort();
+        port = server.getAddress().getPort();
+        base = "http://127.0.0.1:" + port;
     }
 
     @AfterEach
@@ -56,7 +87,66 @@ class RestrictedDataLoaderTest {
     }
 
     private static RestrictedDataLoader loader() {
-        return new RestrictedDataLoader(null, 5, 1024);
+        return new RestrictedDataLoader(null, 5, 1024, new RecordingGuard(true));
+    }
+
+    @Test
+    void shouldRefuseInternalLiteralWithoutConnectingWhenGuardRejectsIt() {
+        RecordingGuard guard = new RecordingGuard(false);
+        RestrictedDataLoader loader = new RestrictedDataLoader(null, 5, 1024, guard);
+
+        assertThatThrownBy(() -> loader.get(base + "/small")).isInstanceOf(DSSExternalResourceException.class);
+        assertThat(hits).hasValue(0);
+        assertThat(guard.seen).extracting(InetAddress::getHostAddress).containsExactly("127.0.0.1");
+    }
+
+    @Test
+    void shouldRefuseMetadataPrivateAndIpv6LoopbackLiteralsWhenGuardRejectsThem() {
+        RecordingGuard guard = new RecordingGuard(false);
+        RestrictedDataLoader loader = new RestrictedDataLoader(null, 1, 1024, guard);
+
+        for (String url : List.of("http://169.254.169.254/latest/meta-data/", "http://10.0.0.1/ca.crl", "http://[::1]/ca.crl")) {
+            assertThatThrownBy(() -> loader.get(url)).isInstanceOf(DSSExternalResourceException.class)
+                    .hasStackTraceContaining("destino interno");
+        }
+        assertThat(guard.seen).hasSize(3);
+    }
+
+    @Test
+    void shouldRefuseHostnameResolvingToInternalAddressWhenGuardRejectsIt() {
+        RecordingGuard guard = new RecordingGuard(false);
+        RestrictedDataLoader loader = new RestrictedDataLoader(null, 5, 1024, guard,
+                fakeDns("ocsp.example", InetAddress.getLoopbackAddress()));
+
+        assertThatThrownBy(() -> loader.get("http://ocsp.example:" + port + "/small"))
+                .isInstanceOf(DSSExternalResourceException.class);
+        assertThat(hits).hasValue(0);
+    }
+
+    @Test
+    void shouldConnectThroughGuardedResolverWhenGuardAcceptsAddress() {
+        RestrictedDataLoader loader = new RestrictedDataLoader(null, 5, 1024, new RecordingGuard(true),
+                fakeDns("ocsp.example", InetAddress.getLoopbackAddress()));
+
+        assertThat(loader.get("http://ocsp.example:" + port + "/small")).hasSize(16);
+        assertThat(hits).hasValue(1);
+    }
+
+    private static DnsResolver fakeDns(String name, InetAddress address) {
+        return new DnsResolver() {
+            @Override
+            public InetAddress[] resolve(String host) throws UnknownHostException {
+                if (host.equals(name)) {
+                    return new InetAddress[]{address};
+                }
+                throw new UnknownHostException(host);
+            }
+
+            @Override
+            public String resolveCanonicalHostname(String host) {
+                return host;
+            }
+        };
     }
 
     @Test

@@ -17,7 +17,7 @@ e o projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 - Códigos do CodeSystem `situacao-excepcional-assinatura` 0.2.0.
 - Maven Wrapper, workflow de CI (GitHub Actions), Dependabot, JaCoCo e separação de testes de integração por `@Tag("integration")` (perfil `integration-tests`).
 - Health e probes via Spring Boot Actuator (`/actuator/health/readiness` e `/liveness`; só o endpoint `health` é exposto). A readiness só fica `UP` depois que o acervo ICP-Brasil carrega.
-- Verificador central do EU DSS (`CertificateVerifierFactory` + `IcpBrasilCertificateVerifiers`): raízes do acervo ICP-Brasil como confiáveis, ACs do acervo como adjuntas e fontes OCSP/CRL/AIA do DSS com os timeouts de `safira.operational.verification` (`ocsp-timeout`, `crl-timeout`); downloads restritos a HTTP/HTTPS, sem redirecionamento e com teto de 64 MiB por resposta.
+- Verificador central do EU DSS (`CertificateVerifierFactory` + `IcpBrasilCertificateVerifiers`): raízes do acervo ICP-Brasil como confiáveis, ACs do acervo como adjuntas e fontes OCSP/CRL/AIA do DSS com os timeouts de `safira.operational.verification` (`ocsp-timeout`, `crl-timeout`); downloads restritos a HTTP/HTTPS, sem redirecionamento, com teto de 64 MiB por resposta e destinos filtrados na conexão (cada endereço resolvido) pela política `icpbrasil-truststore.download-policy.*` — loopback, RFC 1918, link-local, CGNAT e ULA são recusados.
 - `safira-rest` empacotado como JAR executável (`java -jar`), com o goal `repackage` do `spring-boot-maven-plugin`.
 
 ### Alterado

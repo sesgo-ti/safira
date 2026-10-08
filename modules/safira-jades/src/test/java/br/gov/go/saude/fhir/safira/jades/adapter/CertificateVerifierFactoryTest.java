@@ -71,7 +71,7 @@ class CertificateVerifierFactoryTest {
 
     @Test
     void shouldUseDssOnlineSourcesWhenOnline() {
-        CommonCertificateVerifier verifier = CertificateVerifierFactory.online(7, 9).create(acervo(), List.of());
+        CommonCertificateVerifier verifier = CertificateVerifierFactory.online(7, 9, (host, address) -> { }).create(acervo(), List.of());
 
         assertThat(verifier.getOcspSource()).isInstanceOf(OnlineOCSPSource.class);
         assertThat(verifier.getCrlSource()).isInstanceOf(OnlineCRLSource.class);
@@ -80,7 +80,7 @@ class CertificateVerifierFactoryTest {
 
     @Test
     void shouldApplyConfiguredTimeoutsWhenOnline() {
-        List<RestrictedDataLoader> loaders = CertificateVerifierFactory.online(7, 9).dataLoaders();
+        List<RestrictedDataLoader> loaders = CertificateVerifierFactory.online(7, 9, (host, address) -> { }).dataLoaders();
 
         assertThat(loaders).hasSize(3);
         assertThat(loaders.get(0).getTimeoutConnection()).isEqualTo(7000);
