@@ -1163,7 +1163,6 @@ class QaValidacaoAtaquesTest {
     }
 
     @Test
-    @Disabled("VULN-V4: folha expirada recusada como VALIDATION.INDETERMINATE (CERTIFICATE_CHAIN_GENERAL_FAILURE), não CERT.EXPIRED")
     void shouldRejectLeafWhenCertificateIsExpired() {
         KeyPair keys = rsa(2048);
         long notBefore = TestPki.CERT_START + 86_400;

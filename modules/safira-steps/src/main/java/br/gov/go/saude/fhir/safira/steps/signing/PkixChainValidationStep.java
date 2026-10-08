@@ -102,7 +102,8 @@ public class PkixChainValidationStep implements SigningStep {
             SubIndication sub = report.getCertificateSubIndication(id);
             List<CertificateWrapper> path = new ArrayList<>(List.of(subject));
             issuers.stream().filter(issuer -> !issuer.getId().equals(id)).forEach(path::add);
-            return fail(DssOutcomes.code(indication, sub, path), "EU DSS (certificado): " + indication
+            return fail(DssOutcomes.code(indication, sub, path,
+                    reports.getDiagnosticData().getValidationDate()), "EU DSS (certificado): " + indication
                     + (sub == null ? "" : "/" + sub) + " " + DssOutcomes.messages(report.getX509ValidationErrors(id)), context);
         }
 

@@ -17,8 +17,11 @@ import eu.europa.esig.dss.simplereport.jaxb.XmlTimestamp;
 import eu.europa.esig.dss.validation.reports.Reports;
 
 import java.security.cert.X509Certificate;
+import java.util.Date;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Traduz os resultados do EU DSS ({@code Indication}/{@code SubIndication} e dados de diagnóstico)
@@ -26,11 +29,25 @@ import java.util.Optional;
  */
 public final class DssOutcomes {
 
+    private static final Set<SubIndication> REVOKED =
+            EnumSet.of(SubIndication.REVOKED, SubIndication.REVOKED_NO_POE, SubIndication.REVOKED_CA_NO_POE);
+
     private DssOutcomes() {
     }
 
-    /** Código para uma assinatura ou certificado que não passou na validação do DSS. */
-    public static SignatureExceptionCode code(Indication indication, SubIndication sub, List<CertificateWrapper> chain) {
+    /**
+     * Código para uma assinatura ou certificado que não passou na validação do DSS.
+     *
+     * @param chain          cadeia montada pelo DSS (certificado do signatário primeiro)
+     * @param validationTime instante da validação do DSS; folha com {@code notAfter} anterior a ele
+     *                       resulta em {@code CERT.EXPIRED} (salvo revogação, que prevalece)
+     */
+    public static SignatureExceptionCode code(Indication indication, SubIndication sub, List<CertificateWrapper> chain,
+                                              Date validationTime) {
+        if (!REVOKED.contains(sub) && !chain.isEmpty() && validationTime != null
+                && chain.getFirst().getNotAfter().before(validationTime)) {
+            return SignatureExceptionCode.CERT_EXPIRED;
+        }
         if (sub == SubIndication.CERTIFICATE_CHAIN_GENERAL_FAILURE && missingRevocation(chain)) {
             return SignatureExceptionCode.REVOCATION_STATUS_UNKNOWN;
         }

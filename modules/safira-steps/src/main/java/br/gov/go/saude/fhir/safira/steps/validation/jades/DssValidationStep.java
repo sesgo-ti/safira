@@ -103,7 +103,8 @@ public class DssValidationStep implements ValidationStep {
         if (indication != Indication.TOTAL_PASSED) {
             SubIndication sub = report.getSubIndication(id);
             SignatureExceptionCode code = DssOutcomes.code(indication, sub,
-                    reports.getDiagnosticData().getSignatureById(id).getCertificateChain());
+                    reports.getDiagnosticData().getSignatureById(id).getCertificateChain(),
+                    reports.getDiagnosticData().getValidationDate());
             return fail(code, "EU DSS: " + indication + (sub == null ? "" : "/" + sub)
                     + " " + DssOutcomes.messages(report.getAdESValidationErrors(id)), context);
         }
