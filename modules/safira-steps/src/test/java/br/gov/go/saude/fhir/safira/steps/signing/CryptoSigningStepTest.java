@@ -195,7 +195,7 @@ class CryptoSigningStepTest {
     @Test
     void shouldThrowStepExceptionWhenCryptoMaterialMissing() {
         SigningContext context = SigningContext.builder()
-                .attribute(SigningInputStep.SIGNING_INPUT_BYTES_KEY, "data".getBytes(StandardCharsets.UTF_8))
+                .attribute(SigningKeys.SIGNING_INPUT_BYTES, "data".getBytes(StandardCharsets.UTF_8))
                 .build();
 
         assertThrows(StepException.class, () -> step.execute(context));
@@ -206,7 +206,7 @@ class CryptoSigningStepTest {
     private SigningContext contextWith(CryptoMaterial material, byte[] signingInputBytes) {
         return SigningContext.builder()
                 .cryptoMaterial(material)
-                .attribute(SigningInputStep.SIGNING_INPUT_BYTES_KEY, signingInputBytes)
+                .attribute(SigningKeys.SIGNING_INPUT_BYTES, signingInputBytes)
                 .build();
     }
 

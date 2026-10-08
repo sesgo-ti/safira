@@ -22,10 +22,8 @@ import java.util.List;
 public record SafiraOperationalConfigProperties(
 
         @DefaultValue VerificationProps verification,
-        @DefaultValue TrustStoreProps trustStore,
         @DefaultValue SecurityLimitsProps security,
-        @DefaultValue MiddlewareCryptoProps middlewareCrypto,
-        @DefaultValue ValidationPolicyProps validationPolicy
+        @DefaultValue MiddlewareCryptoProps middlewareCrypto
 
 ) {
 
@@ -59,40 +57,6 @@ public record SafiraOperationalConfigProperties(
     ) {}
 
     // -------------------------------------------------------------------------
-    // Trust Store: gerenciamento de certificados ICP-Brasil
-    // -------------------------------------------------------------------------
-
-    /**
-     * @param icpbrasilUrlCertificados URL do .zip com certificados das ACs vigentes da ICP-Brasil.
-     * @param icpbrasilUrlHash512      URL do arquivo SHA-512 do zip da ICP-Brasil.
-     * @param timeout                  Timeout (segundos) para acesso às URLs ICP-Brasil. Padrão: 30.
-     * @param maxRetries               Número máximo de tentativas para obtenção de conteúdo da ICP-Brasil. Padrão: 3.
-     * @param backoff                  Intervalos de backoff entre tentativas, em segundos separados por espaço. Ex: "2 5 10".
-     * @param repositorio              Estratégia de armazenamento do truststore. Opções: {@code memoria} | {@code diretorio} | {@code s3}.
-     * @param diretorio                Diretório local onde dados do truststore são depositados (repositorio=diretorio).
-     * @param bucket                   Bucket S3 onde dados são depositados (repositorio=s3).
-     * @param refresh                  Intervalo (minutos) para verificação de novo conteúdo na ICP-Brasil. Padrão: 1440.
-     * @param ttlCritico               TTL de alerta (minutos): sinaliza conteúdo local próximo do vencimento. Padrão: 2880.
-     * @param ttlMaximo                TTL máximo (minutos): após este ponto o truststore local é ignorado. Padrão: 10080.
-     * @param minimumCertificateDate   Data mínima de emissão do certificado (epoch seconds). Certificados emitidos antes desta data
-     *                                 são rejeitados por não atenderem aos requisitos de segurança vigentes. Padrão: 1751328000 (2025-07-01T00:00:00Z).
-     */
-    public record TrustStoreProps(
-            String icpbrasilUrlCertificados,
-            String icpbrasilUrlHash512,
-            @DefaultValue("30")    Integer timeout,
-            @DefaultValue("3")     Integer maxRetries,
-            String backoff,
-            String repositorio,
-            String diretorio,
-            String bucket,
-            @DefaultValue("1440")  Integer refresh,
-            @DefaultValue("2880")  Integer ttlCritico,
-            @DefaultValue("10080") Integer ttlMaximo,
-            @DefaultValue("1751328000") Long minimumCertificateDate
-    ) {}
-
-    // -------------------------------------------------------------------------
     // Limites de segurança para processamento de Bundles FHIR
     // -------------------------------------------------------------------------
 
@@ -104,9 +68,7 @@ public record SafiraOperationalConfigProperties(
     public record SecurityLimitsProps(
             @DefaultValue("1000")        Integer maxEntriesBundle,
             @DefaultValue("52428800")    Integer maxBundleSize,
-            @DefaultValue("10")          Integer timoutVerificationBundle,
-            @DefaultValue("1751328000")  Long minReferenceTimestamp,
-            @DefaultValue("4102444800")  Long maxReferenceTimestamp
+            @DefaultValue("10")          Integer timoutVerificationBundle
     ) {}
 
     // -------------------------------------------------------------------------
@@ -161,34 +123,5 @@ public record SafiraOperationalConfigProperties(
                 @DefaultValue("2")  Integer intervaloRetry,
                 @DefaultValue("3")  Integer maximoRetries
         ) {}
-    }
-
-    // -------------------------------------------------------------------------
-    // Política de validação de assinaturas
-    // -------------------------------------------------------------------------
-
-    /**
-     * @param nearExpiryThresholdDays   Janela (em dias) para considerar um certificado próximo do vencimento. Padrão: 30. Intervalo: [1, 180].
-     * @param signatureAgeThresholdDays Idade máxima (em dias) aceita para uma assinatura antes de sinalizar alerta. Padrão: 365. Intervalo: [1, 1825].
-     * @param revocationPolicy          Política de tratamento para falhas de revogação. Padrão: STRICT.
-     * @param ocspUnknownHandling       Tratamento para respostas OCSP com status UNKNOWN. Padrão: TREAT_AS_REVOKED.
-     */
-    public record ValidationPolicyProps(
-            @DefaultValue("30")               Integer nearExpiryThresholdDays,
-            @DefaultValue("365")              Integer signatureAgeThresholdDays,
-            @DefaultValue("STRICT")           RevocationPolicy revocationPolicy,
-            @DefaultValue("TREAT_AS_REVOKED") OcspUnknownHandling ocspUnknownHandling
-    ) {
-
-        public enum RevocationPolicy {
-            STRICT,
-            SOFT_FAIL,
-            WARN
-        }
-
-        public enum OcspUnknownHandling {
-            TREAT_AS_REVOKED,
-            TREAT_AS_WARNING
-        }
     }
 }
