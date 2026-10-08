@@ -14,6 +14,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
 import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
 import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
@@ -25,17 +26,13 @@ import br.gov.go.saude.fhir.safira.steps.signing.PkixChainValidationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesAssembleStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesDataToSignStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesExtensionStep;
-import br.gov.go.saude.truststore.icpbrasil.model.ValidationResult;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
+import br.gov.go.saude.fhir.safira.steps.trust.IcpBrasilCertificateVerifiers;
+import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import java.util.Optional;
 
 /**
  * Artefato assinado real (Signature, Bundle, Provenance) produzido pelos steps de assinatura da
@@ -63,9 +60,9 @@ public final class SignedArtifactFixture {
      * @param tsa TSA local para o resultado {@code tsa}; nulo produz JAdES-B-B
      */
     public static SigningResult sign(TestPki pki, SafiraPolicyProperties policy, long iat, TestPki.FakeTsa tsa) {
-        PkixCertificateValidator validator = mock(PkixCertificateValidator.class);
-        when(validator.validate(any(), anyCollection()))
-                .thenReturn(new ValidationResult.Valid(List.of(pki.leafCert), pki.caCert, List.of()));
+        IcpBrasilCertificateVerifiers verifiers = new IcpBrasilCertificateVerifiers(
+                () -> Optional.of(TrustMaterial.of(List.of(pki.caCert))),
+                CertificateVerifierFactory.offline(pki.ocspGoodSource(), null));
         try {
             SigningContext context = SigningContext.builder()
                     .bundleJson(LosslessJson.parseObject(BUNDLE))
@@ -78,7 +75,7 @@ public final class SignedArtifactFixture {
                     .operationalConfig(TestConfigs.operational(tsa == null ? null : tsa.url()))
                     .build();
             List<Step<SigningContext>> steps = List.of(
-                    new PkixChainValidationStep(validator),
+                    new PkixChainValidationStep(verifiers),
                     new CertificatePolicyStep(policy),
                     new FramedContentDigestStep(),
                     new JadesDataToSignStep(),

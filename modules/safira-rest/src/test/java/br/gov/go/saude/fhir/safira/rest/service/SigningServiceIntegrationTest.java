@@ -7,30 +7,33 @@ package br.gov.go.saude.fhir.safira.rest.service;
 
 import br.gov.go.saude.fhir.safira.engine.domain.PipelineResult;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
-import br.gov.go.saude.truststore.icpbrasil.model.ValidationResult;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
+import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
+import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import java.security.cert.PKIXReason;
+import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.when;
 
 /** Integração do {@link SigningService} com a pipeline 0.2.0 e o contexto Spring completo. */
 @SpringBootTest
+@Import(OfflineRevocationConfig.class)
 class SigningServiceIntegrationTest {
 
     @MockitoBean
-    PkixCertificateValidator pkixCertificateValidator;
+    TrustMaterialSource trustMaterialSource;
 
     @Autowired
     SigningService signingService;
@@ -48,10 +51,18 @@ class SigningServiceIntegrationTest {
         return result.getExceptionDetails().issue().getFirst().details().coding().getFirst().code();
     }
 
+    @BeforeEach
+    void resetRevocation() {
+        OfflineRevocationConfig.reset();
+    }
+
+    private void acervo(X509Certificate root) {
+        when(trustMaterialSource.current()).thenReturn(Optional.of(TrustMaterial.of(List.of(root))));
+    }
+
     @Test
     void shouldReturnSigningResultWhenChainIsTrusted() throws Exception {
-        when(pkixCertificateValidator.validate(any(), anyCollection())).thenReturn(new ValidationResult.Valid(
-                List.of(JadesSigningSystemTest.PKI.leafCert), JadesSigningSystemTest.PKI.caCert, List.of()));
+        acervo(JadesSigningSystemTest.PKI.caCert);
 
         PipelineResult<?> result = signingService.sign(body());
 
@@ -60,16 +71,22 @@ class SigningServiceIntegrationTest {
 
     @Test
     void shouldReturnCertNotIcpBrasilWhenChainIsOutsideTheTrustStore() throws Exception {
-        when(pkixCertificateValidator.validate(any(), anyCollection()))
-                .thenReturn(new ValidationResult.Untrusted(PKIXReason.NO_TRUST_ANCHOR, "sem âncora"));
+        acervo(TestPki.create().caCert);
 
         assertThat(code(signingService.sign(body()))).isEqualTo("CERT.NOT-ICP-BRASIL");
     }
 
     @Test
+    void shouldReturnCertRevokedWhenSignerIsRevoked() throws Exception {
+        acervo(JadesSigningSystemTest.PKI.caCert);
+        OfflineRevocationConfig.responder = JadesSigningSystemTest.PKI::ocspRevokedFor;
+
+        assertThat(code(signingService.sign(body()))).isEqualTo("CERT.REVOKED");
+    }
+
+    @Test
     void shouldReturnTrustStoreEmptyWhenCatalogIsNotLoaded() throws Exception {
-        when(pkixCertificateValidator.validate(any(), anyCollection()))
-                .thenReturn(new ValidationResult.TrustStoreUnavailable());
+        when(trustMaterialSource.current()).thenReturn(Optional.empty());
 
         assertThat(code(signingService.sign(body()))).isEqualTo("CONFIG.TRUST-STORE-EMPTY");
     }

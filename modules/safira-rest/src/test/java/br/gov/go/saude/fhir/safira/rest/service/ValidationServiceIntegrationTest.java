@@ -15,8 +15,6 @@ import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
 import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
 import br.gov.go.saude.fhir.safira.jades.adapter.TspSources;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
-import br.gov.go.saude.truststore.icpbrasil.model.ValidationResult;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
 import org.junit.jupiter.api.AfterAll;
@@ -38,8 +36,6 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.when;
 
 /**
@@ -52,9 +48,6 @@ import static org.mockito.Mockito.when;
 class ValidationServiceIntegrationTest {
 
     static final TestPki.FakeTsa TSA = JadesSigningSystemTest.PKI.startFakeTsa();
-
-    @MockitoBean
-    PkixCertificateValidator pkixCertificateValidator;
 
     @MockitoBean
     TrustMaterialSource trustMaterialSource;
@@ -87,8 +80,6 @@ class ValidationServiceIntegrationTest {
     @BeforeEach
     void setUp() {
         TestPki pki = JadesSigningSystemTest.PKI;
-        when(pkixCertificateValidator.validate(any(), anyCollection()))
-                .thenReturn(new ValidationResult.Valid(List.of(pki.leafCert), pki.caCert, List.of()));
         when(trustMaterialSource.current()).thenReturn(Optional.of(TrustMaterial.of(List.of(pki.caCert))));
         OfflineRevocationConfig.reset();
     }

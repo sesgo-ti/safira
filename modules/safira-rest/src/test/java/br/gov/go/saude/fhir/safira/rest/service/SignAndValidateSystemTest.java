@@ -5,8 +5,6 @@
 
 package br.gov.go.saude.fhir.safira.rest.service;
 
-import br.gov.go.saude.truststore.icpbrasil.model.ValidationResult;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -31,8 +29,6 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -44,9 +40,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @SpringBootTest
 @Import(OfflineRevocationConfig.class)
 class SignAndValidateSystemTest {
-
-    @MockitoBean
-    PkixCertificateValidator pkixCertificateValidator;
 
     @MockitoBean
     TrustMaterialSource trustMaterialSource;
@@ -66,8 +59,6 @@ class SignAndValidateSystemTest {
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
         var pki = JadesSigningSystemTest.PKI;
-        when(pkixCertificateValidator.validate(any(), anyCollection()))
-                .thenReturn(new ValidationResult.Valid(List.of(pki.leafCert), pki.caCert, List.of()));
         when(trustMaterialSource.current()).thenReturn(Optional.of(TrustMaterial.of(List.of(pki.caCert))));
         OfflineRevocationConfig.reset();
     }

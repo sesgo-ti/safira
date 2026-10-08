@@ -8,8 +8,8 @@ package br.gov.go.saude.fhir.safira.rest.service;
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
 import br.gov.go.saude.fhir.safira.jades.fixture.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
-import br.gov.go.saude.truststore.icpbrasil.model.ValidationResult;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
+import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
+import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import eu.europa.esig.dss.enumerations.Indication;
@@ -19,6 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -34,10 +35,9 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -50,13 +50,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * política exige TSA HTTPS e a TSA de teste é HTTP local.
  */
 @SpringBootTest
+@Import(OfflineRevocationConfig.class)
 class JadesSigningSystemTest {
 
     static final String POLICY_URI = "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0";
     static final TestPki PKI = TestPki.create();
 
     @MockitoBean
-    PkixCertificateValidator pkixCertificateValidator;
+    TrustMaterialSource trustMaterialSource;
 
     @Autowired
     WebApplicationContext webApplicationContext;
@@ -74,8 +75,8 @@ class JadesSigningSystemTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        when(pkixCertificateValidator.validate(any(), anyCollection()))
-                .thenReturn(new ValidationResult.Valid(List.of(PKI.leafCert), PKI.caCert, List.of()));
+        when(trustMaterialSource.current()).thenReturn(Optional.of(TrustMaterial.of(List.of(PKI.caCert))));
+        OfflineRevocationConfig.reset();
     }
 
     static String example(String name) throws Exception {
