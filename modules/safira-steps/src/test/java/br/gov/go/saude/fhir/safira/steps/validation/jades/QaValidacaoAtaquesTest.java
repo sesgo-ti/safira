@@ -581,7 +581,6 @@ class QaValidacaoAtaquesTest {
     }
 
     @Test
-    @Disabled("VULN-V1: iat de 19 dígitos fora de long causa NumberFormatException → INTERNAL_ERROR com mensagem da exceção")
     void shouldRejectIatWithTemporalCodeWhenItOverflowsLong() {
         long when = now() - 5;
 

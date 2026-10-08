@@ -149,9 +149,10 @@ public class JwsStructureStep implements ValidationStep {
         if (!Policy020.JWS_ALGORITHM.equals(header.string("alg").orElse(null))) {
             return fail(SignatureExceptionCode.VALIDATION_UNSUPPORTED_ALGORITHM, "'alg' deve ser RS256.", context);
         }
-        if (!(header.get("iat").get() instanceof JsonNumber iat) || !iat.lexical().matches("[1-9]\\d{0,18}")) {
+        // Até 11 dígitos (≤ ano 5138): cabe em long sem estouro e cobre qualquer NumericDate plausível.
+        if (!(header.get("iat").get() instanceof JsonNumber iat) || !iat.lexical().matches("[1-9]\\d{0,10}")) {
             return fail(SignatureExceptionCode.TEMPORAL_IAT_INVALID,
-                    "'iat' deve ser NumericDate inteiro positivo, sem fração nem expoente.", context);
+                    "'iat' deve ser NumericDate inteiro positivo de até 11 dígitos, sem fração nem expoente.", context);
         }
         if (!SIG_P_ID.equals(LosslessJson.write(header.get("sigPId").get()))) {
             return fail(SignatureExceptionCode.POLICY_SIGNATURE_POLICY_ID_INVALID,
