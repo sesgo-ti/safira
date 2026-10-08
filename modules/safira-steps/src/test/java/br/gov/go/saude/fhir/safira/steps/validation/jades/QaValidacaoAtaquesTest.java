@@ -902,7 +902,6 @@ class QaValidacaoAtaquesTest {
     // ---------------------------------------------------------------------------------------------
 
     @Test
-    @Disabled("VULN-V2: Signature.onBehalfOf (0..0 no perfil) aceito — metadado não assinado altera a representação")
     void shouldRejectSignatureWhenOnBehalfOfIsInjected() {
         Artifact artifact = legitimateBaselineB().withSignature(s -> s.with("onBehalfOf",
                 object("{\"identifier\":{\"system\":\"urn:brasil:cnpj\",\"value\":\"11222333000181\"}}")));
@@ -912,7 +911,6 @@ class QaValidacaoAtaquesTest {
     }
 
     @Test
-    @Disabled("VULN-V2: Signature.who.display (0..0 no perfil) aceito — nome arbitrário exibido junto à assinatura válida")
     void shouldRejectSignatureWhenWhoDisplayIsInjected() {
         Artifact artifact = legitimateBaselineB().withSignature(s -> s.with("who",
                 s.object("who").orElseThrow().with("display", new JsonString("Dr. Outro Médico"))));
@@ -922,7 +920,6 @@ class QaValidacaoAtaquesTest {
     }
 
     @Test
-    @Disabled("VULN-V2: Signature.who.reference (0..0 no perfil) aceito — aponta a assinatura para outro Practitioner")
     void shouldRejectSignatureWhenWhoReferenceIsInjected() {
         Artifact artifact = legitimateBaselineB().withSignature(s -> s.with("who",
                 s.object("who").orElseThrow().with("reference", new JsonString("Practitioner/outro"))));
@@ -932,7 +929,6 @@ class QaValidacaoAtaquesTest {
     }
 
     @Test
-    @Disabled("VULN-V2: Signature.who.identifier.period/assigner (0..0 no perfil) aceitos quando também presentes no agent")
     void shouldRejectSignatureWhenIdentifierCarriesForbiddenMembers() {
         Artifact base = legitimateBaselineB();
         JsonObject identifier = base.signature().object("who").orElseThrow().object("identifier").orElseThrow()
@@ -947,7 +943,6 @@ class QaValidacaoAtaquesTest {
     }
 
     @Test
-    @Disabled("VULN-V2: membro desconhecido em Signature aceito (não é instância FHIR R4 válida do perfil)")
     void shouldRejectSignatureWhenUnknownMemberIsInjected() {
         Artifact artifact = legitimateBaselineB().withSignature(s -> s.with("aprovadoPor", new JsonString("Diretor")));
 

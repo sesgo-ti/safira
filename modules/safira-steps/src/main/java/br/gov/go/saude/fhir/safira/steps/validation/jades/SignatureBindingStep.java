@@ -29,12 +29,20 @@ import java.util.Set;
  * Passo {@code signature-binding}: seções 1 e 3.1 (parcial) do caso de uso de validação —
  * metadados da {@code Signature} FHIR, extração estrita de {@code Signature.data}, igualdade
  * integral com o único {@code Provenance.signature} e correspondência com {@code Provenance.agent}.
+ * Elementos proibidos pelo perfil (0..0) ou desconhecidos resultam em {@code FORMAT.PROFILE-VALIDATION-FAILED}.
  * Escreve {@link ValidationKeys#JWS_JSON}.
  */
 @StepId("signature-binding")
 public class SignatureBindingStep implements ValidationStep {
 
     private static final Set<String> IDENTITY_SYSTEMS = Set.of(SignerIdentity.CPF_SYSTEM, SignerIdentity.CNPJ_SYSTEM);
+
+    // Membros admitidos pelo perfil assinatura-avancada: onBehalfOf, who.reference|type|display e
+    // who.identifier.use|type|period|assigner são 0..0; id/extension vêm de Element e não são restringidos.
+    private static final Set<String> SIGNATURE_MEMBERS =
+            Set.of("id", "extension", "type", "when", "who", "sigFormat", "targetFormat", "data");
+    private static final Set<String> WHO_MEMBERS = Set.of("id", "extension", "identifier");
+    private static final Set<String> IDENTIFIER_MEMBERS = Set.of("id", "extension", "system", "value");
 
     @Override
     public StepResult<ValidationContext> execute(ValidationContext context) {
@@ -55,6 +63,13 @@ public class SignatureBindingStep implements ValidationStep {
                 || identifier.get().string("value").isEmpty() || signature.string("when").isEmpty()) {
             return fail(SignatureExceptionCode.FORMAT_PROFILE_VALIDATION_FAILED,
                     "Signature.when e Signature.who.identifier (urn:brasil:cpf | urn:brasil:cnpj) são obrigatórios.", context);
+        }
+        if (!SIGNATURE_MEMBERS.containsAll(signature.names())
+                || !WHO_MEMBERS.containsAll(signature.object("who").orElseThrow().names())
+                || !IDENTIFIER_MEMBERS.containsAll(identifier.get().names())) {
+            return fail(SignatureExceptionCode.FORMAT_PROFILE_VALIDATION_FAILED,
+                    "Signature contém elemento não admitido pelo perfil assinatura-avancada "
+                            + "(ex.: onBehalfOf, who.reference, who.display, who.identifier.assigner).", context);
         }
 
         Optional<String> jws = signature.string("data").flatMap(Base64Strict::standard).flatMap(SignatureBindingStep::utf8);
