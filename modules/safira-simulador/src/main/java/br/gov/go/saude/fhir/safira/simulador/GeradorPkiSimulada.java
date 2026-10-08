@@ -42,6 +42,7 @@ import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -62,7 +63,8 @@ import java.util.Map;
  * trecho {@code application-simulacao.yml} com caminhos e allowlist prontos.
  *
  * <p>Uso: {@code --saida <dir> [--senha <senha>] [--politica <oid A3>] [--cpf <11 dígitos>]
- * [--validade-dias <n>]}. Sem {@code --senha}, gera uma senha aleatória e a imprime.
+ * [--validade-dias <n>]}. Sem {@code --senha}, gera uma senha aleatória e a imprime; a senha
+ * informada nunca é impressa. Os PKCS#12 são gravados com permissão 0600 (POSIX).
  */
 public final class GeradorPkiSimulada {
 
@@ -140,7 +142,8 @@ public final class GeradorPkiSimulada {
             System.exit(2);
         }
         Opcoes opcoes = Opcoes.padrao();
-        if (argumentos.containsKey("--senha")) {
+        boolean senhaInformada = argumentos.containsKey("--senha");
+        if (senhaInformada) {
             opcoes = opcoes.comSenha(argumentos.remove("--senha"));
         }
         if (argumentos.containsKey("--politica")) {
@@ -157,7 +160,8 @@ public final class GeradorPkiSimulada {
         }
         Resultado resultado = gerar(Path.of(saida), opcoes);
         System.out.println("PKI de simulação (" + MARCA + ") gerada em " + resultado.raiz().getParent());
-        System.out.println("  senha dos PKCS#12 : " + resultado.senha());
+        // Senha informada pelo operador nunca é ecoada (vazaria em logs de CI); só a gerada é exibida.
+        System.out.println("  senha dos PKCS#12 : " + (senhaInformada ? "(a informada em --senha)" : resultado.senha()));
         System.out.println("  aliases           : " + ALIAS_SIGNATARIO + ", " + ALIAS_REVOGADO);
         System.out.println("  política (OID)    : " + resultado.politicaOid());
         System.out.println("  issuer-sha256 (AC): " + resultado.issuerSha256());
@@ -320,9 +324,18 @@ public final class GeradorPkiSimulada {
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
         keyStore.load(null, null);
         keyStore.setKeyEntry(alias, chaves.getPrivate(), senha.toCharArray(), (Certificate[]) cadeia);
-        try (OutputStream out = Files.newOutputStream(destino)) {
+        try (OutputStream out = arquivoPrivado(destino)) {
             keyStore.store(out, senha.toCharArray());
         }
+    }
+
+    /** Arquivo com chave privada: criado com permissão 0600 quando o sistema de arquivos é POSIX. */
+    private static OutputStream arquivoPrivado(Path destino) throws IOException {
+        Files.deleteIfExists(destino);
+        if (destino.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+            Files.createFile(destino, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
+        }
+        return Files.newOutputStream(destino);
     }
 
     private static String pem(X509Certificate certificado) throws GeneralSecurityException {

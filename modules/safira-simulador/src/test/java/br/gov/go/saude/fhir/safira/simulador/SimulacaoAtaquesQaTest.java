@@ -341,7 +341,6 @@ class SimulacaoAtaquesQaTest {
     }
 
     @Test
-    @Disabled("VULN-S5: PKCS#12 com chave privada gravado com as permissões do umask (legível por grupo/outros)")
     void shouldWritePrivateKeyContainersReadableOnlyByOwner() throws Exception {
         Set<PosixFilePermission> permissoes = Files.getPosixFilePermissions(pki.signatario());
 
@@ -352,7 +351,6 @@ class SimulacaoAtaquesQaTest {
     }
 
     @Test
-    @Disabled("VULN-S5: senha informada por --senha é ecoada no stdout (vaza em logs de CI)")
     void shouldNotEchoPasswordWhenGivenOnCommandLine(@TempDir Path destino) {
         ByteArrayOutputStream capturado = new ByteArrayOutputStream();
         PrintStream original = System.out;
