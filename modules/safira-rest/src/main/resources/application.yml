@@ -8,7 +8,7 @@
 # síncrono do acervo ICP-Brasil da icpbrasil-truststore. Assim orquestradores
 # (e o hubsaude-cli) não enviam tráfego antes de o acervo carregar.
 #
-# O indicador trustStoreCache da biblioteca não é incluído: a versão 0.0.1 o
+# O indicador trustStoreCache da biblioteca não é incluído: a versão 0.0.2 ainda o
 # condiciona a org.springframework.boot.actuate.health.HealthIndicator (Spring
 # Boot 3), ausente no Spring Boot 4, e incluí-lo num grupo aborta o startup.
 # -----------------------------------------------------------------------------
