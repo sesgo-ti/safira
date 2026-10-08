@@ -5,8 +5,11 @@
 
 package br.gov.go.saude.fhir.safira.steps.config;
 
+import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties;
+import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties.VerificationProps;
 import br.gov.go.saude.fhir.safira.engine.domain.Step;
 import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.signing.CertificatePolicyStep;
 import br.gov.go.saude.fhir.safira.steps.signing.ContextValidationStep;
@@ -19,6 +22,7 @@ import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesAssembleStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesDataToSignStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesExtensionStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.TsaTokenVerificationStep;
+import br.gov.go.saude.fhir.safira.steps.trust.IcpBrasilCertificateVerifiers;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.ContentIntegrityStep;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.CurrentChainStep;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.DssValidationStep;
@@ -53,6 +57,25 @@ public class SafiraStepsAutoConfiguration {
     @ConditionalOnMissingBean
     public Clock safiraClock() {
         return Clock.systemUTC();
+    }
+
+    /**
+     * Fontes online do DSS (OCSP, CRL, AIA) com os timeouts de {@code safira.operational.verification};
+     * sobrescrevível em testes por {@link CertificateVerifierFactory#offline}.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public CertificateVerifierFactory safiraCertificateVerifierFactory(SafiraOperationalConfigProperties operational) {
+        VerificationProps verification = operational.verification();
+        return CertificateVerifierFactory.online(verification.ocspTimeout(), verification.crlTimeout());
+    }
+
+    /** Verificador do DSS sobre o acervo ICP-Brasil; a lib entra só como carregadora de certificados. */
+    @Bean
+    @ConditionalOnMissingBean
+    public IcpBrasilCertificateVerifiers icpBrasilCertificateVerifiers(TrustMaterialSource trustMaterialSource,
+                                                                       CertificateVerifierFactory factory) {
+        return new IcpBrasilCertificateVerifiers(trustMaterialSource, factory);
     }
 
     @Bean

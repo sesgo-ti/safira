@@ -17,6 +17,7 @@ e o projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 - Códigos do CodeSystem `situacao-excepcional-assinatura` 0.2.0.
 - Maven Wrapper, workflow de CI (GitHub Actions), Dependabot, JaCoCo e separação de testes de integração por `@Tag("integration")` (perfil `integration-tests`).
 - Health e probes via Spring Boot Actuator (`/actuator/health/readiness` e `/liveness`; só o endpoint `health` é exposto). A readiness só fica `UP` depois que o acervo ICP-Brasil carrega.
+- Verificador central do EU DSS (`CertificateVerifierFactory` + `IcpBrasilCertificateVerifiers`): raízes do acervo ICP-Brasil como confiáveis, ACs do acervo como adjuntas e fontes OCSP/CRL/AIA do DSS com os timeouts de `safira.operational.verification` (`ocsp-timeout`, `crl-timeout`); downloads restritos a HTTP/HTTPS, sem redirecionamento e com teto de 64 MiB por resposta.
 - `safira-rest` empacotado como JAR executável (`java -jar`), com o goal `repackage` do `spring-boot-maven-plugin`.
 
 ### Alterado
@@ -25,6 +26,7 @@ e o projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 - **Incompatível:** a URI de política passa a ser `…/assinatura/politica/0.2.0`; URIs `…/ImplementationGuide/br.go.ses.seguranca|x.y.z` retornam `POLICY.URI-INVALID`.
 - Dependência de acervo, PKIX e revogação migrada para `br.gov.go.saude:icpbrasil-truststore-autoconfigure:0.0.2` (propriedades `icpbrasil-truststore.*`). Na 0.0.2 o acervo descarta raízes fora da lista fixada (v5, v6, v7, v10, v11, v12), um certificado só é considerado revogado a partir da data de revogação e o BouncyCastle não é mais registrado na JVM; o safira usa instâncias próprias do provider.
 - `Signature`: `sigFormat` `application/jose+json`, `targetFormat` `application/fhir+json`, `type` *Verification Signature* (`1.2.840.10065.1.12.1.5`).
+- Assinatura B-B e extensão B-T criam o `CommonCertificateVerifier` sem AIA (o construtor padrão do DSS baixaria certificados pela rede).
 - Spring Boot 4.0.7 e BouncyCastle 1.86, com versões fixadas de Netty, HttpClient 5, Jackson e Log4j por correções de segurança.
 
 ### Removido
