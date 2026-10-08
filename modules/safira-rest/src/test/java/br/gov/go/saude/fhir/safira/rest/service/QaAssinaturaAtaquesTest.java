@@ -631,7 +631,6 @@ class QaAssinaturaAtaquesTest {
     }
 
     @Test
-    @Disabled("VULN-A5: toString() de SigningContext/CryptoMaterial inclui senha e chave privada em claro (vaza em qualquer log)")
     void shouldNotExposeSecretsWhenSigningContextIsLogged() {
         String key = pemBase64(PKI.leafKeys.getPrivate(), null);
         SigningContext context = SigningContext.builder()
