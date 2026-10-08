@@ -64,6 +64,12 @@ public class SafiraSimulacaoAutoConfiguration {
         return () -> atual;
     }
 
+    /** Marca o sucesso de {@code /validar} como simulação (sem validade jurídica ICP-Brasil). */
+    @Bean
+    public AvisoSimulacao avisoSimulacao() {
+        return new AvisoSimulacao();
+    }
+
     /**
      * No modo simulação a allowlist {@code safira.policy.accepted-certificate-policies} precisa
      * fixar o emissor ({@code issuer-sha256}) de cada política: sem ele o startup falha, em vez de

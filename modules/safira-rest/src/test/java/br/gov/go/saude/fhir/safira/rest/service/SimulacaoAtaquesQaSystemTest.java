@@ -95,7 +95,6 @@ class SimulacaoAtaquesQaSystemTest {
     }
 
     @Test
-    @Disabled("VULN-S7: /validar no modo simulação responde VALIDATION.SUCCESS idêntico ao real, sem marcar a simulação")
     void shouldFlagSimulationWhenValidationSucceedsInSimulationMode() throws Exception {
         JsonNode simulada = assinarSimulado();
 
@@ -109,7 +108,7 @@ class SimulacaoAtaquesQaSystemTest {
     }
 
     @Test
-    @Disabled("VULN-S7: assinatura simulada usa a mesma política (sigPId) e o mesmo Signature FHIR da real")
+    @Disabled("VULN-S7 pendente de decisão do responsável: assinatura simulada usa a mesma política (sigPId) e o mesmo Signature FHIR da real")
     void shouldMarkSimulatedSignatureOutsideCertificateWhenSigning() throws Exception {
         JsonNode simulada = assinarSimulado();
         ObjectNode signature = (ObjectNode) simulada.get("signature").deepCopy();
