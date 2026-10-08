@@ -5,10 +5,9 @@
 
 package br.gov.go.saude.fhir.safira.jades;
 
-import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifiers;
-import br.gov.go.saude.fhir.safira.jades.adapter.EvidenceRevocationSources;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.jades.fixture.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki.LeafProfile;
+import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import eu.europa.esig.dss.enumerations.Indication;
@@ -123,7 +122,7 @@ class JadesSigningServiceTest {
 
     @Test
     void shouldBeClassifiedAsJadesBaselineBByDss() {
-        CommonCertificateVerifier verifier = CertificateVerifiers.create(
+        CommonCertificateVerifier verifier = TestPki.verifier(
                 List.of(pki.caCert),
                 EvidenceRevocationSources.ocspFromEvidence(List.of(pki.ocspGoodFor(pki.leafCert))),
                 EvidenceRevocationSources.crlFromEvidence(List.of(pki.crl())));

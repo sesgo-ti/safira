@@ -5,9 +5,12 @@
 
 package br.gov.go.saude.fhir.safira.jades.fixture;
 
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import com.sun.net.httpserver.HttpServer;
 import eu.europa.esig.dss.model.InMemoryDocument;
+import eu.europa.esig.dss.model.x509.revocation.crl.CRL;
 import eu.europa.esig.dss.model.x509.revocation.ocsp.OCSP;
+import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 import eu.europa.esig.dss.spi.x509.revocation.RevocationSource;
 import eu.europa.esig.dss.spi.x509.revocation.ocsp.ExternalResourcesOCSPSource;
 import org.bouncycastle.asn1.ASN1EncodableVector;
@@ -231,6 +234,13 @@ public final class TestPki {
             return der == null ? null
                     : new ExternalResourcesOCSPSource(new InMemoryDocument(der)).getRevocationToken(certificate, issuer);
         };
+    }
+
+    /** Verificador do DSS offline: raízes confiáveis e fontes de revogação prontas (sem AIA nem rede). */
+    public static CommonCertificateVerifier verifier(List<X509Certificate> roots, RevocationSource<OCSP> ocsp,
+                                                     RevocationSource<CRL> crl) {
+        return CertificateVerifierFactory.offline(ocsp, crl)
+                .create(CertificateVerifierFactory.acervo(roots, List.of()), List.of());
     }
 
     /** Fonte OCSP offline que responde {@code GOOD} para qualquer certificado desta PKI. */

@@ -5,9 +5,8 @@
 
 package br.gov.go.saude.fhir.safira.jades;
 
-import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifiers;
-import br.gov.go.saude.fhir.safira.jades.adapter.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.jades.adapter.TspSources;
+import br.gov.go.saude.fhir.safira.jades.fixture.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -107,7 +106,7 @@ class JadesExtensionServiceTest {
 
     @Test
     void shouldBeClassifiedAsJadesBaselineTByDss() {
-        var verifier = CertificateVerifiers.create(List.of(pki.caCert),
+        var verifier = TestPki.verifier(List.of(pki.caCert),
                 EvidenceRevocationSources.ocspFromEvidence(List.of(pki.ocspGoodFor(pki.leafCert), pki.ocspGoodFor(tsa.tsaCert()))),
                 EvidenceRevocationSources.crlFromEvidence(List.of(pki.crl())));
 

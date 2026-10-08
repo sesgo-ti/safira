@@ -6,8 +6,7 @@
 package br.gov.go.saude.fhir.safira.rest.service;
 
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
-import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifiers;
-import br.gov.go.saude.fhir.safira.jades.adapter.EvidenceRevocationSources;
+import br.gov.go.saude.fhir.safira.jades.fixture.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
 import br.gov.go.saude.truststore.icpbrasil.model.ValidationResult;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
@@ -105,7 +104,7 @@ class JadesSigningSystemTest {
         JsonNode response = mapper.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8));
         String jws = new String(Base64.getDecoder().decode(response.get("signature").get("data").asText()), StandardCharsets.UTF_8);
 
-        var verifier = CertificateVerifiers.create(List.of(PKI.caCert),
+        var verifier = TestPki.verifier(List.of(PKI.caCert),
                 EvidenceRevocationSources.ocspFromEvidence(List.of(PKI.ocspGoodFor(PKI.leafCert))), null);
         Reports reports = new JadesValidationService().validate(jws, verifier);
         String id = reports.getSimpleReport().getFirstSignatureId();

@@ -12,8 +12,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
-import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifiers;
-import br.gov.go.saude.fhir.safira.jades.adapter.EvidenceRevocationSources;
+import br.gov.go.saude.fhir.safira.jades.fixture.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
 import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
@@ -168,7 +167,7 @@ class JadesSigningStepsTest {
     }
 
     private SignatureLevel dssFormat(String jws) {
-        var verifier = CertificateVerifiers.create(List.of(pki.caCert),
+        var verifier = TestPki.verifier(List.of(pki.caCert),
                 EvidenceRevocationSources.ocspFromEvidence(List.of(pki.ocspGoodFor(pki.leafCert), pki.ocspGoodFor(fakeTsa.tsaCert()))),
                 EvidenceRevocationSources.crlFromEvidence(List.of(pki.crl())));
         Reports reports = new JadesValidationService().validate(jws, verifier);

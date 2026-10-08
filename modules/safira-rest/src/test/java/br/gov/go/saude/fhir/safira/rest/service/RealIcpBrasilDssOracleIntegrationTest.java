@@ -8,14 +8,10 @@ package br.gov.go.saude.fhir.safira.rest.service;
 import br.gov.go.saude.fhir.safira.jades.JadesSigningService;
 import br.gov.go.saude.fhir.safira.jades.JadesSigningSession;
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
-import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifiers;
-import br.gov.go.saude.fhir.safira.jades.adapter.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
-import br.gov.go.saude.fhir.safira.steps.revocation.LibRevocationEvidence;
+import br.gov.go.saude.fhir.safira.steps.trust.IcpBrasilCertificateVerifiers;
 import br.gov.go.saude.truststore.icpbrasil.model.ValidationResult;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
-import br.gov.go.saude.truststore.icpbrasil.service.revocation.RevocationService;
 import eu.europa.esig.dss.enumerations.Indication;
 import eu.europa.esig.dss.enumerations.SignatureLevel;
 import eu.europa.esig.dss.validation.reports.Reports;
@@ -34,7 +30,6 @@ import java.security.KeyStore;
 import java.security.MessageDigest;
 import java.security.PrivateKey;
 import java.security.Signature;
-import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -47,8 +42,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Oráculo de interoperabilidade com certificado ICP-Brasil real (PKCS#12): produz um JAdES-B-B
  * no formato da política 0.2.0 diretamente pelo {@link JadesSigningService} — fora da pipeline,
- * que recusaria o A1 (C16) — e o valida com o EU DSS usando âncoras do acervo real do ITI e
- * evidências de revogação reais obtidas pela lib icpbrasil-truststore.
+ * que recusaria o A1 (C16) — e o valida com o verificador de produção do EU DSS: acervo real do
+ * ITI e revogação OCSP/CRL obtida pelo próprio DSS.
  *
  * <p>Ignorado sem {@code -Dpfx.path} e {@code -Dpfx.password}; requer acesso à rede (ITI, AIA,
  * OCSP/CRL). Execução:
@@ -71,13 +66,10 @@ class RealIcpBrasilDssOracleIntegrationTest {
     PkixCertificateValidator pkixCertificateValidator;
 
     @Autowired
-    RevocationService revocationService;
-
-    @Autowired
-    TrustMaterialSource trustMaterialSource;
+    IcpBrasilCertificateVerifiers certificateVerifiers;
 
     @Test
-    void shouldValidateRealChainWithDssUsingLibEvidence() throws Exception {
+    void shouldValidateRealChainWithDssUsingOnlineRevocation() throws Exception {
         String pfxPath = System.getProperty("pfx.path");
         String pfxPassword = System.getProperty("pfx.password");
         Assumptions.assumeTrue(pfxPath != null && pfxPassword != null,
@@ -106,15 +98,8 @@ class RealIcpBrasilDssOracleIntegrationTest {
         rsa.update(signing.dataToSign(session));
         String jws = signing.sign(session, rsa.sign());
 
-        LibRevocationEvidence.Outcome outcome = LibRevocationEvidence.collect(revocationService, List.of(chain));
-        assertThat(outcome).isInstanceOf(LibRevocationEvidence.Outcome.Ok.class);
-        LibRevocationEvidence.Collected evidence = ((LibRevocationEvidence.Outcome.Ok) outcome).collected();
-        List<X509Certificate> anchors = trustMaterialSource.current().orElseThrow().anchors().stream()
-                .map(TrustAnchor::getTrustedCert).toList();
-
-        Reports reports = new JadesValidationService().validate(jws, CertificateVerifiers.create(anchors,
-                EvidenceRevocationSources.ocspFromEvidence(evidence.ocspResponses()),
-                EvidenceRevocationSources.crlFromEvidence(evidence.crls())));
+        // Verificador de produção: acervo real como âncoras/adjuntas e OCSP/CRL/AIA online pelo DSS
+        Reports reports = new JadesValidationService().validate(jws, certificateVerifiers.current().orElseThrow());
         String id = reports.getSimpleReport().getFirstSignatureId();
 
         assertThat(reports.getSimpleReport().getIndication(id)).isEqualTo(Indication.TOTAL_PASSED);

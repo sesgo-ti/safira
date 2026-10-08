@@ -3,7 +3,7 @@
  * Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
  */
 
-package br.gov.go.saude.fhir.safira.jades.adapter;
+package br.gov.go.saude.fhir.safira.jades.fixture;
 
 import eu.europa.esig.dss.model.DSSDocument;
 import eu.europa.esig.dss.model.InMemoryDocument;
@@ -17,7 +17,7 @@ import java.util.List;
 
 /**
  * Fontes de revogação <em>offline</em> construídas a partir de respostas OCSP e CRLs
- * completas em DER — insumo determinístico para a extensão B-LT ({@code rVals}).
+ * completas em DER — revogação determinística para os testes de validação pelo DSS.
  */
 public final class EvidenceRevocationSources {
 

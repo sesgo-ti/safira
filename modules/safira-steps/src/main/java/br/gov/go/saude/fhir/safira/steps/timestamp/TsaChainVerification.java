@@ -19,7 +19,6 @@ import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidato
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,8 +27,6 @@ import java.util.Optional;
  * da política TSA selecionada (trust store separado do acervo ICP-Brasil do signatário).
  */
 public final class TsaChainVerification {
-
-    private static final int MAX_DEPTH = 10;
 
     private TsaChainVerification() {
     }
@@ -51,44 +48,6 @@ public final class TsaChainVerification {
                 .flatMap(s -> s.string("signature"))
                 .orElseThrow(() -> new TimestampTokenException(SignatureExceptionCode.FORMAT_JWS_MALFORMED,
                         "JWS sem signatures[0].signature."));
-    }
-
-    /**
-     * Caminho do certificado da TSA até uma âncora do trust store TSA (folha primeiro, âncora por
-     * último), montado com os certificados do token e as próprias âncoras, verificando cada
-     * assinatura. Vazio se o caminho não termina em âncora da política.
-     */
-    public static Optional<List<X509Certificate>> chainToAnchor(Inspection inspection, List<X509Certificate> anchors) {
-        List<X509Certificate> candidates = new ArrayList<>(inspection.tokenCertificates());
-        candidates.addAll(anchors);
-        List<X509Certificate> chain = new ArrayList<>();
-        X509Certificate current = inspection.tsaCertificate();
-        for (int depth = 0; depth < MAX_DEPTH; depth++) {
-            chain.add(current);
-            if (anchors.contains(current)) {
-                return Optional.of(List.copyOf(chain));
-            }
-            X509Certificate child = current;
-            Optional<X509Certificate> issuer = candidates.stream()
-                    .filter(c -> !c.equals(child))
-                    .filter(c -> c.getSubjectX500Principal().equals(child.getIssuerX500Principal()))
-                    .filter(c -> signedBy(child, c))
-                    .findFirst();
-            if (issuer.isEmpty()) {
-                return Optional.empty();
-            }
-            current = issuer.get();
-        }
-        return Optional.empty();
-    }
-
-    private static boolean signedBy(X509Certificate certificate, X509Certificate issuer) {
-        try {
-            certificate.verify(issuer.getPublicKey());
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     public static Optional<PolicyViolation> verify(PkixCertificateValidator validator, Inspection inspection,
