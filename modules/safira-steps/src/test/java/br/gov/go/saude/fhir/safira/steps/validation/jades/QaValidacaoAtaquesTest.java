@@ -881,7 +881,7 @@ class QaValidacaoAtaquesTest {
     }
 
     @Test
-    @Disabled("VULN-V3: recurso referenciado por um recurso assinado, mas fora de Provenance.target, pode ser trocado sem invalidar a assinatura")
+    @Disabled("VULN-V3 pendente de decisão do IG: recurso referenciado por um recurso assinado, mas fora de Provenance.target, pode ser trocado sem invalidar a assinatura")
     void shouldRejectReferencedResourceWhenItIsOutsideTargetsAndIsReplaced() {
         // Provenance assina só a Observation (U2), que referencia o Patient (U1) não assinado
         JsonObject provenance = provenance().with("target", new JsonArray(List.of(
