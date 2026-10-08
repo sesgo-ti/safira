@@ -144,6 +144,19 @@ class SimulacaoIsolamentoQaSystemTest {
     }
 
     @Test
+    void shouldForceTrustStoreBootstrapOffWhenSimulationIsEnabled() {
+        try (ConfigurableApplicationContext contexto = new SpringApplicationBuilder(Application.class)
+                .web(WebApplicationType.NONE)
+                .profiles("simulacao")
+                .properties(ambiente())
+                .run("--icpbrasil-truststore.bootstrap.enabled=true", "--icpbrasil-truststore.scheduling.enabled=true",
+                        "--icpbrasil-truststore.filesystem.base-dir=target/icpbrasil-truststore-simulacao-qa-forcado")) {
+            assertThat(contexto.getEnvironment().getProperty("icpbrasil-truststore.bootstrap.enabled")).isEqualTo("false");
+            assertThat(contexto.getEnvironment().getProperty("icpbrasil-truststore.scheduling.enabled")).isEqualTo("false");
+        }
+    }
+
+    @Test
     void shouldNotTrustSimulatedSignerWhenProfileIsActiveButModeIsOverriddenOff() throws Exception {
         try (ConfigurableApplicationContext parcial = new SpringApplicationBuilder(Application.class)
                 .web(WebApplicationType.NONE)
