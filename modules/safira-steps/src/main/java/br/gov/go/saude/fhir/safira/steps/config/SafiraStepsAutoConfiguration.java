@@ -26,7 +26,6 @@ import br.gov.go.saude.fhir.safira.steps.trust.DownloadPolicyGuard;
 import br.gov.go.saude.fhir.safira.steps.trust.IcpBrasilCertificateVerifiers;
 import br.gov.go.saude.truststore.icpbrasil.config.TrustStoreConfig;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.ContentIntegrityStep;
-import br.gov.go.saude.fhir.safira.steps.validation.jades.CurrentChainStep;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.DssValidationStep;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.JwsStructureStep;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.SignatureBindingStep;
@@ -109,7 +108,6 @@ public class SafiraStepsAutoConfiguration {
         steps.add(new JwsStructureStep());
         steps.add(new ContentIntegrityStep());
         steps.add(new SignerCertificateStep(policyProperties, trustMaterialSource));
-        steps.add(new CurrentChainStep(pkixCertificateValidator));
         steps.add(new DssValidationStep(certificateVerifiers, policyProperties));
         steps.add(new TimestampValidationStep(policyProperties));
         steps.add(new ValidationOutcomeStep());

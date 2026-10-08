@@ -50,7 +50,6 @@ safira:
         - "jws-structure"
         - "content-integrity"
         - "signer-certificate"
-        - "current-chain"
         - "dss-validation"
         - "timestamp-validation"
         - "validation-outcome"

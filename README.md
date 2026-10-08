@@ -36,7 +36,7 @@ Definidas em `safira.pipelines` (`application.yml`), chaveadas pela URI da polí
 | Operação | Steps |
 |---|---|
 | SIGNING | `context-validation` → `payload-validation` → `pkix-chain-validation` → `certificate-policy` → `framed-content-digest` → `jades-data-to-sign` → `crypto-signing` → `jades-assemble` → `jades-extension` → `tsa-token-verification` → `fhir-signature` |
-| VALIDATION | `validation-context` → `signature-binding` → `jws-structure` → `content-integrity` → `signer-certificate` → `current-chain` → `dss-validation` → `timestamp-validation` → `validation-outcome` |
+| VALIDATION | `validation-context` → `signature-binding` → `jws-structure` → `content-integrity` → `signer-certificate` → `dss-validation` → `timestamp-validation` → `validation-outcome` |
 
 O EU DSS nunca acessa a rede: as âncoras vêm do acervo ICP-Brasil (e do trust store TSA da política) e as respostas OCSP/CRL são obtidas e verificadas pela icpbrasil-truststore.
 
