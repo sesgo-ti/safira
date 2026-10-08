@@ -6,6 +6,10 @@
 package br.gov.go.saude.fhir.safira.jades.fixture;
 
 import com.sun.net.httpserver.HttpServer;
+import eu.europa.esig.dss.model.InMemoryDocument;
+import eu.europa.esig.dss.model.x509.revocation.ocsp.OCSP;
+import eu.europa.esig.dss.spi.x509.revocation.RevocationSource;
+import eu.europa.esig.dss.spi.x509.revocation.ocsp.ExternalResourcesOCSPSource;
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.DERSequence;
@@ -15,6 +19,7 @@ import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.BasicConstraints;
+import org.bouncycastle.asn1.x509.CRLReason;
 import org.bouncycastle.asn1.x509.CertificatePolicies;
 import org.bouncycastle.asn1.x509.ExtendedKeyUsage;
 import org.bouncycastle.asn1.x509.Extension;
@@ -36,6 +41,7 @@ import org.bouncycastle.cert.ocsp.CertificateStatus;
 import org.bouncycastle.cert.ocsp.OCSPResp;
 import org.bouncycastle.cert.ocsp.OCSPRespBuilder;
 import org.bouncycastle.cert.ocsp.RespID;
+import org.bouncycastle.cert.ocsp.RevokedStatus;
 import org.bouncycastle.cms.SignerInfoGenerator;
 import org.bouncycastle.cms.jcajce.JcaSignerInfoGeneratorBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -61,6 +67,7 @@ import java.security.cert.X509Certificate;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 
 /**
  * PKI de teste completa para os cenários JAdES:
@@ -211,6 +218,37 @@ public final class TestPki {
 
     /** Resposta OCSP {@code GOOD} (DER de {@code OCSPResponse}) para o certificado informado, assinada pela CA. */
     public byte[] ocspGoodFor(X509Certificate subject) {
+        return ocspFor(subject, CertificateStatus.GOOD);
+    }
+
+    /**
+     * Fonte OCSP offline para o DSS: responde com o DER devolvido por {@code responder} para o
+     * certificado consultado; {@code null} significa "sem revogação disponível".
+     */
+    public static RevocationSource<OCSP> ocspSource(Function<X509Certificate, byte[]> responder) {
+        return (certificate, issuer) -> {
+            byte[] der = responder.apply(certificate.getCertificate());
+            return der == null ? null
+                    : new ExternalResourcesOCSPSource(new InMemoryDocument(der)).getRevocationToken(certificate, issuer);
+        };
+    }
+
+    /** Fonte OCSP offline que responde {@code GOOD} para qualquer certificado desta PKI. */
+    public RevocationSource<OCSP> ocspGoodSource() {
+        return ocspSource(this::ocspGoodFor);
+    }
+
+    /** Resposta OCSP {@code REVOKED} (motivo não especificado, revogado há uma hora), assinada pela CA. */
+    public byte[] ocspRevokedFor(X509Certificate subject) {
+        return ocspRevokedFor(subject, new Date(System.currentTimeMillis() - 3_600_000L));
+    }
+
+    /** Resposta OCSP {@code REVOKED} com a data de revogação informada, assinada pela CA. */
+    public byte[] ocspRevokedFor(X509Certificate subject, Date revocationTime) {
+        return ocspFor(subject, new RevokedStatus(revocationTime, CRLReason.unspecified));
+    }
+
+    private byte[] ocspFor(X509Certificate subject, CertificateStatus status) {
         try {
             DigestCalculatorProvider digests = new JcaDigestCalculatorProviderBuilder()
                     .setProvider(BouncyCastleProvider.PROVIDER_NAME).build();
@@ -222,7 +260,7 @@ public final class TestPki {
             BasicOCSPRespBuilder builder = new BasicOCSPRespBuilder(new RespID(caHolder.getSubject()));
             Date now = new Date();
             Date nextUpdate = new Date(now.getTime() + 10L * 365 * 24 * 3600 * 1000);
-            builder.addResponse(certId, CertificateStatus.GOOD, now, nextUpdate, null);
+            builder.addResponse(certId, status, now, nextUpdate, null);
 
             BasicOCSPResp basic = builder.build(
                     signer(caKeys), new X509CertificateHolder[]{caHolder}, now);

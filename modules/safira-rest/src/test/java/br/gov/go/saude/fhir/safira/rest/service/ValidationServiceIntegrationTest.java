@@ -15,19 +15,16 @@ import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
 import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
 import br.gov.go.saude.fhir.safira.jades.adapter.TspSources;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
-import br.gov.go.saude.truststore.icpbrasil.model.RevocationEvidence;
-import br.gov.go.saude.truststore.icpbrasil.model.RevocationLookup;
-import br.gov.go.saude.truststore.icpbrasil.model.RevocationStatus;
 import br.gov.go.saude.truststore.icpbrasil.model.ValidationResult;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
-import br.gov.go.saude.truststore.icpbrasil.service.revocation.RevocationService;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -35,7 +32,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
@@ -44,7 +40,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 /**
@@ -53,15 +48,13 @@ import static org.mockito.Mockito.when;
  * TSA e trust store TSA configurados, revogação e acervo da lib substituídos pela PKI de teste).
  */
 @SpringBootTest
+@Import(OfflineRevocationConfig.class)
 class ValidationServiceIntegrationTest {
 
     static final TestPki.FakeTsa TSA = JadesSigningSystemTest.PKI.startFakeTsa();
 
     @MockitoBean
     PkixCertificateValidator pkixCertificateValidator;
-
-    @MockitoBean
-    RevocationService revocationService;
 
     @MockitoBean
     TrustMaterialSource trustMaterialSource;
@@ -97,10 +90,7 @@ class ValidationServiceIntegrationTest {
         when(pkixCertificateValidator.validate(any(), anyCollection()))
                 .thenReturn(new ValidationResult.Valid(List.of(pki.leafCert), pki.caCert, List.of()));
         when(trustMaterialSource.current()).thenReturn(Optional.of(TrustMaterial.of(List.of(pki.caCert))));
-        when(revocationService.lookup(any(), any())).thenAnswer(invocation -> {
-            byte[] der = pki.ocspGoodFor(invocation.getArgument(0, X509Certificate.class));
-            return new RevocationLookup(new RevocationStatus.Good("OCSP", der), new RevocationEvidence.OcspResponse(der));
-        });
+        OfflineRevocationConfig.reset();
     }
 
     /** Assina (B-B) e estende o JWS a B-T, recompondo Signature e Provenance. */
@@ -133,18 +123,13 @@ class ValidationServiceIntegrationTest {
     @Test
     void shouldRejectBaselineTWhenTsaRevocationIsInconclusive() throws Exception {
         String body = baselineTValidationBody();
-        doAnswer(invocation -> {
-            X509Certificate certificate = invocation.getArgument(0, X509Certificate.class);
-            if (certificate.getSubjectX500Principal().getName().contains("Fake TSA")) {
-                return RevocationLookup.inconclusive(new RevocationStatus.CrlUnavailable());
-            }
-            byte[] der = JadesSigningSystemTest.PKI.ocspGoodFor(certificate);
-            return new RevocationLookup(new RevocationStatus.Good("OCSP", der), new RevocationEvidence.OcspResponse(der));
-        }).when(revocationService).lookup(any(), any());
+        OfflineRevocationConfig.responder = certificate -> certificate.equals(TSA.tsaCert())
+                ? null
+                : JadesSigningSystemTest.PKI.ocspGoodFor(certificate);
 
         PipelineResult<OperationOutcome> result = validationService.validate(body);
 
         assertThat(result.getExceptionDetails().issue().getFirst().details().coding().getFirst().code())
-                .isEqualTo("REVOCATION.CRL-UNAVAILABLE");
+                .isEqualTo("REVOCATION.STATUS-UNKNOWN");
     }
 }

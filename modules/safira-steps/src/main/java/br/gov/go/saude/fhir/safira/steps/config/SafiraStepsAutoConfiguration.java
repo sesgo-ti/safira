@@ -36,7 +36,6 @@ import br.gov.go.saude.fhir.safira.steps.validation.jades.ValidationOutcomeStep;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.ValidationRequestContextStep;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
-import br.gov.go.saude.truststore.icpbrasil.service.revocation.RevocationService;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -85,8 +84,8 @@ public class SafiraStepsAutoConfiguration {
 
     @Bean
     public List<Step<?>> safiraAllSteps(PkixCertificateValidator pkixCertificateValidator,
-                                        RevocationService revocationService,
                                         TrustMaterialSource trustMaterialSource,
+                                        IcpBrasilCertificateVerifiers certificateVerifiers,
                                         SafiraPolicyProperties policyProperties,
                                         Clock clock) {
         List<Step<?>> steps = new ArrayList<>();
@@ -104,14 +103,14 @@ public class SafiraStepsAutoConfiguration {
         steps.add(new TsaTokenVerificationStep(pkixCertificateValidator, policyProperties));
         steps.add(new FhirSignatureStep());
 
-        // Validação — política 0.2.0 (EU DSS com âncoras e revogação da icpbrasil-truststore)
+        // Validação — política 0.2.0 (EU DSS decide cadeia, revogação e carimbo sobre o acervo ICP-Brasil)
         steps.add(new ValidationRequestContextStep(policyProperties, trustMaterialSource, clock));
         steps.add(new SignatureBindingStep());
         steps.add(new JwsStructureStep());
         steps.add(new ContentIntegrityStep());
         steps.add(new SignerCertificateStep(policyProperties, trustMaterialSource));
         steps.add(new CurrentChainStep(pkixCertificateValidator));
-        steps.add(new DssValidationStep(revocationService, trustMaterialSource, policyProperties));
+        steps.add(new DssValidationStep(certificateVerifiers, policyProperties));
         steps.add(new TimestampValidationStep(policyProperties));
         steps.add(new ValidationOutcomeStep());
 

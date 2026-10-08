@@ -5,20 +5,17 @@
 
 package br.gov.go.saude.fhir.safira.rest.service;
 
-import br.gov.go.saude.truststore.icpbrasil.model.RevocationEvidence;
-import br.gov.go.saude.truststore.icpbrasil.model.RevocationLookup;
-import br.gov.go.saude.truststore.icpbrasil.model.RevocationStatus;
 import br.gov.go.saude.truststore.icpbrasil.model.ValidationResult;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
-import br.gov.go.saude.truststore.icpbrasil.service.revocation.RevocationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -29,7 +26,6 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import java.nio.charset.StandardCharsets;
-import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -46,13 +42,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * serviços da lib icpbrasil-truststore (PKIX, acervo e revogação) substituídos pela PKI de teste.
  */
 @SpringBootTest
+@Import(OfflineRevocationConfig.class)
 class SignAndValidateSystemTest {
 
     @MockitoBean
     PkixCertificateValidator pkixCertificateValidator;
-
-    @MockitoBean
-    RevocationService revocationService;
 
     @MockitoBean
     TrustMaterialSource trustMaterialSource;
@@ -75,10 +69,7 @@ class SignAndValidateSystemTest {
         when(pkixCertificateValidator.validate(any(), anyCollection()))
                 .thenReturn(new ValidationResult.Valid(List.of(pki.leafCert), pki.caCert, List.of()));
         when(trustMaterialSource.current()).thenReturn(Optional.of(TrustMaterial.of(List.of(pki.caCert))));
-        when(revocationService.lookup(any(), any())).thenAnswer(invocation -> {
-            byte[] der = pki.ocspGoodFor(invocation.getArgument(0, X509Certificate.class));
-            return new RevocationLookup(new RevocationStatus.Good("OCSP", der), new RevocationEvidence.OcspResponse(der));
-        });
+        OfflineRevocationConfig.reset();
     }
 
     private JsonNode signed() throws Exception {
@@ -154,14 +145,23 @@ class SignAndValidateSystemTest {
     }
 
     @Test
-    void shouldRejectWhenRevocationIsInconclusive() throws Exception {
+    void shouldRejectWhenNoRevocationIsReachable() throws Exception {
         JsonNode signed = signed();
-        doReturn(RevocationLookup.inconclusive(new RevocationStatus.OcspUnavailable()))
-                .when(revocationService).lookup(any(), any());
+        OfflineRevocationConfig.responder = certificate -> null;
 
         assertThat(validateAndGetCode(validationBody(signed.get("signature").toString(),
                 JadesSigningSystemTest.example("bundle.json"), signed.get("provenance").toString()), 422))
-                .isEqualTo("REVOCATION.OCSP-UNAVAILABLE");
+                .isEqualTo("REVOCATION.STATUS-UNKNOWN");
+    }
+
+    @Test
+    void shouldRejectWhenSignerIsRevoked() throws Exception {
+        JsonNode signed = signed();
+        OfflineRevocationConfig.responder = JadesSigningSystemTest.PKI::ocspRevokedFor;
+
+        assertThat(validateAndGetCode(validationBody(signed.get("signature").toString(),
+                JadesSigningSystemTest.example("bundle.json"), signed.get("provenance").toString()), 422))
+                .isEqualTo("CERT.REVOKED");
     }
 
     @Test
