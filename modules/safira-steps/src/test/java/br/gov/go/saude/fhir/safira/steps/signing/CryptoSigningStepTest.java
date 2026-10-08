@@ -61,10 +61,11 @@ class CryptoSigningStepTest {
     @Test
     void shouldSignWithRsaPemMaterial() throws Exception {
         KeyPair keys = generateRsaKeyPair(2048);
+        X509Certificate cert = selfSign(keys, "CN=Test");
         String pemBase64 = toPemBase64(keys.getPrivate());
         var material = new CryptoMaterial.PemMaterial(pemBase64, null);
         byte[] signingInput = "header.payload".getBytes(StandardCharsets.UTF_8);
-        var context = contextWith(material, signingInput);
+        var context = contextWith(material, cert, signingInput);
 
         var result = step.execute(context);
 
@@ -79,10 +80,11 @@ class CryptoSigningStepTest {
     @Test
     void shouldRejectEcPrivateKeyBecausePolicyAdmitsOnlyRs256() throws Exception {
         KeyPair keys = generateEcKeyPair();
+        X509Certificate cert = selfSign(keys, "CN=Test");
         String pemBase64 = toPemBase64(keys.getPrivate());
         var material = new CryptoMaterial.PemMaterial(pemBase64, null);
         byte[] signingInput = "header.payload".getBytes(StandardCharsets.UTF_8);
-        var context = contextWith(material, signingInput);
+        var context = contextWith(material, cert, signingInput);
 
         var result = step.execute(context);
 
@@ -98,7 +100,7 @@ class CryptoSigningStepTest {
         String p12Base64 = buildPkcs12(keys.getPrivate(), cert, "senha", "test-alias");
         var material = new CryptoMaterial.Pkcs12Material(p12Base64, "senha", "test-alias");
         byte[] signingInput = "header.payload".getBytes(StandardCharsets.UTF_8);
-        var context = contextWith(material, signingInput);
+        var context = contextWith(material, cert, signingInput);
 
         var result = step.execute(context);
 
@@ -115,11 +117,46 @@ class CryptoSigningStepTest {
         X509Certificate cert = selfSign(keys, "CN=Test");
         String p12Base64 = buildPkcs12(keys.getPrivate(), cert, "senha", "only-alias");
         var material = new CryptoMaterial.Pkcs12Material(p12Base64, "senha", null);
-        var context = contextWith(material, "data".getBytes(StandardCharsets.UTF_8));
+        var context = contextWith(material, cert, "data".getBytes(StandardCharsets.UTF_8));
 
         var result = step.execute(context);
 
         assertSuccess(result);
+    }
+
+    // ===== Chave × certificado do signatário =====
+
+    @Test
+    void shouldRejectPemKeyWhenItDoesNotMatchSignerCertificate() throws Exception {
+        KeyPair keys = generateRsaKeyPair(2048);
+        X509Certificate cert = selfSign(generateRsaKeyPair(2048), "CN=Outro");
+        var material = new CryptoMaterial.PemMaterial(toPemBase64(keys.getPrivate()), null);
+        var context = contextWith(material, cert, "data".getBytes(StandardCharsets.UTF_8));
+
+        var result = step.execute(context);
+
+        assertFailure(result, SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE);
+    }
+
+    @Test
+    void shouldSelectPkcs12EntryMatchingSignerCertificateWhenAliasIsAbsent() throws Exception {
+        KeyPair other = generateRsaKeyPair(2048);
+        KeyPair keys = generateRsaKeyPair(2048);
+        X509Certificate cert = selfSign(keys, "CN=Test");
+        KeyStore keyStore = KeyStore.getInstance("PKCS12");
+        keyStore.load(null, null);
+        keyStore.setKeyEntry("a-outro", other.getPrivate(), "senha".toCharArray(),
+                new Certificate[]{selfSign(other, "CN=Outro")});
+        keyStore.setKeyEntry("b-titular", keys.getPrivate(), "senha".toCharArray(), new Certificate[]{cert});
+        var baos = new java.io.ByteArrayOutputStream();
+        keyStore.store(baos, "senha".toCharArray());
+        var material = new CryptoMaterial.Pkcs12Material(Base64.getEncoder().encodeToString(baos.toByteArray()), "senha", null);
+        byte[] signingInput = "data".getBytes(StandardCharsets.UTF_8);
+
+        var result = step.execute(contextWith(material, cert, signingInput));
+
+        assertSuccess(result);
+        assertTrue(verifyRsa(keys.getPublic(), signingInput, Base64.getUrlDecoder().decode(getSignature(result))));
     }
 
     // ===== PKCS12 alias não encontrado =====
@@ -130,7 +167,7 @@ class CryptoSigningStepTest {
         X509Certificate cert = selfSign(keys, "CN=Test");
         String p12Base64 = buildPkcs12(keys.getPrivate(), cert, "senha", "real-alias");
         var material = new CryptoMaterial.Pkcs12Material(p12Base64, "senha", "alias-inexistente");
-        var context = contextWith(material, "data".getBytes(StandardCharsets.UTF_8));
+        var context = contextWith(material, cert, "data".getBytes(StandardCharsets.UTF_8));
 
         var result = step.execute(context);
 
@@ -145,7 +182,7 @@ class CryptoSigningStepTest {
         X509Certificate cert = selfSign(keys, "CN=Test");
         String p12Base64 = buildPkcs12(keys.getPrivate(), cert, "senha-correta", "test-alias");
         var material = new CryptoMaterial.Pkcs12Material(p12Base64, "senha-errada", "test-alias");
-        var context = contextWith(material, "data".getBytes(StandardCharsets.UTF_8));
+        var context = contextWith(material, cert, "data".getBytes(StandardCharsets.UTF_8));
 
         var result = step.execute(context);
 
@@ -157,8 +194,9 @@ class CryptoSigningStepTest {
     @Test
     void shouldProduceBase64UrlWithoutPadding() throws Exception {
         KeyPair keys = generateRsaKeyPair(2048);
+        X509Certificate cert = selfSign(keys, "CN=Test");
         var material = new CryptoMaterial.PemMaterial(toPemBase64(keys.getPrivate()), null);
-        var context = contextWith(material, "data".getBytes(StandardCharsets.UTF_8));
+        var context = contextWith(material, cert, "data".getBytes(StandardCharsets.UTF_8));
 
         var result = step.execute(context);
 
@@ -203,9 +241,10 @@ class CryptoSigningStepTest {
 
     // ===== Helpers =====
 
-    private SigningContext contextWith(CryptoMaterial material, byte[] signingInputBytes) {
+    private SigningContext contextWith(CryptoMaterial material, X509Certificate signer, byte[] signingInputBytes) {
         return SigningContext.builder()
                 .cryptoMaterial(material)
+                .certificateChain(new X509Certificate[]{signer})
                 .attribute(SigningKeys.SIGNING_INPUT_BYTES, signingInputBytes)
                 .build();
     }

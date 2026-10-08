@@ -123,7 +123,6 @@ class QaAssinaturaAtaquesTest {
     // ------------------------------------------------------------------ chave × certificado
 
     @Test
-    @Disabled("VULN-A1: chave privada PEM de outro par é aceita e o Safira devolve assinatura inválida em nome do titular do certificado")
     void shouldRejectSigningWhenPemPrivateKeyDoesNotMatchCertificate() throws Exception {
         KeyPair other = rsa(2048);
         Map<String, String> body = baseBody();
@@ -136,7 +135,6 @@ class QaAssinaturaAtaquesTest {
     }
 
     @Test
-    @Disabled("VULN-A1: PKCS#12 com chave de outro par (certificado do titular informado em certificateChain) produz assinatura inválida")
     void shouldRejectSigningWhenPkcs12KeyDoesNotMatchCertificate() throws Exception {
         KeyPair other = rsa(2048);
         X509Certificate otherCert = leaf(other, LeafSpec.a3());
@@ -150,7 +148,6 @@ class QaAssinaturaAtaquesTest {
     }
 
     @Test
-    @Disabled("VULN-A1: sem alias, o primeiro par de um PKCS#12 com várias chaves é usado mesmo sem corresponder ao certificado")
     void shouldRejectSigningWhenPkcs12WithoutAliasHasOnlyForeignKeys() throws Exception {
         KeyPair other = rsa(2048);
         Map<String, String> body = baseBody();
@@ -742,7 +739,6 @@ class QaAssinaturaAtaquesTest {
     }
 
     @Test
-    @Disabled("VULN-A1: assinatura com chave trocada é emitida (200) e o próprio /validar a recusa (SIGNATURE-VERIFICATION-FAILED)")
     void shouldNeverEmitSignatureThatFailsValidationWhenKeyIsSwapped() throws Exception {
         Map<String, String> body = baseBody();
         body.put("signerCryptoMaterial", pemMaterial(rsa(2048).getPrivate()));
