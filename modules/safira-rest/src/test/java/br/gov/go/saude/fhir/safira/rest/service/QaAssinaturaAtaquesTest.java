@@ -615,7 +615,6 @@ class QaAssinaturaAtaquesTest {
     }
 
     @Test
-    @Disabled("VULN-A4: diagnostics expõem mensagens internas da JVM/BouncyCastle (NPE, classes) no OperationOutcome")
     void shouldNotExposeInternalExceptionMessagesWhenPemMaterialIsIncomplete() throws Exception {
         Map<String, String> missing = baseBody();
         missing.put("signerCryptoMaterial", "{\"type\":\"PEM\"}");

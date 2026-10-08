@@ -19,6 +19,8 @@ import org.bouncycastle.openssl.PEMKeyPair;
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 import org.bouncycastle.openssl.jcajce.JcePEMDecryptorProviderBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
@@ -51,6 +53,8 @@ import java.util.Enumeration;
  */
 @StepId("crypto-signing")
 public class CryptoSigningStep implements SigningStep {
+
+    private static final Logger log = LoggerFactory.getLogger(CryptoSigningStep.class);
 
     public static final String SIGNATURE_KEY = "signature";
 
@@ -85,8 +89,9 @@ public class CryptoSigningStep implements SigningStep {
         } catch (KeyLoadingException e) {
             return StepResult.failure(getName(), e.code, e.getMessage(), context);
         } catch (Exception e) {
+            log.warn("Falha ao carregar a chave privada do material criptográfico", e);
             throw new StepException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
-                    "Erro ao carregar a chave privada: " + e.getMessage(), e);
+                    "Não foi possível carregar a chave privada do material criptográfico fornecido.", e);
         }
 
         if (!"RSA".equals(privateKey.getAlgorithm())) {
@@ -122,8 +127,9 @@ public class CryptoSigningStep implements SigningStep {
                     .build();
             return StepResult.success(getName(), updated);
         } catch (Exception e) {
+            log.error("Falha na operação de assinatura RS256", e);
             throw new StepException(SignatureExceptionCode.CRYPTO_SIGNATURE_CREATION_FAILED,
-                    "Erro na operação de assinatura: " + e.getMessage(), e);
+                    "Falha na operação criptográfica de assinatura.", e);
         }
     }
 
@@ -144,6 +150,10 @@ public class CryptoSigningStep implements SigningStep {
     }
 
     private PrivateKey loadPemPrivateKey(CryptoMaterial.PemMaterial pem) throws Exception {
+        if (pem.privateKey() == null || pem.privateKey().isEmpty()) {
+            throw new KeyLoadingException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
+                    "A chave PEM não foi fornecida.");
+        }
         byte[] pemBytes;
         try {
             pemBytes = Base64.getDecoder().decode(pem.privateKey());
@@ -177,7 +187,7 @@ public class CryptoSigningStep implements SigningStep {
             }
 
             throw new KeyLoadingException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
-                    "O conteúdo PEM não contém uma chave privada reconhecível: " + object.getClass().getSimpleName());
+                    "O conteúdo PEM não contém uma chave privada reconhecível.");
         }
     }
 
@@ -197,7 +207,7 @@ public class CryptoSigningStep implements SigningStep {
             keyStore.load(new ByteArrayInputStream(p12Bytes), password);
         } catch (Exception e) {
             throw new KeyLoadingException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
-                    "Não foi possível abrir o PKCS#12 com a senha fornecida: " + e.getMessage());
+                    "Não foi possível abrir o PKCS#12 com a senha fornecida.");
         }
 
         String alias = p12.alias();
