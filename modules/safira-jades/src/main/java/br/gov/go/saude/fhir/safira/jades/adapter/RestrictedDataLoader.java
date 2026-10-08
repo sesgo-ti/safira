@@ -8,13 +8,17 @@ package br.gov.go.saude.fhir.safira.jades.adapter;
 import eu.europa.esig.dss.model.DSSException;
 import eu.europa.esig.dss.service.http.commons.CommonsDataLoader;
 import eu.europa.esig.dss.service.http.commons.CommonsHttpClientResponseHandler;
+import eu.europa.esig.dss.service.http.proxy.ProxyConfig;
 import eu.europa.esig.dss.spi.client.http.MaxSizeInputStream;
 import eu.europa.esig.dss.spi.exception.DSSExternalResourceException;
 import org.apache.hc.client5.http.DnsResolver;
 import org.apache.hc.client5.http.SystemDefaultDnsResolver;
 import org.apache.hc.client5.http.config.ConnectionConfig;
+import org.apache.hc.client5.http.impl.DefaultSchemePortResolver;
+import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
+import org.apache.hc.client5.http.impl.routing.DefaultRoutePlanner;
 import org.apache.hc.client5.http.io.HttpClientConnectionManager;
 import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.util.TimeValue;
@@ -33,8 +37,9 @@ import java.util.Objects;
  * <p>O {@link CommonsDataLoader} do DSS 6.4 aceita também {@code file:}, {@code ftp:} e
  * {@code ldap:} e não limita o tamanho da resposta; ambas as restrições são aplicadas pelos
  * pontos de extensão do próprio DSS (métodos protegidos e {@code HttpClientResponseHandler}).
- * O filtro de destino entra pelo {@link DnsResolver} do connection manager; não há proxy
- * configurado, então o endereço resolvido é o próprio destino.
+ * O filtro de destino entra pelo {@link DnsResolver} do connection manager. Proxy é proibido
+ * (com proxy o DNS seria resolvido por ele, contornando o filtro): {@code setProxyConfig} e
+ * {@code setUseSystemProperties} são recusados e a rota é sempre direta.
  */
 public class RestrictedDataLoader extends CommonsDataLoader {
 
@@ -86,6 +91,26 @@ public class RestrictedDataLoader extends CommonsDataLoader {
                 .setTimeToLive(TimeValue.ofMilliseconds(getConnectionTimeToLive()))
                 .build());
         return manager;
+    }
+
+    /** Rota sempre direta: ignora {@code http(s).proxyHost} e qualquer {@code ProxySelector}. */
+    @Override
+    protected synchronized HttpClientBuilder getHttpClientBuilder(String url) {
+        return super.getHttpClientBuilder(url).setRoutePlanner(new DefaultRoutePlanner(DefaultSchemePortResolver.INSTANCE));
+    }
+
+    @Override
+    public void setProxyConfig(ProxyConfig proxyConfig) {
+        if (proxyConfig != null) {
+            throw new UnsupportedOperationException("Proxy contornaria o filtro de destino dos downloads.");
+        }
+    }
+
+    @Override
+    public void setUseSystemProperties(boolean useSystemProperties) {
+        if (useSystemProperties) {
+            throw new UnsupportedOperationException("Propriedades de rede do sistema (proxy) não são admitidas.");
+        }
     }
 
     @Override

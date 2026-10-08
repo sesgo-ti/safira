@@ -34,6 +34,19 @@ class DownloadPolicyGuardTest {
         assertThatThrownBy(() -> guard().check(literal, ip(literal))).isInstanceOf(DownloadPolicyException.class);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"::7f00:1", "::a00:1", "64:ff9b::a9fe:a9fe", "64:ff9b::7f00:1", "2002:a00:1::1",
+            "2002:7f00:1::", "64:ff9b:1::808:808", "2001:0:4136:e378:8000:63bf:3fff:fdd2"})
+    void shouldRefuseTransitionAddressWhenItEmbedsInternalIpv4OrIsLocalOnly(String literal) {
+        assertThatThrownBy(() -> guard().check("ocsp.example.com", ip(literal))).isInstanceOf(DownloadPolicyException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"64:ff9b::c8c6:1", "2002:c8c6:1::1", "2804:214::1"})
+    void shouldAcceptIpv6WhenEmbeddedIpv4IsPublicOrAbsent(String literal) {
+        assertThatCode(() -> guard().check("ocsp.example.com", ip(literal))).doesNotThrowAnyException();
+    }
+
     @Test
     void shouldRefuseHostnameWhenItResolvesToInternalAddress() {
         assertThatThrownBy(() -> guard().check("ocsp.example.com", ip("10.0.0.1")))

@@ -7,6 +7,7 @@ package br.gov.go.saude.fhir.safira.jades.adapter;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import eu.europa.esig.dss.service.http.proxy.ProxyConfig;
 import eu.europa.esig.dss.spi.exception.DSSExternalResourceException;
 import org.apache.hc.client5.http.DnsResolver;
 import org.junit.jupiter.api.AfterEach;
@@ -147,6 +148,29 @@ class RestrictedDataLoaderTest {
                 return host;
             }
         };
+    }
+
+    @Test
+    void shouldRefuseProxyConfigurationWhenRequested() {
+        assertThatThrownBy(() -> loader().setProxyConfig(new ProxyConfig())).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> loader().setUseSystemProperties(true)).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void shouldIgnoreSystemProxyWhenJvmProxyPropertiesAreSet() {
+        String previous = System.getProperty("http.proxyHost");
+        System.setProperty("http.proxyHost", "203.0.113.1");
+        System.setProperty("http.proxyPort", "9");
+        try {
+            assertThat(loader().get(base + "/small")).hasSize(16);
+        } finally {
+            if (previous == null) {
+                System.clearProperty("http.proxyHost");
+            } else {
+                System.setProperty("http.proxyHost", previous);
+            }
+            System.clearProperty("http.proxyPort");
+        }
     }
 
     @Test
