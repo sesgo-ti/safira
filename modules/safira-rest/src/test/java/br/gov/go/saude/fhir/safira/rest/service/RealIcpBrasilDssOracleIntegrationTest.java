@@ -5,15 +5,17 @@
 
 package br.gov.go.saude.fhir.safira.rest.service;
 
+import br.gov.go.saude.fhir.safira.jades.CertificateValidationService;
 import br.gov.go.saude.fhir.safira.jades.JadesSigningService;
 import br.gov.go.saude.fhir.safira.jades.JadesSigningSession;
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
 import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
 import br.gov.go.saude.fhir.safira.steps.trust.IcpBrasilCertificateVerifiers;
-import br.gov.go.saude.truststore.icpbrasil.model.ValidationResult;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
 import eu.europa.esig.dss.enumerations.Indication;
 import eu.europa.esig.dss.enumerations.SignatureLevel;
+import eu.europa.esig.dss.model.x509.CertificateToken;
+import eu.europa.esig.dss.spi.DSSUtils;
+import eu.europa.esig.dss.validation.reports.CertificateReports;
 import eu.europa.esig.dss.validation.reports.Reports;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
@@ -45,7 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * que recusaria o A1 (C16) — e o valida com o verificador de produção do EU DSS: acervo real do
  * ITI e revogação OCSP/CRL obtida pelo próprio DSS.
  *
- * <p>Ignorado sem {@code -Dpfx.path} e {@code -Dpfx.password}; requer acesso à rede (ITI, AIA,
+ * <p>Ignorado sem {@code -Dpfx.path} e {@code -Dpfx.password}; requer acesso à rede (ITI,
  * OCSP/CRL). Execução:
  * <pre>
  * ./mvnw -Pintegration-tests test -pl modules/safira-rest -am \
@@ -61,9 +63,6 @@ import static org.assertj.core.api.Assertions.assertThat;
         "icpbrasil-truststore.filesystem.base-dir=target/icpbrasil-truststore-it"
 })
 class RealIcpBrasilDssOracleIntegrationTest {
-
-    @Autowired
-    PkixCertificateValidator pkixCertificateValidator;
 
     @Autowired
     IcpBrasilCertificateVerifiers certificateVerifiers;
@@ -82,12 +81,15 @@ class RealIcpBrasilDssOracleIntegrationTest {
         List<X509Certificate> supplied = Arrays.stream(keyStore.getCertificateChain(alias))
                 .map(X509Certificate.class::cast).toList();
 
-        // PKIX real (AIA, âncora do acervo, revogação) fornece a cadeia completa até a raiz
-        ValidationResult pkix = pkixCertificateValidator.validate(supplied.getFirst(), supplied.subList(1, supplied.size()));
-        assertThat(pkix).isInstanceOf(ValidationResult.Valid.class);
-        ValidationResult.Valid valid = (ValidationResult.Valid) pkix;
-        List<X509Certificate> chain = new ArrayList<>(valid.path());
-        chain.add(valid.anchor());
+        // Cadeia validada pelo DSS (acervo real, revogação online) — mesma rotina do pkix-chain-validation
+        CertificateReports certificateReports = new CertificateValidationService().validate(supplied.getFirst(),
+                supplied.subList(1, supplied.size()), certificateVerifiers.current().orElseThrow());
+        String leafId = new CertificateToken(supplied.getFirst()).getDSSIdAsString();
+        assertThat(certificateReports.getSimpleReport().getCertificateIndication(leafId)).isEqualTo(Indication.PASSED);
+        List<X509Certificate> chain = new ArrayList<>(List.of(supplied.getFirst()));
+        certificateReports.getDiagnosticData().getUsedCertificateById(leafId).getCertificateChain().stream()
+                .filter(certificate -> !certificate.getId().equals(leafId))
+                .forEach(certificate -> chain.add(DSSUtils.loadCertificate(certificate.getBinaries()).getCertificate()));
 
         JadesSigningService signing = new JadesSigningService();
         byte[] payload = MessageDigest.getInstance("SHA-256").digest("oraculo".getBytes(StandardCharsets.UTF_8));
