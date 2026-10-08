@@ -1,0 +1,187 @@
+name: Release
+
+# Tag vX.Y.Z na main publica hubsaude-safira-X.Y.Z.jar em sesgo-ti/hubsaude,
+# de onde o hubsaude-cli provisiona o Safira. Só o job publicar tem o PAT.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  validar-tag:
+    name: Validar tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      versao: ${{ steps.ver.outputs.versao }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolver versão a partir da tag
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "::error::tag inválida: $GITHUB_REF_NAME (esperado vMAJOR.MINOR.PATCH)"
+            exit 1
+          fi
+          echo "versao=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+
+      - name: Conferir que a tag aponta para o commit executado
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref="refs/tags/${GITHUB_REF_NAME}"
+          saida="$(git ls-remote --exit-code origin "$ref" "${ref}^{}")" || {
+            echo "::error::tag ausente no remoto: $GITHUB_REF_NAME"
+            exit 1
+          }
+          tag_sha="$(awk -v r="$ref" '$2 == r {print $1}' <<<"$saida")"
+          peeled="$(awk -v r="${ref}^{}" '$2 == r {print $1}' <<<"$saida")"
+          resolvido="${peeled:-$tag_sha}"
+          if [ "$resolvido" != "$GITHUB_SHA" ]; then
+            echo "::error::tag $GITHUB_REF_NAME aponta para ${resolvido}, mas o run executa ${GITHUB_SHA} (tag movida)"
+            exit 1
+          fi
+
+      - name: Conferir que o commit está na main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::o commit ${GITHUB_SHA} da tag $GITHUB_REF_NAME não está na main"
+            exit 1
+          fi
+
+  build:
+    name: Build e testes
+    needs: validar-tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configurar JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Fixar a versão do pom a partir da tag
+        env:
+          VERSAO: ${{ needs.validar-tag.outputs.versao }}
+        run: ./mvnw -B --no-transfer-progress versions:set -DnewVersion="$VERSAO" -DprocessAllModules=true -DgenerateBackupPoms=false
+
+      - name: Build e testes
+        run: ./mvnw -B --no-transfer-progress verify
+
+      - name: Preparar assets
+        shell: bash
+        env:
+          VERSAO: ${{ needs.validar-tag.outputs.versao }}
+        run: |
+          set -euo pipefail
+          origem="modules/safira-rest/target/safira-rest-${VERSAO}.jar"
+          jar="hubsaude-safira-${VERSAO}.jar"
+          [ -f "$origem" ] || { echo "::error::JAR ausente: $origem"; ls -la modules/safira-rest/target/ || true; exit 1; }
+          if ! unzip -l "$origem" | grep -q 'BOOT-INF/lib/'; then
+            echo "::error::$origem não é um JAR executável do Spring Boot"
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$origem" "dist/$jar"
+          (cd dist && sha256sum "$jar" > checksums.txt && cat checksums.txt)
+
+      - name: Transportar assets ao job de publicação
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: safira-release-${{ github.run_id }}
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error
+
+  publicar:
+    name: Publicar em sesgo-ti/hubsaude
+    needs: [validar-tag, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: hubsaude-distribution
+    steps:
+      - name: Recuperar assets do build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: safira-release-${{ github.run_id }}
+          path: dist
+
+      - name: Conferir integridade e idempotência
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HUBSAUDE_DIST_TOKEN }}
+          VERSAO: ${{ needs.validar-tag.outputs.versao }}
+        run: |
+          set -euo pipefail
+          cd dist
+          jar="hubsaude-safira-${VERSAO}.jar"
+          total="$(find . -type f | wc -l)"
+          if [ "$total" -ne 2 ] || [ ! -f "$jar" ] || [ ! -f checksums.txt ]; then
+            echo "::error::o artifact deve conter exatamente $jar e checksums.txt"
+            find . -type f
+            exit 1
+          fi
+          grep -q "  ${jar}\$" checksums.txt || { echo "::error::checksums.txt não referencia $jar"; exit 1; }
+          sha256sum -c checksums.txt
+
+          # Mesmos bytes já publicados: no-op. Bytes diferentes: falha.
+          tag="hubsaude-safira-v${VERSAO}"
+          resp="${RUNNER_TEMP}/release.json"
+          url=""
+          if gh api "repos/sesgo-ti/hubsaude/releases/tags/${tag}" > "$resp" 2> "${RUNNER_TEMP}/release.err"; then
+            url="$(JAR="$jar" jq -r '.assets[] | select(.name == env.JAR) | .url // empty' "$resp")"
+          elif [ "$(jq -r '.status // empty' "$resp" 2>/dev/null || true)" != "404" ]; then
+            cat "${RUNNER_TEMP}/release.err" || true
+            echo "::error::consulta à release ${tag} falhou sem ser 404"
+            exit 1
+          fi
+          if [ -n "$url" ]; then
+            curl -fsSL --retry 3 -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/octet-stream" -o "${RUNNER_TEMP}/publicado.jar" "$url"
+            local_sha="$(sha256sum "$jar" | awk '{print $1}')"
+            remoto_sha="$(sha256sum "${RUNNER_TEMP}/publicado.jar" | awk '{print $1}')"
+            if [ "$local_sha" != "$remoto_sha" ]; then
+              echo "::error::$jar já publicado com bytes diferentes (local=${local_sha} publicado=${remoto_sha}); corte uma nova versão"
+              exit 1
+            fi
+            echo "Asset já publicado com os mesmos bytes."
+          fi
+
+      - name: Publicar release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          repository: sesgo-ti/hubsaude
+          token: ${{ secrets.HUBSAUDE_DIST_TOKEN }}
+          tag_name: hubsaude-safira-v${{ needs.validar-tag.outputs.versao }}
+          name: hubsaude-safira ${{ needs.validar-tag.outputs.versao }}
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: |
+            dist/hubsaude-safira-${{ needs.validar-tag.outputs.versao }}.jar
+            dist/checksums.txt

@@ -80,6 +80,10 @@ Resposta `200` com `OperationOutcome` `VALIDATION.SUCCESS` ou `422` com o códig
 
 Políticas suportadas.
 
+### Health
+
+`GET /actuator/health/readiness` e `GET /actuator/health/liveness` (Spring Boot Actuator; só o endpoint `health` é exposto). A readiness só fica `UP` depois que o acervo ICP-Brasil carrega na partida, então orquestradores e o [hubsaude-cli](https://github.com/sesgo-ti/hubsaude-cli) aguardam por ela antes de enviar requisições. Se o acervo não carrega (rede, proxy ou ITI indisponível), o serviço encerra na partida.
+
 ## Configuração
 
 ```yaml
@@ -117,7 +121,25 @@ As demais propriedades da biblioteca (rede, revogação, política de download, 
 ./mvnw verify
 ```
 
+O `package` gera o JAR executável do serviço em `modules/safira-rest/target/safira-rest-<versão>.jar`:
+
+```bash
+./mvnw -DskipTests package
+java -jar modules/safira-rest/target/safira-rest-*.jar
+```
+
 Relatório de cobertura (JaCoCo) por módulo em `modules/<módulo>/target/site/jacoco/index.html`.
+
+## Release
+
+Uma tag `vX.Y.Z` em commit da `main` dispara o workflow `release.yml`, que fixa a versão do pom a partir da tag, roda `./mvnw verify` e publica `hubsaude-safira-X.Y.Z.jar` com `checksums.txt` na release `hubsaude-safira-vX.Y.Z` de `sesgo-ti/hubsaude`. É de lá que o [hubsaude-cli](https://github.com/sesgo-ti/hubsaude-cli) provisiona o Safira, depois que a versão entra no manifesto dele.
+
+```bash
+git tag -a v0.2.0 -m "safira 0.2.0"
+git push origin v0.2.0
+```
+
+A publicação exige o secret `HUBSAUDE_DIST_TOKEN` no environment `hubsaude-distribution`, com deployment policy restrita a tags `v*.*.*`.
 
 ### Testes de integração com certificado ICP-Brasil real
 

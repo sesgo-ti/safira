@@ -2,6 +2,20 @@
 # Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
 
 # -----------------------------------------------------------------------------
+# Health e probes. A readiness só fica UP depois que o acervo ICP-Brasil carrega.
+# O indicador trustStoreCache fica de fora: aborta a partida no Spring Boot 4.
+# -----------------------------------------------------------------------------
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+# -----------------------------------------------------------------------------
 # Acervo ICP-Brasil (lib icpbrasil-truststore): download do ITI, cache, PKIX e revogação.
 # As URLs oficiais do ITI são defaults da biblioteca; demais propriedades no README da lib.
 # -----------------------------------------------------------------------------

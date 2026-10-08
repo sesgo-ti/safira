@@ -49,6 +49,12 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
+        <!-- Health e probes (/actuator/health/readiness). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -74,9 +80,17 @@
 
     <build>
         <plugins>
+            <!-- Sem o parent do Spring Boot, o repackage precisa ser explícito. -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
