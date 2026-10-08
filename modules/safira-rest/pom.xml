@@ -49,6 +49,13 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
+        <!-- Health e probes (/actuator/health/readiness): o serviço só fica
+             pronto depois que o acervo ICP-Brasil carrega (ver application.yml). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

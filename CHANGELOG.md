@@ -16,6 +16,7 @@ e o projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 - Validação: parsing estrito do JWS, vínculo `Signature` × `Provenance.signature` × `Provenance.agent`, recomputação do payload, cadeia PKIX atual (B-B), EU DSS com âncoras e evidências de revogação da icpbrasil-truststore, verificação do `TimeStampToken` e trust store TSA separado (B-T).
 - Códigos do CodeSystem `situacao-excepcional-assinatura` 0.2.0.
 - Maven Wrapper, workflow de CI (GitHub Actions), Dependabot, JaCoCo e separação de testes de integração por `@Tag("integration")` (perfil `integration-tests`).
+- Health e probes via Spring Boot Actuator (`/actuator/health/readiness` e `/liveness`; só o endpoint `health` é exposto). A readiness só fica `UP` depois que o acervo ICP-Brasil carrega.
 - `safira-rest` empacotado como JAR executável (`java -jar`), com o goal `repackage` do `spring-boot-maven-plugin`.
 
 ### Alterado
