@@ -360,7 +360,6 @@ class QaAssinaturaAtaquesTest {
     }
 
     @Test
-    @Disabled("VULN-A6: certificado folha com extensão crítica desconhecida é aceito (RFC 5280 §4.2 exige rejeição)")
     void shouldRejectSigningWhenLeafHasUnknownCriticalExtension() throws Exception {
         KeyPair keys = rsa(2048);
         Map<String, String> body = baseBody();

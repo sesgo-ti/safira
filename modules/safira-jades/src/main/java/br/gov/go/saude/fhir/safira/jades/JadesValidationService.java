@@ -21,6 +21,9 @@ import java.util.Objects;
  * se extraem {@code Indication} ({@code TOTAL_PASSED} | {@code TOTAL_FAILED} | {@code INDETERMINATE})
  * e {@code SubIndication} — o modelo triádico que fundamenta o tratamento de garantia
  * indeterminada no pipeline de validação.
+ *
+ * <p>Usa a política padrão do DSS com extensão crítica desconhecida no certificado do signatário
+ * como {@code FAIL} (RFC 5280 §4.2).
  */
 public class JadesValidationService {
 
@@ -43,6 +46,6 @@ public class JadesValidationService {
                 new InMemoryDocument(jwsJson.getBytes(StandardCharsets.UTF_8)));
         validator.setCertificateVerifier(verifier);
         validator.setValidationLevel(level);
-        return validator.validateDocument();
+        return validator.validateDocument(StrictValidationPolicies.SIGNATURE);
     }
 }
