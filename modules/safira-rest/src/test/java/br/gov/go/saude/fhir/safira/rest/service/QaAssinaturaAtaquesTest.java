@@ -648,7 +648,6 @@ class QaAssinaturaAtaquesTest {
     // ------------------------------------------------------------------ DoS
 
     @Test
-    @Disabled("VULN-A2: corpo sem limite — membro desconhecido de ~60 MB é lido inteiro em memória e a assinatura é emitida")
     void shouldRejectSigningWhenRequestBodyExceedsSecurityLimit() throws Exception {
         String chunk = "\"" + "A".repeat(10_000_000) + "\"";
         Map<String, String> body = baseBody();
@@ -657,6 +656,17 @@ class QaAssinaturaAtaquesTest {
         MvcResult result = sign(body);
 
         assertThat(result.getResponse().getStatus()).isIn(413, 422);
+    }
+
+    @Test
+    void shouldRejectValidationWhenRequestBodyExceedsSecurityLimit() throws Exception {
+        String padding = "A".repeat(60_000_000);
+
+        MvcResult result = validate("{\"data\":\"eA==\",\"padding\":\"" + padding + "\"}",
+                JadesSigningSystemTest.example("bundle.json"), JadesSigningSystemTest.example("provenance.json"));
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(413);
+        assertThat(code(result)).isEqualTo("SECURITY.BUNDLE-SIZE-LIMIT-EXCEEDED");
     }
 
     @Test
