@@ -37,8 +37,9 @@ import java.util.Optional;
 
 /**
  * Passo {@code dss-validation}: o EU DSS decide a assinatura — verificação criptográfica JWS
- * (4.3), construção da cadeia (x5c, ACs do acervo e AIA), revogação OCSP/CRL obtida pelo próprio
- * DSS (6) e, em JAdES-B-T, o carimbo e a cadeia da TSA com prova de existência (5).
+ * (4.3), construção da cadeia pelo {@code x5c} e pelas ACs do acervo (sem AIA), revogação
+ * OCSP/CRL obtida pelo próprio DSS só para cadeias que terminam numa âncora (6) e, em JAdES-B-T,
+ * o carimbo e a cadeia da TSA com prova de existência (5).
  *
  * <p>Âncoras: raízes do acervo ICP-Brasil e, em B-T, as do trust store TSA da política, cuja
  * cadeia do carimbo precisa terminar numa delas. Tempo: em B-B o DSS valida no instante atual
