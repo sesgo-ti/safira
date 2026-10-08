@@ -38,7 +38,7 @@ Definidas em `safira.pipelines` (`application.yml`), chaveadas pela URI da polí
 | SIGNING | `context-validation` → `payload-validation` → `pkix-chain-validation` → `certificate-policy` → `framed-content-digest` → `jades-data-to-sign` → `crypto-signing` → `jades-assemble` → `jades-extension` → `tsa-token-verification` → `fhir-signature` |
 | VALIDATION | `validation-context` → `signature-binding` → `jws-structure` → `content-integrity` → `signer-certificate` → `dss-validation` → `timestamp-validation` → `validation-outcome` |
 
-O EU DSS nunca acessa a rede: as âncoras vêm do acervo ICP-Brasil (e do trust store TSA da política) e as respostas OCSP/CRL são obtidas e verificadas pela icpbrasil-truststore.
+Na validação, o EU DSS decide cadeia, revogação e carimbo: as raízes do acervo ICP-Brasil (e, em B-T, o trust store TSA da política) são as âncoras, as ACs do acervo completam a cadeia junto com o `x5c` (sem AIA) e o próprio DSS consulta OCSP/CRL — só para cadeias que terminam numa âncora, em HTTP/HTTPS nas portas 80/443 e com destinos filtrados por `icpbrasil-truststore.download-policy.*`. A icpbrasil-truststore entra como carregadora do acervo.
 
 ## API
 

@@ -13,7 +13,7 @@ e o projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 - JAdES-B-B e JAdES-B-T (ETSI TS 119 182-1) via EU DSS 6.4: protected header `{alg, x5t#S256, x5c, iat, sigPId, srCms}`, `etsiU` em claro com um único `sigTst`, carimbo com nonce, `reqPolicy` e imprint SHA-256.
 - Canonicalização `fhir-json-lossless/0.2.0` e artefato enquadrado `UINT64_BE(N) || len(Ti) || Ti || len(Ri) || Ri`, sobre parser JSON sem perda (tokens `decimal` preservados, membros duplicados rejeitados).
 - Elegibilidade do certificado folha por allowlist (`safira.policy.accepted-certificate-policies`: OID completo, tipo A3/A4/SE-S/SE-H e SHA-256 do emissor), RSA 2048/4096 por tipo, `digitalSignature`, identidade CPF/CNPJ com dígitos verificadores.
-- Validação: parsing estrito do JWS, vínculo `Signature` × `Provenance.signature` × `Provenance.agent`, recomputação do payload, cadeia PKIX atual (B-B), EU DSS com âncoras e evidências de revogação da icpbrasil-truststore, verificação do `TimeStampToken` e trust store TSA separado (B-T).
+- Validação: parsing estrito do JWS, vínculo `Signature` × `Provenance.signature` × `Provenance.agent`, recomputação do payload, EU DSS decidindo cadeia, revogação (B-B no instante atual; B-T com o carimbo como prova de existência) e carimbo, com as regras da política 0.2.0 sobre o `TimeStampToken` e trust store TSA separado (B-T).
 - Códigos do CodeSystem `situacao-excepcional-assinatura` 0.2.0.
 - Maven Wrapper, workflow de CI (GitHub Actions), Dependabot, JaCoCo e separação de testes de integração por `@Tag("integration")` (perfil `integration-tests`).
 - Health e probes via Spring Boot Actuator (`/actuator/health/readiness` e `/liveness`; só o endpoint `health` é exposto). A readiness só fica `UP` depois que o acervo ICP-Brasil carrega.
@@ -30,6 +30,8 @@ e o projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 - Spring Boot 4.0.7 e BouncyCastle 1.86, com versões fixadas de Netty, HttpClient 5, Jackson e Log4j por correções de segurança.
 
 ### Removido
+
+- Passo `current-chain` (PKIX e revogação da lib no instante atual), coberto pelo `dss-validation`; a validação não usa mais `RevocationService` da icpbrasil-truststore nem monta manualmente a cadeia da TSA.
 
 - Pipelines das políticas `0.1.0`, `1.1.0` e `2.0.0` (implementação manual de JWS e perfil JAdES com níveis B-LT/B-LTA).
 - Assinatura ECDSA/ES256 (a política admite somente `RS256`).
