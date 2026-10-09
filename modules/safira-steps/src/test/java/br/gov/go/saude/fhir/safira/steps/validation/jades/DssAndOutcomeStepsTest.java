@@ -129,18 +129,29 @@ class DssAndOutcomeStepsTest {
 
     @Test
     void shouldRejectSignerWithUnknownCriticalExtensionAsChainValidationFailed() {
-        TestPki critical = TestPki.create(TestPki.LeafProfile.a3().withUnknownCriticalExtension());
-        SafiraPolicyProperties criticalPolicy = TestConfigs.policy(critical,
-                TestConfigs.tsaPolicies(tempDir, TestPki.TSA_POLICY_OID, 1, critical.caCert));
-        TrustMaterialSource criticalTrust = () -> Optional.of(TrustMaterial.of(List.of(critical.caCert)));
-        ValidationContext signed = SignedArtifactFixture.validationContext(SignedArtifactFixture.signSemVerificarCadeia(critical, criticalPolicy));
-        ValidationContext parsed = new JwsStructureStep().execute(new SignatureBindingStep().execute(signed).context()).context();
-        DssValidationStep step = new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(criticalTrust),
-                CertificateVerifierFactory.offline(EvidenceRevocationSources.ocspFromEvidence(
-                        List.of(critical.ocspGoodFor(critical.leafCert))), null)), criticalPolicy);
+        StepResult<ValidationContext> result = validateWithLeaf(TestPki.LeafProfile.a3().withUnknownCriticalExtension());
 
-        assertThat(code(step.execute(SignedArtifactFixture.comAcervo(parsed, criticalTrust))))
-                .isEqualTo(SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED);
+        assertThat(code(result)).isEqualTo(SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED);
+        assertThat(((StepResult.Failure<ValidationContext>) result).diagnostics()).contains("1.3.6.1.4.1.99999.1");
+    }
+
+    @Test
+    void shouldAcceptSameSignerWithoutUnknownCriticalExtension() {
+        assertThat(validateWithLeaf(TestPki.LeafProfile.a3()).isSuccess()).isTrue();
+    }
+
+    private static StepResult<ValidationContext> validateWithLeaf(TestPki.LeafProfile profile) {
+        TestPki leafPki = TestPki.create(profile);
+        SafiraPolicyProperties leafPolicy = TestConfigs.policy(leafPki,
+                TestConfigs.tsaPolicies(tempDir, TestPki.TSA_POLICY_OID, 1, leafPki.caCert));
+        TrustMaterialSource leafTrust = () -> Optional.of(TrustMaterial.of(List.of(leafPki.caCert)));
+        ValidationContext signed = SignedArtifactFixture.validationContext(
+                SignedArtifactFixture.signSemVerificarCadeia(leafPki, leafPolicy));
+        ValidationContext parsed = new JwsStructureStep().execute(new SignatureBindingStep().execute(signed).context()).context();
+        DssValidationStep step = new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(leafTrust),
+                CertificateVerifierFactory.offline(EvidenceRevocationSources.ocspFromEvidence(
+                        List.of(leafPki.ocspGoodFor(leafPki.leafCert))), null)), leafPolicy);
+        return step.execute(SignedArtifactFixture.comAcervo(parsed, leafTrust));
     }
 
     @Test
