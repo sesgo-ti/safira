@@ -65,7 +65,7 @@ public class SafiraSimulacaoAutoConfiguration {
         return fonte;
     }
 
-    /** Sem rede no modo simulação: a revogação vem só das LCRs locais. */
+    /** Sem rede no modo simulação: revogação e carimbo vêm de LCRs locais ou das fontes em memória. */
     @Bean
     @ConditionalOnMissingBean
     public DestinationGuard simulacaoDestinationGuard() {
