@@ -8,8 +8,14 @@ package br.gov.go.saude.fhir.safira.steps.trust.icpbrasil;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
 import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 import java.security.cert.CertStore;
 import java.security.cert.CertStoreException;
@@ -50,8 +56,11 @@ class FonteDeConfiancaIcpBrasilTest {
     @Test
     void shouldKeepGenerationWhileTrustMaterialIsSameInstance() {
         FonteDeConfiancaIcpBrasil fonte = fonte(new AtomicReference<>(material()));
+        AcervoDeConfianca primeiro = fonte.atual().orElseThrow();
+        AcervoDeConfianca segundo = fonte.atual().orElseThrow();
 
-        assertThat(fonte.atual().orElseThrow().geracao()).isEqualTo(fonte.atual().orElseThrow().geracao());
+        assertThat(segundo.geracao()).isEqualTo(primeiro.geracao());
+        assertThat(segundo).isSameAs(primeiro);
     }
 
     @Test
@@ -92,5 +101,53 @@ class FonteDeConfiancaIcpBrasilTest {
     @Test
     void shouldReturnEmptyWhenTrustMaterialHasNoAnchors() {
         assertThat(fonte(new AtomicReference<>(TrustMaterial.of(List.of(pki.leafCert)))).atual()).isEmpty();
+    }
+
+    @Test
+    void shouldLogErrorOnlyOnFirstFailureOfSameTrustMaterial() {
+        ListAppender<ILoggingEvent> eventos = capturarLog();
+        FonteDeConfiancaIcpBrasil fonte = fonte(new AtomicReference<>(TrustMaterial.of(List.of(pki.leafCert))));
+
+        fonte.atual();
+        fonte.atual();
+        fonte.atual();
+
+        assertThat(eventos.list).extracting(ILoggingEvent::getLevel)
+                .containsExactly(Level.ERROR, Level.DEBUG, Level.DEBUG);
+    }
+
+    @Test
+    void shouldLogErrorAgainWhenFailureReturnsAfterRecovery() {
+        ListAppender<ILoggingEvent> eventos = capturarLog();
+        TrustMaterial semRaizes = TrustMaterial.of(List.of(pki.leafCert));
+        AtomicReference<TrustMaterial> material = new AtomicReference<>(semRaizes);
+        FonteDeConfiancaIcpBrasil fonte = fonte(material);
+
+        fonte.atual();
+        material.set(material());
+        fonte.atual();
+        material.set(semRaizes);
+        fonte.atual();
+
+        assertThat(eventos.list).extracting(ILoggingEvent::getLevel).containsExactly(Level.ERROR, Level.ERROR);
+    }
+
+    private static ListAppender<ILoggingEvent> capturarLog() {
+        Logger logger = (Logger) LoggerFactory.getLogger(FonteDeConfiancaIcpBrasil.class);
+        logger.detachAndStopAllAppenders();
+        logger.setAdditive(false);
+        logger.setLevel(Level.DEBUG);
+        ListAppender<ILoggingEvent> eventos = new ListAppender<>();
+        eventos.start();
+        logger.addAppender(eventos);
+        return eventos;
+    }
+
+    @AfterEach
+    void restaurarLog() {
+        Logger logger = (Logger) LoggerFactory.getLogger(FonteDeConfiancaIcpBrasil.class);
+        logger.detachAndStopAllAppenders();
+        logger.setAdditive(true);
+        logger.setLevel(null);
     }
 }
