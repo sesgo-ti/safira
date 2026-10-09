@@ -6,7 +6,8 @@
 package br.gov.go.saude.fhir.safira.rest.service;
 
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.EvidenceRevocationSources;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 
@@ -20,15 +21,15 @@ import java.util.function.Function;
 @TestConfiguration(proxyBeanMethods = false)
 public class OfflineRevocationConfig {
 
-    static volatile Function<X509Certificate, byte[]> responder = JadesSigningSystemTest.PKI::ocspGoodFor;
+    static volatile Function<X509Certificate, byte[]> responder = JadesSigningSystemTest.PKI::ocspBom;
 
     /** Volta a responder {@code GOOD} para qualquer certificado da PKI de teste. */
     static void reset() {
-        responder = JadesSigningSystemTest.PKI::ocspGoodFor;
+        responder = JadesSigningSystemTest.PKI::ocspBom;
     }
 
     @Bean
     CertificateVerifierFactory offlineCertificateVerifierFactory() {
-        return CertificateVerifierFactory.offline(TestPki.ocspSource(certificate -> responder.apply(certificate)), null);
+        return CertificateVerifierFactory.offline(EvidenceRevocationSources.ocspPorCertificado(certificate -> responder.apply(certificate)), null);
     }
 }

@@ -14,7 +14,8 @@ import br.gov.go.saude.fhir.safira.engine.domain.json.LosslessJson;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
 import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
 import br.gov.go.saude.fhir.safira.jades.adapter.TspSources;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
+import br.gov.go.saude.fhir.safira.testkit.TsaHttpLocal;
 import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,7 +46,7 @@ import static org.mockito.Mockito.when;
 @Import(OfflineRevocationConfig.class)
 class ValidationServiceIntegrationTest {
 
-    static final TestPki.FakeTsa TSA = JadesSigningSystemTest.PKI.startFakeTsa();
+    static final TsaHttpLocal TSA = JadesSigningSystemTest.PKI.iniciarTsaHttp();
 
     @MockitoBean
     FonteDeConfianca fonteDeConfianca;
@@ -62,10 +63,10 @@ class ValidationServiceIntegrationTest {
         Path anchors = Files.createTempFile("tsa-anchors", ".pem");
         Files.writeString(anchors, "-----BEGIN CERTIFICATE-----\n"
                 + Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.US_ASCII))
-                .encodeToString(JadesSigningSystemTest.PKI.caCert.getEncoded())
+                .encodeToString(JadesSigningSystemTest.PKI.raiz().getEncoded())
                 + "\n-----END CERTIFICATE-----\n", StandardCharsets.US_ASCII);
         registry.add("safira.policy.tsa-policies.version", () -> "1.0.0");
-        registry.add("safira.policy.tsa-policies.policies[0].oid", () -> TestPki.TSA_POLICY_OID);
+        registry.add("safira.policy.tsa-policies.policies[0].oid", () -> PkiIcpSimulada.POLITICA_TSA);
         registry.add("safira.policy.tsa-policies.policies[0].max-accuracy-seconds", () -> "1");
         registry.add("safira.policy.tsa-policies.policies[0].trust-store.reference", () -> "file:" + anchors);
     }
@@ -77,8 +78,8 @@ class ValidationServiceIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        TestPki pki = JadesSigningSystemTest.PKI;
-        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(pki.caCert));
+        PkiIcpSimulada pki = JadesSigningSystemTest.PKI;
+        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(pki.raiz(), pki.ac()));
         OfflineRevocationConfig.reset();
     }
 
@@ -89,7 +90,7 @@ class ValidationServiceIntegrationTest {
         SigningResult result = (SigningResult) signed.getValue();
         JsonObject signature = LosslessJson.parseObject(result.signatureJson());
         String bb = new String(Base64.getDecoder().decode(signature.string("data").orElseThrow()), StandardCharsets.UTF_8);
-        String bt = new JadesExtensionService().extendToBaselineT(bb, TspSources.online(TSA.url(), 10, TestPki.TSA_POLICY_OID));
+        String bt = new JadesExtensionService().extendToBaselineT(bb, TspSources.online(TSA.url(), 10, PkiIcpSimulada.POLITICA_TSA));
 
         JsonObject btSignature = signature.with("data",
                 new JsonString(Base64.getEncoder().encodeToString(bt.getBytes(StandardCharsets.UTF_8))));
@@ -112,9 +113,9 @@ class ValidationServiceIntegrationTest {
     @Test
     void shouldRejectBaselineTWhenTsaRevocationIsInconclusive() throws Exception {
         String body = baselineTValidationBody();
-        OfflineRevocationConfig.responder = certificate -> certificate.equals(TSA.tsaCert())
+        OfflineRevocationConfig.responder = certificate -> certificate.equals(TSA.certificado())
                 ? null
-                : JadesSigningSystemTest.PKI.ocspGoodFor(certificate);
+                : JadesSigningSystemTest.PKI.ocspBom(certificate);
 
         PipelineResult<OperationOutcome> result = validationService.validate(body);
 

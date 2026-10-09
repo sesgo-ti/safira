@@ -20,7 +20,8 @@ public final class AcervoDeTeste {
     private AcervoDeTeste() {
     }
 
-    public static Optional<AcervoDeConfianca> com(X509Certificate raiz) {
-        return Optional.of(new AcervoDeConfianca("teste-" + GERACOES.incrementAndGet(), List.of(raiz), List.of()));
+    public static Optional<AcervoDeConfianca> com(X509Certificate raiz, X509Certificate... intermediarias) {
+        return Optional.of(new AcervoDeConfianca("teste-" + GERACOES.incrementAndGet(), List.of(raiz),
+                List.of(intermediarias)));
     }
 }

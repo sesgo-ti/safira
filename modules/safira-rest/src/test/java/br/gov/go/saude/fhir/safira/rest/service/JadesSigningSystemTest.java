@@ -6,8 +6,9 @@
 package br.gov.go.saude.fhir.safira.rest.service;
 
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.testkit.EvidenceRevocationSources;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,7 +53,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 public class JadesSigningSystemTest {
 
     public static final String POLICY_URI = "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0";
-    public static final TestPki PKI = TestPki.create();
+    public static final PkiIcpSimulada PKI = PkiIcpSimulada.criar();
 
     @MockitoBean
     FonteDeConfianca fonteDeConfianca;
@@ -67,13 +68,13 @@ public class JadesSigningSystemTest {
     public static void policy(DynamicPropertyRegistry registry) {
         registry.add("safira.policy.accepted-certificate-policies[0].oid", () -> "2.16.76.1.2.3.1");
         registry.add("safira.policy.accepted-certificate-policies[0].type", () -> "A3");
-        registry.add("safira.policy.accepted-certificate-policies[0].issuer-sha256", PKI::issuerSha256);
+        registry.add("safira.policy.accepted-certificate-policies[0].issuer-sha256", PKI::emissorSha256);
     }
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(PKI.caCert));
+        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(PKI.raiz(), PKI.ac()));
         OfflineRevocationConfig.reset();
     }
 
@@ -86,8 +87,8 @@ public class JadesSigningSystemTest {
     public static String signingBody(String policyUri, long referenceTimestamp) throws Exception {
         return "{\"bundle\":" + example("bundle.json")
                 + ",\"provenance\":" + example("provenance.json")
-                + ",\"signerCryptoMaterial\":{\"type\":\"PEM\",\"privateKeyBase64\":\"" + PKI.leafKeyPemBase64() + "\"}"
-                + ",\"certificateChain\":[\"" + Base64.getEncoder().encodeToString(PKI.leafCert.getEncoded()) + "\"]"
+                + ",\"signerCryptoMaterial\":{\"type\":\"PEM\",\"privateKeyBase64\":\"" + PKI.chavePrivadaSignatarioPemBase64() + "\"}"
+                + ",\"certificateChain\":[\"" + Base64.getEncoder().encodeToString(PKI.signatario().getEncoded()) + "\"]"
                 + ",\"referenceTimestamp\":" + referenceTimestamp
                 + ",\"strategy\":\"iat\""
                 + ",\"policyIdentifierUri\":\"" + policyUri + "\"}";
@@ -105,8 +106,9 @@ public class JadesSigningSystemTest {
         JsonNode response = mapper.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8));
         String jws = new String(Base64.getDecoder().decode(response.get("signature").get("data").asText()), StandardCharsets.UTF_8);
 
-        var verifier = TestPki.verifier(List.of(PKI.caCert),
-                EvidenceRevocationSources.ocspFromEvidence(List.of(PKI.ocspGoodFor(PKI.leafCert))), null);
+        var verifier = CertificateVerifierFactory.offline(EvidenceRevocationSources.ocspFromEvidence(
+                        List.of(PKI.ocspBom(PKI.signatario()), PKI.ocspBom(PKI.ac()))), null)
+                .create(CertificateVerifierFactory.acervo(List.of(PKI.raiz()), List.of(PKI.ac())), List.of());
         Reports reports = new JadesValidationService().validate(jws, verifier);
         String id = reports.getSimpleReport().getFirstSignatureId();
         assertThat(reports.getSimpleReport().getIndication(id)).isEqualTo(Indication.TOTAL_PASSED);
@@ -121,7 +123,7 @@ public class JadesSigningSystemTest {
         assertThat(result.getResponse().getContentType()).startsWith("application/fhir+json");
         assertThat(response.get("provenance").get("signature")).hasSize(1);
         assertThat(response.get("provenance").get("signature").get(0)).isEqualTo(response.get("signature"));
-        assertThat(response.get("signature").get("who").get("identifier").get("value").asText()).isEqualTo(TestPki.TEST_CPF);
+        assertThat(response.get("signature").get("who").get("identifier").get("value").asText()).isEqualTo(PkiIcpSimulada.CPF);
     }
 
     @Test

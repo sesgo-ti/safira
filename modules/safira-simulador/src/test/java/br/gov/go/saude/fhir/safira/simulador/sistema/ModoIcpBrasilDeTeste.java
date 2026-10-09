@@ -17,7 +17,8 @@ import java.util.Optional;
 
 /**
  * Safira fora do modo simulação: no lugar do acervo ICP-Brasil, um acervo com outra raiz (a da PKI
- * de teste do {@code safira-jades}), que não contém a raiz simulada, e nenhum destino de rede.
+ * do {@code safira-testkit} usada nos testes do {@code safira-rest}), que não contém a raiz simulada, e
+ * nenhum destino de rede.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class ModoIcpBrasilDeTeste {
@@ -25,7 +26,7 @@ public class ModoIcpBrasilDeTeste {
     @Bean
     FonteDeConfianca fonteDeConfiancaDeOutraRaiz() {
         Optional<AcervoDeConfianca> acervo = Optional.of(new AcervoDeConfianca("teste-outra-raiz",
-                List.of(JadesSigningSystemTest.PKI.caCert), List.of()));
+                List.of(JadesSigningSystemTest.PKI.raiz()), List.of()));
         return () -> acervo;
     }
 

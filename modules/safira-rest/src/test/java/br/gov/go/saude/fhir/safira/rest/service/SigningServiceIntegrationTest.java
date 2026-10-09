@@ -7,7 +7,7 @@ package br.gov.go.saude.fhir.safira.rest.service;
 
 import br.gov.go.saude.fhir.safira.engine.domain.PipelineResult;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,13 +54,13 @@ class SigningServiceIntegrationTest {
         OfflineRevocationConfig.reset();
     }
 
-    private void acervo(X509Certificate root) {
-        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(root));
+    private void acervo(X509Certificate root, X509Certificate... intermediarias) {
+        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(root, intermediarias));
     }
 
     @Test
     void shouldReturnSigningResultWhenChainIsTrusted() throws Exception {
-        acervo(JadesSigningSystemTest.PKI.caCert);
+        acervo(JadesSigningSystemTest.PKI.raiz(), JadesSigningSystemTest.PKI.ac());
 
         PipelineResult<?> result = signingService.sign(body());
 
@@ -69,15 +69,15 @@ class SigningServiceIntegrationTest {
 
     @Test
     void shouldReturnCertNotIcpBrasilWhenChainIsOutsideTheTrustStore() throws Exception {
-        acervo(TestPki.create().caCert);
+        acervo(PkiIcpSimulada.criar().raiz());
 
         assertThat(code(signingService.sign(body()))).isEqualTo("CERT.NOT-ICP-BRASIL");
     }
 
     @Test
     void shouldReturnCertRevokedWhenSignerIsRevoked() throws Exception {
-        acervo(JadesSigningSystemTest.PKI.caCert);
-        OfflineRevocationConfig.responder = JadesSigningSystemTest.PKI::ocspRevokedFor;
+        acervo(JadesSigningSystemTest.PKI.raiz(), JadesSigningSystemTest.PKI.ac());
+        OfflineRevocationConfig.responder = JadesSigningSystemTest.PKI::ocspRevogado;
 
         assertThat(code(signingService.sign(body()))).isEqualTo("CERT.REVOKED");
     }

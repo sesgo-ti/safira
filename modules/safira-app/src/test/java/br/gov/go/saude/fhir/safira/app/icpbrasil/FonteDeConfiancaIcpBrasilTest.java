@@ -5,7 +5,7 @@
 
 package br.gov.go.saude.fhir.safira.app.icpbrasil;
 
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 import ch.qos.logback.classic.Level;
@@ -30,15 +30,15 @@ import static org.mockito.Mockito.when;
 
 class FonteDeConfiancaIcpBrasilTest {
 
-    private static TestPki pki;
+    private static PkiIcpSimulada pki;
 
     @BeforeAll
     static void setUp() {
-        pki = TestPki.create();
+        pki = PkiIcpSimulada.criar();
     }
 
     private static TrustMaterial material() {
-        return TrustMaterial.of(List.of(pki.caCert, pki.tsaCert, pki.leafCert));
+        return TrustMaterial.of(List.of(pki.raiz(), pki.ac(), pki.tsa(), pki.signatario()));
     }
 
     private static FonteDeConfiancaIcpBrasil fonte(AtomicReference<TrustMaterial> material) {
@@ -49,8 +49,8 @@ class FonteDeConfiancaIcpBrasilTest {
     void shouldExposeAnchorsAsRaizesAndIntermediatesAsIntermediarias() {
         AcervoDeConfianca acervo = fonte(new AtomicReference<>(material())).atual().orElseThrow();
 
-        assertThat(acervo.raizes()).containsExactly(pki.caCert);
-        assertThat(acervo.intermediarias()).containsExactlyInAnyOrder(pki.tsaCert, pki.leafCert);
+        assertThat(acervo.raizes()).containsExactly(pki.raiz());
+        assertThat(acervo.intermediarias()).containsExactlyInAnyOrder(pki.ac(), pki.tsa(), pki.signatario());
     }
 
     @Test
@@ -100,13 +100,13 @@ class FonteDeConfiancaIcpBrasilTest {
 
     @Test
     void shouldReturnEmptyWhenTrustMaterialHasNoAnchors() {
-        assertThat(fonte(new AtomicReference<>(TrustMaterial.of(List.of(pki.leafCert)))).atual()).isEmpty();
+        assertThat(fonte(new AtomicReference<>(TrustMaterial.of(List.of(pki.signatario())))).atual()).isEmpty();
     }
 
     @Test
     void shouldLogErrorOnlyOnFirstFailureOfSameTrustMaterial() {
         ListAppender<ILoggingEvent> eventos = capturarLog();
-        FonteDeConfiancaIcpBrasil fonte = fonte(new AtomicReference<>(TrustMaterial.of(List.of(pki.leafCert))));
+        FonteDeConfiancaIcpBrasil fonte = fonte(new AtomicReference<>(TrustMaterial.of(List.of(pki.signatario()))));
 
         fonte.atual();
         fonte.atual();
@@ -119,7 +119,7 @@ class FonteDeConfiancaIcpBrasilTest {
     @Test
     void shouldLogErrorAgainWhenFailureReturnsAfterRecovery() {
         ListAppender<ILoggingEvent> eventos = capturarLog();
-        TrustMaterial semRaizes = TrustMaterial.of(List.of(pki.leafCert));
+        TrustMaterial semRaizes = TrustMaterial.of(List.of(pki.signatario()));
         AtomicReference<TrustMaterial> material = new AtomicReference<>(semRaizes);
         FonteDeConfiancaIcpBrasil fonte = fonte(material);
 

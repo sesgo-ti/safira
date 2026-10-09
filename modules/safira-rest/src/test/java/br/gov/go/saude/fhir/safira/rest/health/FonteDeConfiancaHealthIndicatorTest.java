@@ -5,7 +5,7 @@
 
 package br.gov.go.saude.fhir.safira.rest.health;
 
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.health.contributor.Health;
@@ -29,8 +29,8 @@ class FonteDeConfiancaHealthIndicatorTest {
 
     @Test
     void shouldReportUpWithGenerationAndCountsWhenCatalogIsAvailable() {
-        var pki = TestPki.create();
-        var acervo = new AcervoDeConfianca("g-42", List.of(pki.caCert), List.of(pki.caCert, pki.caCert));
+        var pki = PkiIcpSimulada.criar();
+        var acervo = new AcervoDeConfianca("g-42", List.of(pki.raiz()), List.of(pki.ac(), pki.ac()));
         var indicador = new FonteDeConfiancaHealthIndicator(() -> Optional.of(acervo));
 
         Health health = indicador.health();

@@ -54,7 +54,7 @@ class QaValidacaoRestAtaquesTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(JadesSigningSystemTest.PKI.caCert));
+        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(JadesSigningSystemTest.PKI.raiz(), JadesSigningSystemTest.PKI.ac()));
         OfflineRevocationConfig.reset();
     }
 

@@ -57,7 +57,7 @@ public class SignAndValidateSystemTest {
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
         var pki = JadesSigningSystemTest.PKI;
-        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(pki.caCert));
+        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(pki.raiz(), pki.ac()));
         OfflineRevocationConfig.reset();
     }
 
@@ -146,7 +146,7 @@ public class SignAndValidateSystemTest {
     @Test
     void shouldRejectWhenSignerIsRevoked() throws Exception {
         JsonNode signed = signed();
-        OfflineRevocationConfig.responder = JadesSigningSystemTest.PKI::ocspRevokedFor;
+        OfflineRevocationConfig.responder = JadesSigningSystemTest.PKI::ocspRevogado;
 
         assertThat(validateAndGetCode(validationBody(signed.get("signature").toString(),
                 JadesSigningSystemTest.example("bundle.json"), signed.get("provenance").toString()), 422))

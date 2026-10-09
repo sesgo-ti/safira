@@ -81,7 +81,7 @@ class AcervoIndisponivelSystemTest {
     @Test
     void shouldReturn422TrustStoreEmptyWhenValidatingWithoutCatalog() throws Exception {
         when(fonteDeConfianca.atual())
-                .thenReturn(AcervoDeTeste.com(JadesSigningSystemTest.PKI.caCert));
+                .thenReturn(AcervoDeTeste.com(JadesSigningSystemTest.PKI.raiz(), JadesSigningSystemTest.PKI.ac()));
         JsonNode signed = json(enviar("/assinar", JadesSigningSystemTest.signingBody(
                 JadesSigningSystemTest.POLICY_URI, Instant.now().getEpochSecond())));
         when(fonteDeConfianca.atual()).thenReturn(Optional.empty());

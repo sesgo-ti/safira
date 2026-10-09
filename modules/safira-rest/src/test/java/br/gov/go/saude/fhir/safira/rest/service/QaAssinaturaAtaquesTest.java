@@ -8,7 +8,7 @@ package br.gov.go.saude.fhir.safira.rest.service;
 import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties;
 import br.gov.go.saude.fhir.safira.engine.domain.CryptoMaterial;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.rest.request.SigningRequestParser;
 import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -85,9 +85,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @Import(OfflineRevocationConfig.class)
 class QaAssinaturaAtaquesTest {
 
-    static final TestPki PKI = TestPki.create();
+    static final PkiIcpSimulada PKI = PkiIcpSimulada.criar();
     static final String POLICY_OID = "2.16.76.1.2.3.1";
-    static final String CPF = TestPki.TEST_CPF;
+    static final String CPF = PkiIcpSimulada.CPF;
     static final String PASSWORD = "S3nh@-Secreta-QA-123";
     private static final BouncyCastleProvider BC = new BouncyCastleProvider();
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -108,14 +108,14 @@ class QaAssinaturaAtaquesTest {
     static void policy(DynamicPropertyRegistry registry) {
         registry.add("safira.policy.accepted-certificate-policies[0].oid", () -> POLICY_OID);
         registry.add("safira.policy.accepted-certificate-policies[0].type", () -> "A3");
-        registry.add("safira.policy.accepted-certificate-policies[0].issuer-sha256", PKI::issuerSha256);
+        registry.add("safira.policy.accepted-certificate-policies[0].issuer-sha256", PKI::emissorSha256);
     }
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(PKI.caCert));
-        OfflineRevocationConfig.responder = PKI::ocspGoodFor;
+        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(PKI.raiz(), PKI.ac()));
+        OfflineRevocationConfig.responder = PKI::ocspBom;
     }
 
     // ------------------------------------------------------------------ chave × certificado
@@ -161,7 +161,7 @@ class QaAssinaturaAtaquesTest {
     void shouldRejectSigningWhenPkcs12AliasIsMissing() throws Exception {
         Map<String, String> body = baseBody();
         body.put("signerCryptoMaterial", p12Material(
-                p12(Map.of("titular", new Entry(PKI.leafKeys.getPrivate(), PKI.leafCert))), "inexistente"));
+                p12(Map.of("titular", new Entry(PKI.chavesSignatario().getPrivate(), PKI.signatario()))), "inexistente"));
 
         MvcResult result = sign(body);
 
@@ -173,7 +173,7 @@ class QaAssinaturaAtaquesTest {
     void shouldRejectSigningWhenPkcs12AliasIsOversized() throws Exception {
         Map<String, String> body = baseBody();
         body.put("signerCryptoMaterial", p12Material(
-                p12(Map.of("titular", new Entry(PKI.leafKeys.getPrivate(), PKI.leafCert))), "a".repeat(65)));
+                p12(Map.of("titular", new Entry(PKI.chavesSignatario().getPrivate(), PKI.signatario()))), "a".repeat(65)));
 
         MvcResult result = sign(body);
 
@@ -201,7 +201,7 @@ class QaAssinaturaAtaquesTest {
     @Test
     void shouldRejectSigningWhenChainCarriesRogueCaWithTrustedCaName() throws Exception {
         KeyPair rogueCaKeys = rsa(2048);
-        X500Name caName = X500Name.getInstance(PKI.caCert.getSubjectX500Principal().getEncoded());
+        X500Name caName = X500Name.getInstance(PKI.ac().getSubjectX500Principal().getEncoded());
         X509Certificate rogueCa = issue(rogueCaKeys, rogueCaKeys, caName, caName,
                 LeafSpec.authority());
         KeyPair keys = rsa(2048);
@@ -219,8 +219,8 @@ class QaAssinaturaAtaquesTest {
     @Test
     void shouldRejectSigningWhenSignerIsTheTrustedCa() throws Exception {
         Map<String, String> body = baseBody();
-        body.put("signerCryptoMaterial", pemMaterial(PKI.caKeys.getPrivate()));
-        body.put("certificateChain", chain(PKI.caCert));
+        body.put("signerCryptoMaterial", pemMaterial(PKI.chavesAc().getPrivate()));
+        body.put("certificateChain", chain(PKI.ac()));
 
         MvcResult result = sign(body);
 
@@ -246,7 +246,7 @@ class QaAssinaturaAtaquesTest {
     @Test
     void shouldRejectSigningWhenChainOrderPutsCaFirst() throws Exception {
         Map<String, String> body = baseBody();
-        body.put("certificateChain", chain(PKI.caCert, PKI.leafCert));
+        body.put("certificateChain", chain(PKI.ac(), PKI.signatario()));
 
         MvcResult result = sign(body);
 
@@ -383,7 +383,7 @@ class QaAssinaturaAtaquesTest {
 
     @Test
     void shouldRejectSigningWhenLeafIsRevoked() throws Exception {
-        OfflineRevocationConfig.responder = PKI::ocspRevokedFor;
+        OfflineRevocationConfig.responder = PKI::ocspRevogado;
 
         MvcResult result = sign(baseBody());
 
@@ -490,7 +490,7 @@ class QaAssinaturaAtaquesTest {
     void shouldRejectSigningWhenCryptoMaterialTypeIsUnsupported(String type) throws Exception {
         Map<String, String> body = baseBody();
         body.put("signerCryptoMaterial", "{\"type\":" + mapper.writeValueAsString(type)
-                + ",\"privateKeyBase64\":\"" + pemBase64(PKI.leafKeys.getPrivate(), null) + "\",\"remoteUrl\":\"http://127.0.0.1/\"}");
+                + ",\"privateKeyBase64\":\"" + pemBase64(PKI.chavesSignatario().getPrivate(), null) + "\",\"remoteUrl\":\"http://127.0.0.1/\"}");
 
         MvcResult result = sign(body);
 
@@ -575,7 +575,7 @@ class QaAssinaturaAtaquesTest {
     @Test
     void shouldNotLeakPasswordWhenPkcs12PasswordIsWrong() throws Exception {
         Map<String, String> body = baseBody();
-        byte[] p12 = p12(Map.of("titular", new Entry(PKI.leafKeys.getPrivate(), PKI.leafCert)));
+        byte[] p12 = p12(Map.of("titular", new Entry(PKI.chavesSignatario().getPrivate(), PKI.signatario())));
         body.put("signerCryptoMaterial", "{\"type\":\"PKCS12\",\"contentBase64\":\"" + Base64.getEncoder().encodeToString(p12)
                 + "\",\"password\":\"senha-errada-QA-999\",\"alias\":\"titular\"}");
 
@@ -589,7 +589,7 @@ class QaAssinaturaAtaquesTest {
 
     @Test
     void shouldNotLeakPasswordOrKeyWhenEncryptedPemPasswordIsWrong() throws Exception {
-        String encrypted = pemBase64(PKI.leafKeys.getPrivate(), PASSWORD);
+        String encrypted = pemBase64(PKI.chavesSignatario().getPrivate(), PASSWORD);
         Map<String, String> body = baseBody();
         body.put("signerCryptoMaterial", "{\"type\":\"PEM\",\"privateKeyBase64\":\"" + encrypted
                 + "\",\"password\":\"senha-errada-QA-999\"}");
@@ -606,7 +606,7 @@ class QaAssinaturaAtaquesTest {
     void shouldSignWhenEncryptedPemPasswordIsCorrect() throws Exception {
         Map<String, String> body = baseBody();
         body.put("signerCryptoMaterial", "{\"type\":\"PEM\",\"privateKeyBase64\":\""
-                + pemBase64(PKI.leafKeys.getPrivate(), PASSWORD) + "\",\"password\":\"" + PASSWORD + "\"}");
+                + pemBase64(PKI.chavesSignatario().getPrivate(), PASSWORD) + "\",\"password\":\"" + PASSWORD + "\"}");
 
         MvcResult result = sign(body);
 
@@ -631,7 +631,7 @@ class QaAssinaturaAtaquesTest {
 
     @Test
     void shouldNotExposeSecretsWhenSigningContextIsLogged() {
-        String key = pemBase64(PKI.leafKeys.getPrivate(), null);
+        String key = pemBase64(PKI.chavesSignatario().getPrivate(), null);
         SigningContext context = SigningContext.builder()
                 .cryptoMaterial(new CryptoMaterial.Pkcs12Material("conteudo-p12", PASSWORD, "titular"))
                 .build();
@@ -668,7 +668,7 @@ class QaAssinaturaAtaquesTest {
     @Test
     void shouldRejectSigningWhenCertificateChainIsAbsurdlyLong() throws Exception {
         KeyPair junkKeys = rsa(2048);
-        List<X509Certificate> certificates = new ArrayList<>(List.of(PKI.leafCert));
+        List<X509Certificate> certificates = new ArrayList<>(List.of(PKI.signatario()));
         for (int i = 0; i < 2000; i++) {
             X500Name name = new X500Name("CN=Lixo " + i);
             certificates.add(issue(junkKeys, junkKeys, name, name, LeafSpec.authority()));
@@ -687,7 +687,7 @@ class QaAssinaturaAtaquesTest {
         System.setProperty("keystore.pkcs12.macIterationCount", "5000000");
         System.setProperty("keystore.pkcs12.keyPbeIterationCount", "5000000");
         try {
-            p12 = p12(Map.of("titular", new Entry(PKI.leafKeys.getPrivate(), PKI.leafCert)));
+            p12 = p12(Map.of("titular", new Entry(PKI.chavesSignatario().getPrivate(), PKI.signatario())));
         } finally {
             System.clearProperty("keystore.pkcs12.macIterationCount");
             System.clearProperty("keystore.pkcs12.keyPbeIterationCount");
@@ -789,8 +789,8 @@ class QaAssinaturaAtaquesTest {
         Map<String, String> body = new LinkedHashMap<>();
         body.put("bundle", JadesSigningSystemTest.example("bundle.json"));
         body.put("provenance", JadesSigningSystemTest.example("provenance.json"));
-        body.put("signerCryptoMaterial", pemMaterial(PKI.leafKeys.getPrivate()));
-        body.put("certificateChain", chain(PKI.leafCert));
+        body.put("signerCryptoMaterial", pemMaterial(PKI.chavesSignatario().getPrivate()));
+        body.put("certificateChain", chain(PKI.signatario()));
         body.put("referenceTimestamp", Long.toString(Instant.now().getEpochSecond()));
         body.put("strategy", "\"iat\"");
         body.put("policyIdentifierUri", "\"" + JadesSigningSystemTest.POLICY_URI + "\"");
@@ -839,7 +839,7 @@ class QaAssinaturaAtaquesTest {
         keyStore.load(null, null);
         for (Map.Entry<String, Entry> entry : entries.entrySet()) {
             keyStore.setKeyEntry(entry.getKey(), entry.getValue().key(), PASSWORD.toCharArray(),
-                    new Certificate[]{entry.getValue().certificate(), PKI.caCert});
+                    new Certificate[]{entry.getValue().certificate(), PKI.ac()});
         }
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         keyStore.store(out, PASSWORD.toCharArray());
@@ -902,7 +902,7 @@ class QaAssinaturaAtaquesTest {
     }
 
     private static X509Certificate leaf(KeyPair keys, LeafSpec spec) throws Exception {
-        return issue(keys, PKI.caKeys, X500Name.getInstance(PKI.caCert.getSubjectX500Principal().getEncoded()),
+        return issue(keys, PKI.chavesAc(), X500Name.getInstance(PKI.ac().getSubjectX500Principal().getEncoded()),
                 spec.subject(), spec);
     }
 
