@@ -28,8 +28,9 @@ Implementação da criação e da validação de assinaturas eletrônicas qualif
 | `safira-jades` | Integração com o EU DSS: JAdES-B-B, extensão para B-T e validação |
 | `safira-steps` | Steps das pipelines de assinatura e validação da política 0.2.0 |
 | `safira-rest` | Biblioteca da API REST (Spring Boot 4): controller e serviços registrados por auto-configuração, sem `main` |
-| `safira-app` | Aplicação de produção — artefato de deploy: `safira-rest` + adaptador do acervo ICP-Brasil (icpbrasil-truststore) e filtro de destino de rede. Não contém o modo simulação |
+| `safira-app` | Aplicação de produção — artefato de deploy (JAR `-exec`): `safira-rest` + adaptador do acervo ICP-Brasil (icpbrasil-truststore) e filtro de destino de rede. Não contém o modo simulação; o jar comum é biblioteca (CLI) |
 | `safira-simulador` | Aplicação do simulador (JAR `-exec`): a API do `safira-rest` com uma PKI simulada no lugar do acervo ICP-Brasil (sem valor legal, sem rede, sem a icpbrasil-truststore); o jar comum é biblioteca (auto-configuração e gerador de PKI simulada) |
+| `safira-cli` | Linha de comando (JAR `-exec`, picocli + Spring Boot não web): `safira assinar` e `safira validar` sobre os serviços do `safira-rest`, no modo `icpbrasil` (adaptador do `safira-app`) ou `simulacao` (PKI do `safira-simulador`) |
 
 ## Pipelines
 
@@ -223,6 +224,71 @@ java -jar $J --spring.config.additional-location=file:/tmp/pki/application-simul
 ```
 
 Sem `--senha`, a senha é aleatória e impressa; a informada nunca é impressa. `--politica` vale só para o signatário válido (o revogado segue `2.16.76.1.2.3.1`).
+
+## CLI
+
+`safira assinar` e `safira validar` executam **o mesmo pipeline** da API (os serviços do `safira-rest`, com o mesmo parser de requisição), sem servidor HTTP. O JAR é `modules/safira-cli/target/safira-cli-<versão>-exec.jar`.
+
+```bash
+safira assinar --bundle b.json --provenance p.json --p12 a.p12 \
+    (--senha-arquivo s.txt | --senha-env VAR | --senha-stdin) [--alias A] --estrategia iat|tsa \
+    [--politica <uri>] [--saida out.json] [--modo icpbrasil|simulacao] [--pki-dir DIR] [--config extra.yml] [--verbose]
+safira validar --signature s.json --bundle b.json --provenance p.json \
+    [--politica <uri>] [--saida r.json] [--modo icpbrasil|simulacao] [--pki-dir DIR] [--config extra.yml] [--verbose]
+```
+
+- **Saída:** o stdout recebe só o JSON de resultado — em `assinar`, o mesmo envelope `{"signature", "provenance"}` de `POST /assinar`; em `validar`, o `OperationOutcome`; em falha, o `OperationOutcome` com o código do IG. Logs, avisos e erros vão para o stderr; stack trace só no stderr e só com `--verbose`. `--saida` grava o JSON no arquivo (stdout vazio).
+- **Senha:** exatamente uma de `--senha-arquivo` (uma quebra de linha final é ignorada), `--senha-env` (nome da variável) ou `--senha-stdin` (primeira linha). **Não existe `--senha <valor>`**: a senha nunca vai na linha de comando (lista de processos, histórico); um `--senha` digitado é recusado (saída 3) sem ecoar o valor.
+- **Entrada:** cada arquivo JSON precisa ser um único objeto UTF-8 sem membros duplicados (senão `FORMAT.JSON-MALFORMED`, saída 3). O tamanho é conferido antes da leitura: Bundle até `safira.operational.security.max-bundle-size` e todos os arquivos juntos até esse limite + 4 MiB, como o corpo da API (senão `SECURITY.BUNDLE-SIZE-LIMIT-EXCEEDED`, saída 3). A cadeia enviada é a do PKCS#12 (`--alias` é dispensável com uma só chave) e o instante de referência é o atual.
+- **Modos (um por processo, nunca misturados):** `icpbrasil` (padrão) usa o adaptador da icpbrasil-truststore do `safira-app` — acervo carregado a cada execução (download do ITI ou cache em `SAFIRA_TRUSTSTORE_DIR`, padrão `~/.safira/icpbrasil-truststore`); sem acervo, a operação devolve `CONFIG.TRUST-STORE-EMPTY` (saída 4). A allowlist institucional (`safira.policy.accepted-certificate-policies`) e a `tsa-url` vêm de `--config`. `simulacao` usa a PKI simulada persistida do simulador (mesmo diretório, `~/.safira-simulador/pki`, ou `--pki-dir`), gerada na primeira execução, sem rede e sem a icpbrasil-truststore; o stderr avisa e a saída é marcada "SIMULAÇÃO — sem validade jurídica ICP-Brasil" (membro `simulacao` no envelope de `assinar`; issue informativa no `OperationOutcome` de sucesso de `validar`). Cada modo exclui as auto-configurações do outro com precedência sobre ambiente e propriedades de sistema, e a partida exige exatamente uma `FonteDeConfianca`, do tipo do modo; `--pki-dir` fora do modo `simulacao` é erro de uso.
+- **Configuração:** `safira-cli.yml` + `safira-cli-<modo>.yml` no JAR (os `application*.yml` do app e do simulador não são lidos) e `--config` (YAML adicional).
+
+### Códigos de saída
+
+Alinhados aos do [hubsaude CLI](https://github.com/sesgo-ti/hubsaude-cli) (0/3/4/6), mais 1 para erro interno. Na dúvida, o resultado é **inconclusivo**: uma assinatura só é dada como reprovada com evidência clara, e só sai com 0 com evidência positiva (assinatura criada; em `validar`, uma issue `VALIDATION.SUCCESS` e nenhuma `error`/`fatal`). Decide a primeira issue `error`/`fatal` do `OperationOutcome`:
+
+| Exit | Significado | Códigos do IG |
+|---|---|---|
+| `0` | Sucesso: assinatura criada ou válida | `VALIDATION.SUCCESS` (sem issue de erro) |
+| `3` | Erro de uso ou configuração: argumentos, arquivos, JSON, limites, política, allowlist; falha na partida (ex.: PKI simulada corrompida) | `FORMAT.*`¹, `POLICY.*`, `CONFIG.*` (exceto `TRUST-STORE-EMPTY`), `SECURITY.*` (exceto `SIGNATURE-VALIDATION-REPLAY` e `HASH-VALIDATION-FAILED`), `MIDDLEWARE.*`, `DEVICE.*`, `CRYPTO.KEY-INACCESSIBLE`, `CRYPTO.PIN-INVALID` |
+| `4` | Inconclusivo: repetir mais tarde | `VALIDATION.INDETERMINATE`, `VALIDATION.TRY-LATER`, `REVOCATION.*`, `CONFIG.TRUST-STORE-EMPTY`, `TSA.UNAVAILABLE`, `TSA.INVALID-RESPONSE`, `CACHE.*`, `NETWORK.*`, `SECURITY.HASH-VALIDATION-FAILED`, `SYSTEM.TIMEOUT`; código desconhecido, issue sem código, `OperationOutcome` sem erro e sem `VALIDATION.SUCCESS` |
+| `6` | Reprovação definitiva: assinatura inválida, revogado, vencido, não confiável | `CERT.*`, `CRYPTO.*` (demais), `VALIDATION.*` (demais), `TSA.*` (demais), `TEMPORAL.*`, `SECURITY.SIGNATURE-VALIDATION-REPLAY`; em `validar`, `FORMAT.JWS-MALFORMED`, `FORMAT.JADES-*`, `FORMAT.JWK-INVALID`, `FORMAT.CERT-PEM-INVALID` |
+| `1` | Erro interno inesperado | `SYSTEM.*` (exceto timeout), `STORAGE.*` |
+
+¹ Em `validar`, os `FORMAT.*` que descrevem a assinatura recebida (JWS/JAdES) são reprovação (6).
+
+### Exemplo (modo simulação)
+
+Conferido à mão com o JAR (a PKI é gerada na primeira execução; o `signatario.p12` e a `senha.txt` ficam no diretório):
+
+```bash
+./mvnw -DskipTests package
+J=$(ls modules/safira-cli/target/safira-cli-*-exec.jar); P=/tmp/safira-sim
+EX=modules/safira-rest/src/test/resources/examples/politica-0.2.0
+
+java -jar $J assinar --modo simulacao --pki-dir $P --bundle $EX/bundle.json --provenance $EX/provenance.json \
+    --p12 $P/signatario.p12 --alias signatario --senha-arquivo $P/senha.txt --estrategia iat > assinada.json
+echo $?                                    # 0
+jq -c 'keys' assinada.json                 # ["provenance","signature","simulacao"]
+jq '.signature' assinada.json > s.json; jq '.provenance' assinada.json > p.json
+
+java -jar $J validar --modo simulacao --pki-dir $P --signature s.json --bundle $EX/bundle.json --provenance p.json \
+  | jq -c '[.issue[].details.text]'
+# ["Assinatura digital validada com sucesso","SIMULAÇÃO — sem validade jurídica ICP-Brasil"]   (saída 0)
+
+sed 's/"Souza"/"Souza-X"/' $EX/bundle.json > alterado.json
+java -jar $J validar --modo simulacao --pki-dir $P --signature s.json --bundle alterado.json --provenance p.json \
+  | jq -r '.issue[0].details.coding[0].code'   # CRYPTO.HASH-VERIFICATION-FAILED   (saída 6)
+
+echo 'nao json' > lixo.json
+java -jar $J validar --modo simulacao --pki-dir $P --signature lixo.json --bundle $EX/bundle.json --provenance p.json \
+  | jq -r '.issue[0].details.coding[0].code'   # FORMAT.JSON-MALFORMED   (saída 3)
+
+java -jar $J assinar --bundle $EX/bundle.json --provenance $EX/provenance.json --p12 a.p12 --estrategia iat --senha x
+# stderr: Erro: argumento não reconhecido: --senha (valores omitidos).   (saída 3)
+```
+
+No modo `icpbrasil` sem acervo (ex.: `-Dicpbrasil-truststore.bootstrap.enabled=false`, sem rede) e com a allowlist por `--config`, `validar` devolve `CONFIG.TRUST-STORE-EMPTY` e sai com 4. O stderr do modo simulação traz o aviso `AVISO: SIMULAÇÃO — sem validade jurídica ICP-Brasil (PKI simulada em <dir>)` e o log da PKI (caminhos, nunca a senha).
 
 ## Build e testes
 
