@@ -40,7 +40,8 @@ import java.util.Optional;
  * Elegibilidade e identidade do certificado folha ICP-Brasil (política 0.2.0: C16, C18, C19;
  * criar 2.5/2.6; validar 4.1).
  *
- * <p>Complementa — não substitui — a validação PKIX do caminho, feita pela lib
+ * <p>Complementa — não substitui — a validação PKIX do caminho e a revogação, feitas pelo EU DSS
+ * ({@code pkix-chain-validation}, {@code dss-validation}) sobre o acervo carregado pela
  * icpbrasil-truststore. Os códigos retornados são os do caso de uso de criação; a validação
  * reinterpreta os que o IG define de forma diferente.
  */

@@ -41,7 +41,9 @@ Definidas em `safira.pipelines` (`application.yml`), chaveadas pela URI da polí
 | SIGNING | `context-validation` → `payload-validation` → `pkix-chain-validation` → `certificate-policy` → `framed-content-digest` → `jades-data-to-sign` → `crypto-signing` → `jades-assemble` → `jades-extension` → `tsa-token-verification` → `fhir-signature` |
 | VALIDATION | `validation-context` → `signature-binding` → `jws-structure` → `content-integrity` → `signer-certificate` → `dss-validation` → `timestamp-validation` → `validation-outcome` |
 
-Na assinatura (`pkix-chain-validation`, `tsa-token-verification`) e na validação, o EU DSS decide cadeia, revogação e carimbo: as raízes do acervo ICP-Brasil (e, em B-T, o trust store TSA da política) são as âncoras, as ACs do acervo completam a cadeia junto com o `x5c` (sem AIA) e o próprio DSS consulta OCSP/CRL — só para cadeias que terminam numa âncora, em HTTP/HTTPS (qualquer porta) e com destinos filtrados por `icpbrasil-truststore.download-policy.*`. A icpbrasil-truststore entra como carregadora do acervo.
+Esses steps são obrigatórios e nessa ordem (`Policy020.REQUIRED_SIGNING_STEPS` e `REQUIRED_VALIDATION_STEPS`): a configuração pode acrescentar steps, mas um pipeline da política 0.2.0 que omita ou reordene algum deles impede a partida (inclusive na CLI com `--config`). Em tempo de execução, `validation-outcome` exige a aprovação do `dss-validation` e `fhir-signature` a cadeia aprovada pelo `pkix-chain-validation`.
+
+Na assinatura (`pkix-chain-validation`, `tsa-token-verification`) e na validação, o EU DSS decide cadeia, revogação e carimbo: as raízes do acervo ICP-Brasil (e, em B-T, o trust store TSA da política, só para a cadeia do carimbo: a do signatário precisa terminar numa raiz do acervo) são as âncoras, as ACs do acervo completam a cadeia junto com o `x5c` (sem AIA) e o próprio DSS consulta OCSP/CRL — só para cadeias que terminam numa âncora, em HTTP/HTTPS (qualquer porta) e com destinos filtrados por `icpbrasil-truststore.download-policy.*`. A icpbrasil-truststore entra como carregadora do acervo.
 
 ## API
 
@@ -116,7 +118,7 @@ safira:
       tsa-url: "https://<ACT>"         # HTTPS, obrigatória para strategy=tsa
 ```
 
-As demais propriedades da biblioteca (rede, revogação, política de download, readiness) estão no [README da icpbrasil-truststore](https://github.com/sesgo-ti/icpbrasil-truststore).
+As demais propriedades da biblioteca (rede, política de download, readiness) estão no [README da icpbrasil-truststore](https://github.com/sesgo-ti/icpbrasil-truststore).
 
 ## Modo simulação
 

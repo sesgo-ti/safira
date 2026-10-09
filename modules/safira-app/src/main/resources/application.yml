@@ -33,7 +33,7 @@ management:
           include: readinessState,fonteDeConfianca
 
 # -----------------------------------------------------------------------------
-# Acervo ICP-Brasil (lib icpbrasil-truststore): download do ITI, cache, PKIX e revogação.
+# Acervo ICP-Brasil (lib icpbrasil-truststore): só download do ITI e cache; PKIX e revogação são do EU DSS.
 # As URLs oficiais do ITI são defaults da biblioteca; demais propriedades no README da lib.
 # -----------------------------------------------------------------------------
 icpbrasil-truststore:
