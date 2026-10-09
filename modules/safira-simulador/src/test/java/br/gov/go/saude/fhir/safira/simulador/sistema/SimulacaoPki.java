@@ -36,7 +36,7 @@ final class SimulacaoPki {
         }
     }
 
-    /** Variáveis lidas pelo perfil {@code simulacao} (application-simulacao.yml). */
+    /** Variáveis {@code SAFIRA_SIMULACAO_*} lidas pelo application.yml do simulador (PKI em arquivos). */
     static Map<String, String> ambiente() {
         Map<String, String> ambiente = new LinkedHashMap<>();
         ambiente.put("SAFIRA_SIMULACAO_TRUST_ANCHORS", PKI.raiz().toUri().toString());
@@ -48,20 +48,26 @@ final class SimulacaoPki {
 
     /** Corpo de {@code POST /assinar} com o PKCS#12 simulado e estratégia {@code iat}. */
     static String signingBody(Path p12, String alias, long referenceTimestamp) throws Exception {
+        return signingBody(PKI, p12, alias, referenceTimestamp, "iat");
+    }
+
+    /** Corpo de {@code POST /assinar} com um PKCS#12 da PKI informada e a estratégia ({@code iat} ou {@code tsa}). */
+    static String signingBody(Resultado pki, Path p12, String alias, long referenceTimestamp, String estrategia)
+            throws Exception {
         byte[] conteudo = Files.readAllBytes(p12);
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
         try (InputStream in = Files.newInputStream(p12)) {
-            keyStore.load(in, PKI.senha().toCharArray());
+            keyStore.load(in, pki.senha().toCharArray());
         }
         String folha = Base64.getEncoder().encodeToString(keyStore.getCertificate(alias).getEncoded());
         return "{\"bundle\":" + JadesSigningSystemTest.example("bundle.json")
                 + ",\"provenance\":" + JadesSigningSystemTest.example("provenance.json")
                 + ",\"signerCryptoMaterial\":{\"type\":\"PKCS12\",\"contentBase64\":\""
-                + Base64.getEncoder().encodeToString(conteudo) + "\",\"password\":\"" + PKI.senha()
+                + Base64.getEncoder().encodeToString(conteudo) + "\",\"password\":\"" + pki.senha()
                 + "\",\"alias\":\"" + alias + "\"}"
                 + ",\"certificateChain\":[\"" + folha + "\"]"
                 + ",\"referenceTimestamp\":" + referenceTimestamp
-                + ",\"strategy\":\"iat\""
+                + ",\"strategy\":\"" + estrategia + "\""
                 + ",\"policyIdentifierUri\":\"" + JadesSigningSystemTest.POLICY_URI + "\"}";
     }
 }

@@ -20,12 +20,13 @@
     <artifactId>safira-simulador</artifactId>
     <packaging>jar</packaging>
     <name>Safira :: Simulador</name>
-    <description>Modo simulação: assinatura e validação pelo mesmo pipeline com raízes de confiança próprias (sem valor legal ICP-Brasil).</description>
+    <description>Aplicação do simulador: a API do Safira (safira-rest) com uma PKI simulada no lugar do acervo ICP-Brasil, sem rede (sem valor legal ICP-Brasil).</description>
 
     <dependencies>
+        <!-- Mesma API e pipeline do produto; sem a icpbrasil-truststore -->
         <dependency>
             <groupId>br.gov.go.saude.fhir</groupId>
-            <artifactId>safira-steps</artifactId>
+            <artifactId>safira-rest</artifactId>
             <version>${project.version}</version>
         </dependency>
 
@@ -39,17 +40,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-autoconfigure</artifactId>
-        </dependency>
-
-        <!-- ResponseBodyAdvice do aviso de simulação nas respostas de /validar -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.bouncycastle</groupId>
-            <artifactId>bcpkix-jdk18on</artifactId>
         </dependency>
 
         <dependency>
@@ -68,13 +58,7 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Testes de sistema: safira-rest + simulador, com os auxiliares do rest e a PKI de teste do jades -->
-        <dependency>
-            <groupId>br.gov.go.saude.fhir</groupId>
-            <artifactId>safira-rest</artifactId>
-            <version>${project.version}</version>
-            <scope>test</scope>
-        </dependency>
+        <!-- Auxiliares dos testes de sistema do safira-rest -->
         <dependency>
             <groupId>br.gov.go.saude.fhir</groupId>
             <artifactId>safira-rest</artifactId>
@@ -86,14 +70,14 @@
 
     <build>
         <plugins>
-            <!-- JAR executável do gerador de PKI simulada (safira-simulador-*-exec.jar, opção saida)
-                 ao lado do jar comum, que segue utilizável como biblioteca. -->
+            <!-- JAR executável da aplicação do simulador (safira-simulador-*-exec.jar) ao lado do
+                 jar comum, que segue utilizável como biblioteca (CLI). -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
                     <classifier>exec</classifier>
-                    <mainClass>br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada</mainClass>
+                    <mainClass>br.gov.go.saude.fhir.safira.simulador.SimuladorApplication</mainClass>
                 </configuration>
                 <executions>
                     <execution>

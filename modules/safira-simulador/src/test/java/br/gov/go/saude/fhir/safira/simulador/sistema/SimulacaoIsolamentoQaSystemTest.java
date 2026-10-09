@@ -46,9 +46,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 /**
  * QA adversarial do isolamento entre confiança simulada e real: assinatura simulada com a cadeia
  * inteira (inclusive a raiz simulada) no {@code x5c}, apresentada a um Safira em modo normal cuja
- * allowlist aponta para a AC simulada; e ativação parcial/indevida do perfil {@code simulacao}.
+ * allowlist aponta para a AC simulada; e ativação parcial/indevida do modo simulação.
  */
-@SpringBootTest
+@SpringBootTest(properties = "safira.simulacao.enabled=false")
 @Import(ModoIcpBrasilDeTeste.class)
 class SimulacaoIsolamentoQaSystemTest {
 
@@ -98,7 +98,6 @@ class SimulacaoIsolamentoQaSystemTest {
     static void assinarEmModoSimulacao() throws Exception {
         try (ConfigurableApplicationContext simulacao = new SpringApplicationBuilder(SimuladorTestApplication.class)
                 .web(WebApplicationType.NONE)
-                .profiles("simulacao")
                 .properties(ambiente())
                 .run()) {
             PipelineResult<?> result = simulacao.getBean(SigningService.class).sign(corpoComCadeiaCompleta());
@@ -127,31 +126,17 @@ class SimulacaoIsolamentoQaSystemTest {
     }
 
     @Test
-    void shouldFailStartupWhenSimulationProfileHasNoAnchors() {
+    void shouldFailStartupWhenSimulationHasNoAnchorsOutsideSimulatorApplication() {
         assertThatThrownBy(() -> new SpringApplicationBuilder(SimuladorTestApplication.class)
                 .web(WebApplicationType.NONE)
-                .profiles("simulacao")
                 .run().close())
                 .hasStackTraceContaining("safira.simulacao.trust-anchors");
-    }
-
-    @Test
-    void shouldForceTrustStoreBootstrapOffWhenSimulationIsEnabled() {
-        try (ConfigurableApplicationContext contexto = new SpringApplicationBuilder(SimuladorTestApplication.class)
-                .web(WebApplicationType.NONE)
-                .profiles("simulacao")
-                .properties(ambiente())
-                .run("--icpbrasil-truststore.bootstrap.enabled=true", "--icpbrasil-truststore.scheduling.enabled=true")) {
-            assertThat(contexto.getEnvironment().getProperty("icpbrasil-truststore.bootstrap.enabled")).isEqualTo("false");
-            assertThat(contexto.getEnvironment().getProperty("icpbrasil-truststore.scheduling.enabled")).isEqualTo("false");
-        }
     }
 
     @Test
     void shouldFailStartupWhenSimulationAllowlistIssuerIsEmpty() {
         assertThatThrownBy(() -> new SpringApplicationBuilder(SimuladorTestApplication.class)
                 .web(WebApplicationType.NONE)
-                .profiles("simulacao")
                 .properties(ambiente())
                 .run("--SAFIRA_SIMULACAO_ISSUER_SHA256=")
                 .close())
@@ -159,11 +144,10 @@ class SimulacaoIsolamentoQaSystemTest {
     }
 
     @Test
-    void shouldNotTrustSimulatedSignerWhenProfileIsActiveButModeIsOverriddenOff() throws Exception {
+    void shouldNotTrustSimulatedSignerWhenModeIsOverriddenOff() throws Exception {
         try (ConfigurableApplicationContext parcial = new SpringApplicationBuilder(SimuladorTestApplication.class,
                 ModoIcpBrasilDeTeste.class)
                 .web(WebApplicationType.NONE)
-                .profiles("simulacao")
                 .properties(ambiente())
                 .run("--safira.simulacao.enabled=false")) {
             PipelineResult<?> result = parcial.getBean(SigningService.class).sign(SimulacaoPki.signingBody(

@@ -146,7 +146,8 @@ class GeradorPkiSimuladaTest {
     void shouldNotPointYamlUsageToProductJarsWhenGenerating() throws Exception {
         String yaml = Files.readString(resultado.yaml());
 
-        assertThat(yaml).contains("--spring.profiles.active=simulacao")
+        assertThat(yaml).contains("--spring.config.additional-location=file:" + resultado.yaml())
+                .contains("safira-simulador")
                 .doesNotContain("safira-rest.jar")
                 .doesNotContain("safira-app");
     }

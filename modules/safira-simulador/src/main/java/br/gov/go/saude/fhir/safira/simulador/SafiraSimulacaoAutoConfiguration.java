@@ -7,6 +7,8 @@ package br.gov.go.saude.fhir.safira.simulador;
 
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.jades.adapter.DestinationGuard;
+import br.gov.go.saude.fhir.safira.jades.adapter.TspSourceFactory;
+import br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada.Resultado;
 import br.gov.go.saude.fhir.safira.steps.config.SafiraStepsAutoConfiguration;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
@@ -17,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -31,8 +34,10 @@ import java.util.stream.Collectors;
 /**
  * Modo simulação: implementa a porta {@link FonteDeConfianca} com as raízes de
  * {@code safira.simulacao.*}, no lugar do acervo ICP-Brasil e sem misturá-los. Os steps não mudam;
- * só a fonte de confiança (e, com LCRs locais, a de revogação). Sem rede: o {@link DestinationGuard}
- * padrão recusa todo destino. Roda antes dos steps, cujos beans são {@code @ConditionalOnMissingBean}.
+ * só a fonte de confiança e, sem rede, as de revogação e carimbo: LCRs locais (âncoras em arquivo) ou
+ * OCSP, LCR e TSA em memória da PKI gerada na partida ({@link PkiGeradaNaPartida}). O
+ * {@link DestinationGuard} padrão recusa todo destino. Roda antes dos steps, cujos beans são
+ * {@code @ConditionalOnMissingBean}.
  */
 @AutoConfiguration(before = SafiraStepsAutoConfiguration.class)
 @ConditionalOnProperty(prefix = "safira.simulacao", name = "enabled", havingValue = "true")
@@ -106,6 +111,27 @@ public class SafiraSimulacaoAutoConfiguration {
         CertificateVerifierFactory simulacaoCertificateVerifierFactory(SafiraSimulacaoProperties propriedades) {
             return CertificateVerifierFactory.offline(null,
                     LcrsSimuladas.fonte(propriedades.crls(), MaterialSimulado.conferidos(propriedades)));
+        }
+    }
+
+    /**
+     * PKI gerada na partida: revogação (OCSP e LCR) e carimbo do tempo pelas fontes em memória do
+     * testkit — a TSA configurada em {@code tsa-url} nunca é contatada.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnBean(Resultado.class)
+    static class PkiEmMemoriaConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        CertificateVerifierFactory simulacaoRevogacaoEmMemoria(Resultado pki) {
+            return CertificateVerifierFactory.offline(pki.pki().fonteOcsp(), pki.pki().fonteLcr());
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        TspSourceFactory simulacaoCarimboEmMemoria(Resultado pki) {
+            return (tsaUrl, timeoutSeconds, policyOid) -> pki.pki().fonteTsp();
         }
     }
 }

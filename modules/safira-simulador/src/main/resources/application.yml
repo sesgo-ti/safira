@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
+
+# -----------------------------------------------------------------------------
+# Aplicação do simulador — PKI própria no lugar do acervo ICP-Brasil (SEM VALOR LEGAL).
+# Mesmo pipeline da política 0.2.0 do safira-app; só a fonte de confiança muda.
+#
+# Sem SAFIRA_SIMULACAO_TRUST_ANCHORS (e sem LCRs), a PKI é gerada na partida em
+# safira.simulador.diretorio (padrão: diretório temporário novo) com revogação e
+# carimbo do tempo em memória. Com as âncoras (ou um application-simulacao.yml do
+# GeradorPkiSimulada via --spring.config.additional-location), vale a PKI em arquivos
+# com LCRs locais. Ver README.
+# -----------------------------------------------------------------------------
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,fonteDeConfianca
+
+safira:
+  simulador:
+    # Onde a PKI gerada na partida é gravada (vazio = diretório temporário novo)
+    diretorio: ${SAFIRA_SIMULADOR_DIRETORIO:}
+
+  simulacao:
+    enabled: true
+    # Bundle PEM com as raízes autoassinadas (vazio = PKI gerada na partida)
+    trust-anchors: ${SAFIRA_SIMULACAO_TRUST_ANCHORS:}
+    # Bundle PEM com as ACs intermediárias (opcional)
+    intermediates: ${SAFIRA_SIMULACAO_INTERMEDIATES:}
+    # LCRs locais separadas por vírgula (só com trust-anchors; o simulador não acessa a rede)
+    crls: ${SAFIRA_SIMULACAO_CRLS:}
+
+  pipelines:
+    - version: "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0"
+      operation: SIGNING
+      steps:
+        - "context-validation"
+        - "payload-validation"
+        - "pkix-chain-validation"
+        - "certificate-policy"
+        - "framed-content-digest"
+        - "jades-data-to-sign"
+        - "crypto-signing"
+        - "jades-assemble"
+        - "jades-extension"
+        - "tsa-token-verification"
+        - "fhir-signature"
+
+    - version: "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0"
+      operation: VALIDATION
+      steps:
+        - "validation-context"
+        - "signature-binding"
+        - "jws-structure"
+        - "content-integrity"
+        - "signer-certificate"
+        - "dss-validation"
+        - "timestamp-validation"
+        - "validation-outcome"
+
+  policy:
+    # Com a PKI gerada na partida, allowlist e política TSA vêm da própria PKI.
+    accepted-certificate-policies:
+      - oid: ${SAFIRA_SIMULACAO_POLICY_OID:2.16.76.1.2.3.1}
+        type: A3
+        # SHA-256 (hex minúsculo) do DER da AC emissora do signatário simulado
+        issuer-sha256: ${SAFIRA_SIMULACAO_ISSUER_SHA256:}
+
+    temporal-policy:
+      min-cert-issue-date: 1751328000
+
+  operational:
+    verification:
+      ocsp-timeout: 20
+      crl-timeout: 20
+      tsa-timeout: 20
+      # Nunca contatada: o carimbo vem da TSA simulada em memória (o pipeline exige HTTPS).
+      tsa-url: "https://tsa.simulacao.invalid"
+
+    security:
+      max-entries-bundle: 1000
+      max-bundle-size: 52428800

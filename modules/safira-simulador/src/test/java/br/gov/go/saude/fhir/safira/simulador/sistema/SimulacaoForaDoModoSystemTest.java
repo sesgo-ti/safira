@@ -40,7 +40,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * em modo normal, cujo acervo ({@link ModoIcpBrasilDeTeste}: outra raiz no lugar das raízes
  * ICP-Brasil) não contém a raiz simulada — mesmo com a allowlist apontando para a AC simulada.
  */
-@SpringBootTest
+@SpringBootTest(properties = "safira.simulacao.enabled=false")
 @Import(ModoIcpBrasilDeTeste.class)
 class SimulacaoForaDoModoSystemTest {
 
@@ -58,7 +58,7 @@ class SimulacaoForaDoModoSystemTest {
         registry.add("safira.policy.accepted-certificate-policies[0].issuer-sha256", SimulacaoPki.PKI::issuerSha256);
     }
 
-    /** Assina num Safira à parte, no perfil {@code simulacao}. */
+    /** Assina num Safira à parte, no modo simulação. */
     @BeforeAll
     static void assinarEmModoSimulacao() throws Exception {
         String[] propriedades = SimulacaoPki.ambiente().entrySet().stream()
@@ -66,7 +66,6 @@ class SimulacaoForaDoModoSystemTest {
                 .toArray(String[]::new);
         try (ConfigurableApplicationContext simulacao = new SpringApplicationBuilder(SimuladorTestApplication.class)
                 .web(WebApplicationType.NONE)
-                .profiles("simulacao")
                 .properties(propriedades)
                 .run()) {
             PipelineResult<?> result = simulacao.getBean(SigningService.class).sign(SimulacaoPki.signingBody(

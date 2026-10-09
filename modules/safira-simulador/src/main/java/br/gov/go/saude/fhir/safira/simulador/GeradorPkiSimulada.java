@@ -182,8 +182,7 @@ public final class GeradorPkiSimulada {
     private static String yaml(Resultado r) {
         return """
                 # PKI de simulação (%s) gerada pelo GeradorPkiSimulada.
-                # Uso: numa aplicação com safira-rest e safira-simulador,
-                #        --spring.profiles.active=simulacao --spring.config.additional-location=file:%s/
+                # Uso: java -jar safira-simulador-<versão>-exec.jar --spring.config.additional-location=file:%s
                 safira:
                   simulacao:
                     enabled: true
@@ -197,7 +196,7 @@ public final class GeradorPkiSimulada {
                       - oid: "%s"
                         type: A3
                         issuer-sha256: "%s"
-                """.formatted(MARCA, r.raiz().getParent(), r.raiz().toUri(), r.ac().toUri(), r.lcrRaiz().toUri(),
+                """.formatted(MARCA, r.yaml(), r.raiz().toUri(), r.ac().toUri(), r.lcrRaiz().toUri(),
                 r.lcrAc().toUri(), r.politicaOid(), r.issuerSha256());
     }
 
