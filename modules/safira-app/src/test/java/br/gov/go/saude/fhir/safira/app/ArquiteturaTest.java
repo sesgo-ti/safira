@@ -6,6 +6,7 @@
 package br.gov.go.saude.fhir.safira.app;
 
 import com.tngtech.archunit.core.importer.ImportOption;
+import com.tngtech.archunit.core.importer.Location;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
@@ -15,10 +16,20 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 /**
  * Fronteiras do produto: o núcleo (engine, jades, steps, rest) não conhece a icpbrasil-truststore nem o
  * simulador; núcleo e app não usam a PKI simulada do testkit; as camadas só dependem para baixo (engine e jades ← steps ← rest ← app); só o adaptador
- * {@code app.icpbrasil} usa a lib dentro do app. Importa somente classes de produção.
+ * {@code app.icpbrasil} usa a lib dentro do app. Importa somente classes de produção (sem {@code *-tests.jar}).
  */
-@AnalyzeClasses(packages = "br.gov.go.saude", importOptions = ImportOption.DoNotIncludeTests.class)
+@AnalyzeClasses(packages = "br.gov.go.saude",
+        importOptions = {ImportOption.DoNotIncludeTests.class, ArquiteturaTest.SemTestJars.class})
 class ArquiteturaTest {
+
+    /** Exclui os {@code *-tests.jar} (ex.: auxiliares de teste do {@code safira-rest} no reactor). */
+    static final class SemTestJars implements ImportOption {
+
+        @Override
+        public boolean includes(Location location) {
+            return !location.contains("-tests.jar");
+        }
+    }
 
     private static final String[] NUCLEO = {
             "br.gov.go.saude.fhir.safira.engine..", "br.gov.go.saude.fhir.safira.jades..",
