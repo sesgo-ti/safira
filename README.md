@@ -137,7 +137,7 @@ O startup falha com mensagem clara se as âncoras faltarem, estiverem ilegíveis
 
 ```bash
 ./mvnw -DskipTests package
-java -jar modules/safira-simulador/target/safira-simulador-*.jar \
+java -jar modules/safira-simulador/target/safira-simulador-*-exec.jar \
     --saida /tmp/pki [--senha <senha>] [--politica 2.16.76.1.2.3.<n>] [--cpf <cpf>] [--validade-dias 365]
 ```
 

@@ -62,8 +62,8 @@ import java.util.Map;
  * intermediária, signatário A3-like e um segundo signatário revogado, LCRs da raiz e da AC e um
  * trecho {@code application-simulacao.yml} com caminhos e allowlist prontos.
  *
- * <p>Uso: {@code --saida <dir> [--senha <senha>] [--politica <oid A3>] [--cpf <11 dígitos>]
- * [--validade-dias <n>]}. Sem {@code --senha}, gera uma senha aleatória e a imprime; a senha
+ * <p>Uso: {@code java -jar safira-simulador-<versão>-exec.jar --saida <dir> [--senha <senha>]
+ * [--politica <oid A3>] [--cpf <11 dígitos>] [--validade-dias <n>]}. Sem {@code --senha}, gera uma senha aleatória e a imprime; a senha
  * informada nunca é impressa. Os PKCS#12 são gravados com permissão 0600 (POSIX).
  */
 public final class GeradorPkiSimulada {
@@ -137,7 +137,7 @@ public final class GeradorPkiSimulada {
         Map<String, String> argumentos = argumentos(args);
         String saida = argumentos.remove("--saida");
         if (saida == null) {
-            System.err.println("Uso: GeradorPkiSimulada --saida <dir> [--senha <senha>] [--politica <oid A3>]"
+            System.err.println("Uso: java -jar safira-simulador-<versão>-exec.jar --saida <dir> [--senha <senha>] [--politica <oid A3>]"
                     + " [--cpf <cpf>] [--validade-dias <n>]");
             System.exit(2);
         }
