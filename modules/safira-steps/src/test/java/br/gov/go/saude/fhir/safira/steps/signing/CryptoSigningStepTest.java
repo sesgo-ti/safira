@@ -181,6 +181,24 @@ class CryptoSigningStepTest {
         assertTrue(verifyRsa(keys.getPublic(), signingInput, Base64.getUrlDecoder().decode(getSignature(result))));
     }
 
+    @Test
+    void shouldReturnCertificateNotFoundWhenPkcs12AliasHasNoPrivateKey() throws Exception {
+        KeyPair keys = generateRsaKeyPair(2048);
+        X509Certificate cert = selfSign(keys, "CN=Test");
+        KeyStore keyStore = KeyStore.getInstance("PKCS12");
+        keyStore.load(null, null);
+        keyStore.setKeyEntry("titular", keys.getPrivate(), "senha".toCharArray(), new Certificate[]{cert});
+        keyStore.setCertificateEntry("so-certificado", cert);
+        var baos = new java.io.ByteArrayOutputStream();
+        keyStore.store(baos, "senha".toCharArray());
+        var material = new CryptoMaterial.Pkcs12Material(
+                Base64.getEncoder().encodeToString(baos.toByteArray()), "senha", "so-certificado");
+
+        var result = step.execute(contextWith(material, cert, "data".getBytes(StandardCharsets.UTF_8)));
+
+        assertFailure(result, SignatureExceptionCode.DEVICE_CERTIFICATE_NOT_FOUND);
+    }
+
     // ===== PKCS12 alias não encontrado =====
 
     @Test
