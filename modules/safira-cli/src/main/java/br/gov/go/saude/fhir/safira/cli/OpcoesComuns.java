@@ -67,7 +67,7 @@ final class OpcoesComuns {
         if (config != null) {
             legivel(config, "Arquivo de configuração");
         }
-        Path pki = modo == Modo.SIMULACAO ? diretorioDaPki() : null;
+        Path pki = modo == Modo.SIMULACAO ? diretorioDaPki(pkiDir) : null;
         for (Path entrada : entradas) {
             if (entrada != null && (pki == null || !entrada.toAbsolutePath().normalize().startsWith(pki))) {
                 legivel(entrada, "Arquivo");
@@ -76,7 +76,7 @@ final class OpcoesComuns {
     }
 
     /** Diretório efetivo da PKI simulada: {@code --pki-dir}, {@code SAFIRA_SIMULADOR_DIRETORIO} ou o padrão. */
-    private Path diretorioDaPki() {
+    static Path diretorioDaPki(Path pkiDir) {
         if (pkiDir != null) {
             return pkiDir.toAbsolutePath().normalize();
         }
