@@ -241,6 +241,16 @@ public final class PkiIcpSimulada {
         return certificado -> certificado.equals(signatario()) ? null : ocspBom(certificado);
     }
 
+    /** Respostas OCSP por certificado com a AC {@code REVOKED} e os demais (signatário, TSA) {@code GOOD}. */
+    public Function<X509Certificate, byte[]> respostasComAcRevogada() {
+        return certificado -> certificado.equals(ac()) ? ocspRevogado(certificado) : ocspBom(certificado);
+    }
+
+    /** Respostas OCSP por certificado sem resposta para a AC e {@code GOOD} para os demais. */
+    public Function<X509Certificate, byte[]> respostasSemRevogacaoDaAc() {
+        return certificado -> certificado.equals(ac()) ? null : ocspBom(certificado);
+    }
+
     /** LCR (DER) da AC, que lista o certificado revogado. */
     public byte[] lcr() {
         return new LcrSimulada(repositorio, proximaAtualizacao).lcrDer(ac);
