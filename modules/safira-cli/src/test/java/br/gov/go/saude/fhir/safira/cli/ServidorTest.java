@@ -25,6 +25,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -169,6 +170,55 @@ class ServidorTest {
         assertThat(resultado.err()).contains("órfão");
         assertThat(arquivoDeEstado()).doesNotExist();
         assertThat(parar.saida()).isZero();
+    }
+
+    @Test
+    void shouldNotKillReusedPidWhenProcessStartIsUnknown() throws Exception {
+        Process alheio = new ProcessBuilder("sleep", "60").start();
+        try {
+            gravarEstado(alheio.pid(), null);
+
+            Resultado parar = Cli.executar("servidor", "parar", "--modo", "simulacao", "--estado-dir", estado.toString());
+
+            assertThat(parar.saida()).isZero();
+            assertThat(parar.err()).contains("órfão").contains("não foi encerrado");
+            assertThat(alheio.isAlive()).isTrue();
+            assertThat(arquivoDeEstado()).doesNotExist();
+        } finally {
+            alheio.destroyForcibly();
+        }
+    }
+
+    @Test
+    void shouldNotKillProcessWhoseCommandIsNotTheServer() throws Exception {
+        Process alheio = new ProcessBuilder("sleep", "60").start();
+        try {
+            gravarEstado(alheio.pid(), alheio.info().startInstant().orElseThrow());
+
+            Resultado parar = Cli.executar("servidor", "parar", "--modo", "simulacao", "--estado-dir", estado.toString());
+            Resultado segundo = iniciar();
+
+            assertThat(parar.saida()).isZero();
+            assertThat(parar.err()).contains("não foi encerrado");
+            assertThat(alheio.isAlive()).isTrue();
+            assertThat(segundo.saida()).isZero();
+        } finally {
+            alheio.destroyForcibly();
+        }
+    }
+
+    private void gravarEstado(long pid, Instant inicio) throws IOException {
+        Files.createDirectories(arquivoDeEstado().getParent());
+        Properties gravado = new Properties();
+        gravado.setProperty("pid", String.valueOf(pid));
+        gravado.setProperty("porta", String.valueOf(porta));
+        gravado.setProperty("modo", "simulacao");
+        if (inicio != null) {
+            gravado.setProperty("inicioDoProcesso", inicio.toString());
+        }
+        try (OutputStream saida = Files.newOutputStream(arquivoDeEstado())) {
+            gravado.store(saida, null);
+        }
     }
 
     @Test

@@ -23,6 +23,8 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -30,7 +32,7 @@ import java.util.Set;
 
 /**
  * Estado de um servidor local em {@code <base>/<modo>/servidor.properties}: PID, porta, modo, instante de
- * início do processo (identidade do PID, contra reuso) e caminho do log. O diretório é 0700 e os
+ * início do processo e comando (identidade do PID, contra reuso) e caminho do log. O diretório é 0700 e os
  * arquivos 0600 (POSIX); a gravação é atômica.
  *
  * @param inicioDoProcesso instante de início do processo segundo o SO (nulo = desconhecido)
@@ -135,15 +137,34 @@ record EstadoDoServidor(Modo modo, long pid, int porta, Instant inicioDoProcesso
         }
     }
 
-    /** O processo do estado, se vivo e com o mesmo instante de início (PID não reutilizado). */
+    /**
+     * O processo do estado, se vivo e com identidade confirmada: mesmo instante de início e comando
+     * {@code servidor executar --modo <modo>}. Identidade desconhecida (início ou comando indisponíveis)
+     * conta como NÃO confirmada: um PID reaproveitado por outro processo nunca é tomado pelo servidor.
+     */
     Optional<ProcessHandle> processo() {
-        return ProcessHandle.of(pid).filter(ProcessHandle::isAlive).filter(this::mesmoProcesso);
+        return vivo().filter(this::mesmoProcesso);
+    }
+
+    /** O processo com o PID do estado, se vivo, sem conferir a identidade. */
+    Optional<ProcessHandle> vivo() {
+        return ProcessHandle.of(pid).filter(ProcessHandle::isAlive);
     }
 
     private boolean mesmoProcesso(ProcessHandle processo) {
         Optional<Instant> inicio = processo.info().startInstant();
-        return inicioDoProcesso == null || inicio.isEmpty()
-                || inicio.get().truncatedTo(ChronoUnit.SECONDS).equals(inicioDoProcesso.truncatedTo(ChronoUnit.SECONDS));
+        return inicioDoProcesso != null && inicio.isPresent()
+                && inicio.get().truncatedTo(ChronoUnit.SECONDS).equals(inicioDoProcesso.truncatedTo(ChronoUnit.SECONDS))
+                && comandoDoServidor(processo.info(), modo);
+    }
+
+    /** Os argumentos (ou a linha de comando) contêm {@code servidor executar} e {@code --modo <modo>}. */
+    static boolean comandoDoServidor(ProcessHandle.Info info, Modo modo) {
+        List<String> argumentos = info.arguments().map(List::of)
+                .or(() -> info.commandLine().map(linha -> List.of(linha.split("\\s+"))))
+                .orElse(List.of());
+        return Collections.indexOfSubList(argumentos, List.of("servidor", "executar")) >= 0
+                && Collections.indexOfSubList(argumentos, List.of("--modo", modo.nome())) >= 0;
     }
 
     /** Cria (ou recria vazio) um arquivo 0600. */

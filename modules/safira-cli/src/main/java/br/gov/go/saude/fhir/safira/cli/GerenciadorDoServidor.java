@@ -44,6 +44,7 @@ final class GerenciadorDoServidor {
     private static final Duration INTERVALO = Duration.ofMillis(250);
     private static final Duration TIMEOUT_DA_SONDA = Duration.ofSeconds(2);
     private static final Duration TIMEOUT_FORCADO = Duration.ofSeconds(10);
+    private static final Duration ESPERA_DO_INICIO = Duration.ofSeconds(2);
     private static final int LINHAS_DO_LOG = 20;
 
     /** Falha com o código de saída da CLI. */
@@ -113,7 +114,7 @@ final class GerenciadorDoServidor {
             Path log = dir.resolve(EstadoDoServidor.LOG);
             Process processo = lancar(partida, log);
             EstadoDoServidor estado = new EstadoDoServidor(partida.modo(), processo.pid(), partida.porta(),
-                    processo.info().startInstant().orElse(null), Instant.now(), log);
+                    inicioDe(processo), Instant.now(), log);
             estado.gravar(dir);
             esperarProntidao(processo, estado, dir, partida.timeout());
             return status(partida.modo(), estado, true);
@@ -167,10 +168,43 @@ final class GerenciadorDoServidor {
                 "Outra operação de 'safira servidor' está em andamento em " + dir + "."));
     }
 
+    /**
+     * Remove o estado sem encerrar processo algum. Se o PID estiver vivo sem identidade confirmada (PID
+     * reaproveitado, início ou comando desconhecidos), o processo é de outro dono e não é tocado.
+     */
     private void limparOrfao(Path dir, EstadoDoServidor estado) {
         EstadoDoServidor.remover(dir);
-        err.println("AVISO: estado órfão removido (PID " + estado.pid() + " não está em execução).");
+        err.println(estado.vivo().isPresent()
+                ? "AVISO: estado órfão removido: o PID " + estado.pid() + " está vivo, mas não foi confirmado como o "
+                        + "servidor (início ou comando não conferem) e não foi encerrado."
+                : "AVISO: estado órfão removido (PID " + estado.pid() + " não está em execução).");
         err.flush();
+    }
+
+    /**
+     * Instante de início do filho segundo o SO, esperado por até {@link #ESPERA_DO_INICIO}; sem ele o
+     * servidor não poderia ser identificado depois, então o filho é encerrado.
+     */
+    private static Instant inicioDe(Process processo) {
+        Instant limite = Instant.now().plus(ESPERA_DO_INICIO);
+        while (true) {
+            Optional<Instant> inicio = processo.info().startInstant();
+            if (inicio.isPresent()) {
+                return inicio.get();
+            }
+            if (Instant.now().isAfter(limite)) {
+                encerrar(processo.toHandle(), TIMEOUT_FORCADO);
+                throw new FalhaDoServidor("Não foi possível obter o instante de início do processo " + processo.pid()
+                        + " para identificá-lo; processo encerrado.", CodigosDeSaida.ERRO_INTERNO);
+            }
+            try {
+                Thread.sleep(INTERVALO);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                encerrar(processo.toHandle(), TIMEOUT_FORCADO);
+                throw new FalhaDoServidor("Espera interrompida; servidor encerrado.", CodigosDeSaida.ERRO_INTERNO);
+            }
+        }
     }
 
     private static void exigirPortaLivre(int porta) {
