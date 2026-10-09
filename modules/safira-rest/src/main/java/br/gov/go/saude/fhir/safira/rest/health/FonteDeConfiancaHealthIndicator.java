@@ -7,18 +7,14 @@ package br.gov.go.saude.fhir.safira.rest.health;
 
 import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
-import org.springframework.stereotype.Component;
 
 /**
  * Readiness da porta de confiança: DOWN enquanto não há acervo vigente, UP com a geração e as
- * contagens (sem despejar certificados). Vive no {@code safira-rest} para que o
- * {@code safira-steps} não dependa do Actuator.
+ * contagens (sem despejar certificados). Vive no {@code safira-rest} (registrado por
+ * {@link SafiraHealthAutoConfiguration}) para que o {@code safira-steps} não dependa do Actuator.
  */
-@Component("fonteDeConfianca")
-@ConditionalOnClass(HealthIndicator.class)
 public class FonteDeConfiancaHealthIndicator implements HealthIndicator {
 
     private final FonteDeConfianca fonteDeConfianca;
