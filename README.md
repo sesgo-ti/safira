@@ -335,6 +335,43 @@ java -jar $J servidor status --modo simulacao
 # {"modo":"simulacao","estado":"PARADO"}   (saída 0)
 ```
 
+## Integração com o hubsaude CLI
+
+Contrato estável para o [hubsaude CLI](https://github.com/sesgo-ti/hubsaude-cli) provisionar e comandar o Safira como componente local (como faz com o validador e o simulador). O hubsaude usa a mesma `java` do seu JRE provisionado; o Safira não exige nada além do JAR.
+
+**Artefato por release:** `safira-cli-X.Y.Z-exec.jar` (um único JAR, os dois modos) e o SHA-256 em `safira-cli-X.Y.Z-exec.jar.sha256` (só o hash em hexadecimal; gerado e conferido no `package` do `safira-cli`). Conferência manual: `shasum -a 256 safira-cli-X.Y.Z-exec.jar`. Entrada sugerida para o `release.json` do hubsaude (mesmo formato dos demais componentes):
+
+```json
+"safira": {
+  "url": "https://github.com/sesgo-ti/safira/releases/download/safira-vX.Y.Z/safira-cli-X.Y.Z-exec.jar",
+  "version": "X.Y.Z",
+  "tag": "safira-vX.Y.Z",
+  "sha256": "<conteúdo de safira-cli-X.Y.Z-exec.jar.sha256>"
+}
+```
+
+**Comandos** (`--modo icpbrasil|simulacao`; `simulacao` não exige certificado ICP-Brasil nem rede):
+
+| hubsaude | Safira |
+|---|---|
+| `hubsaude safira assinar ...` | `java -jar safira-cli.jar assinar ... --modo M` |
+| `hubsaude safira validar ...` | `java -jar safira-cli.jar validar ... --modo M` |
+| `hubsaude safira start` | `java -jar safira-cli.jar servidor iniciar --modo M [--porta P] [--ociosidade D]` |
+| `hubsaude safira status` | `java -jar safira-cli.jar servidor status --modo M` |
+| `hubsaude safira stop` | `java -jar safira-cli.jar servidor parar --modo M` |
+| `hubsaude safira pki` | `java -jar safira-cli.jar simulador pki` |
+
+**Variáveis:** `HUBSAUDE_SAFIRA_PORT` → `--porta P` (equivale a `SAFIRA_PORT`; padrão 8080 `icpbrasil` e 8081 `simulacao`); `HUBSAUDE_IDLE_TIMEOUT` → `--ociosidade` (equivale a `SAFIRA_IDLE_TIMEOUT`; formatos `90s`, `30m`, `2h` ou ISO-8601). O hubsaude deve passar como argumento (a CLI não lê as variáveis `HUBSAUDE_*`). Diretórios de estado e acervo: `SAFIRA_SERVIDOR_DIR`, `SAFIRA_TRUSTSTORE_DIR`, `SAFIRA_SIMULADOR_DIRETORIO` (ou `--estado-dir`, `--pki-dir`).
+
+**Códigos de saída** (os mesmos do hubsaude CLI; detalhes em [Códigos de saída](#códigos-de-saída)): `0` sucesso; `3` erro de uso ou configuração (inclui porta ocupada e servidor já em execução); `4` inconclusivo, repetir mais tarde (inclui servidor que não ficou pronto a tempo); `6` reprovação definitiva da assinatura; `1` erro interno. O `servidor status` sai com `0` sempre que o estado é determinado: o estado vai no JSON do stdout (`UP`, `DOWN` ou `PARADO`), não no código. `servidor parar` é idempotente (`0` sem servidor). `servidor iniciar` só retorna com a readiness `UP` (saída `0` e o JSON de status) ou falha; o `url` do JSON é a base da API (`/assinar`, `/validar`).
+
+**Garantias:**
+- O servidor escuta só em `127.0.0.1`, sem autenticação, e o Actuator fica no mesmo conector. Não é implantação de produção.
+- Simulação sempre marcada: aviso no stderr, membro `simulacao` no envelope de `assinar` e issue "SIMULAÇÃO — sem validade jurídica ICP-Brasil" em `validar`. Um processo nunca mistura os modos.
+- A senha nunca vai por argumento: use `--senha-arquivo`, `--senha-env` ou `--senha-stdin` (`--senha` é recusado com saída 3).
+- O stdout traz só o JSON de resultado; logs e erros vão para o stderr.
+- Um servidor por modo e diretório de estado; PID reaproveitado nunca encerra processo alheio.
+
 ## Build e testes
 
 ```bash
