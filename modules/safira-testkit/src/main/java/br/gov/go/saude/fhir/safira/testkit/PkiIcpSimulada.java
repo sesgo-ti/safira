@@ -256,6 +256,11 @@ public final class PkiIcpSimulada {
         return new LcrSimulada(repositorio, proximaAtualizacao).lcrDer(ac);
     }
 
+    /** LCR (DER) da raiz, sem revogações: revogação da AC para quem usa LCRs em arquivo. */
+    public byte[] lcrDaRaiz() {
+        return new LcrSimulada(repositorio, proximaAtualizacao).lcrDer(raiz);
+    }
+
     /** {@code TimeStampToken} (CMS DER) sobre o hash SHA-256 informado, emitido pela TSA simulada. */
     public byte[] carimbo(byte[] sha256, OpcoesCarimbo opcoes) {
         return new TsaSimulada(tsa, opcoes.politica(), opcoes.genTime(), opcoes.accuracySegundos())

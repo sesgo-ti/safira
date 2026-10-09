@@ -40,6 +40,7 @@ import org.bouncycastle.tsp.TimeStampResponse;
 import org.bouncycastle.tsp.TimeStampToken;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.HttpURLConnection;
@@ -47,6 +48,8 @@ import java.net.URI;
 import java.security.MessageDigest;
 import java.security.interfaces.ECPublicKey;
 import java.security.interfaces.RSAPublicKey;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509CRL;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Date;
@@ -130,6 +133,17 @@ class PkiIcpSimuladaTest {
         assertThat(pki.fonteLcr().getRevocationToken(new CertificateToken(pki.signatario()),
                 new CertificateToken(pki.ac())).getStatus()).isEqualTo(CertificateStatus.GOOD);
         assertThat(pki.lcr()).isNotEmpty();
+    }
+
+    @Test
+    void shouldIssueEmptyRootCrlSignedByRoot() throws Exception {
+        X509CRL lcr = (X509CRL) CertificateFactory.getInstance("X.509")
+                .generateCRL(new ByteArrayInputStream(pki.lcrDaRaiz()));
+
+        lcr.verify(pki.raiz().getPublicKey());
+        assertThat(lcr.getIssuerX500Principal()).isEqualTo(pki.raiz().getSubjectX500Principal());
+        assertThat(lcr.isRevoked(pki.ac())).isFalse();
+        assertThat(lcr.getNextUpdate()).isAfter(new Date());
     }
 
     @Test
