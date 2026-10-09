@@ -14,13 +14,22 @@ import org.bouncycastle.operator.OperatorCreationException;
 
 import java.io.IOException;
 import java.util.Date;
+import java.util.function.Supplier;
 
 /** {@link PKICRLSource} da PKI simulada: responde sem ponto de distribuição de LCR no certificado. */
 final class LcrSimulada extends PKICRLSource {
 
-    LcrSimulada(JAXBCertEntityRepository repositorio, Date proximaAtualizacao) {
+    private final transient Supplier<Date> proximaAtualizacao;
+
+    LcrSimulada(JAXBCertEntityRepository repositorio, Supplier<Date> proximaAtualizacao) {
         super(repositorio);
-        setNextUpdate(proximaAtualizacao);
+        this.proximaAtualizacao = proximaAtualizacao;
+    }
+
+    /** {@code nextUpdate} avaliado a cada emissão. */
+    @Override
+    public Date getNextUpdate() {
+        return proximaAtualizacao.get();
     }
 
     @Override

@@ -14,6 +14,7 @@ import eu.europa.esig.dss.pki.jaxb.JAXBPKILoader;
 import eu.europa.esig.dss.pki.jaxb.PKIJaxbFacade;
 import eu.europa.esig.dss.pki.jaxb.XmlCertificatePolicies;
 import eu.europa.esig.dss.pki.jaxb.XmlCertificateType;
+import eu.europa.esig.dss.pki.jaxb.XmlDateDefinitionType;
 import eu.europa.esig.dss.pki.jaxb.XmlKeyAlgo;
 import eu.europa.esig.dss.pki.jaxb.XmlKeyUsages;
 import eu.europa.esig.dss.pki.jaxb.XmlPki;
@@ -37,20 +38,25 @@ import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.MessageDigest;
+import java.security.PrivateKey;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.Period;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Date;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * PKI ICP-like SIMULADA — SEM VALOR LEGAL — para testes e para o simulador.
@@ -66,6 +72,8 @@ import java.util.function.Function;
  * mesma reemissão.
  *
  * <p>Cada instância gera chaves novas e seriais aleatórios; datas relativas ao instante da criação.
+ * {@link #restaurar(Material, Duration)} reconstrói uma PKI a partir do {@link #material()} persistido
+ * (mesmas chaves e certificados, revogado ainda revogado).
  */
 public final class PkiIcpSimulada {
 
@@ -79,6 +87,7 @@ public final class PkiIcpSimulada {
     public static final String POLITICA_TSA = "1.3.6.1.4.1.13762.3";
 
     private static final String XML = "/pki/icp-simulada.xml";
+    private static final String PKI = "icp-simulada";
     private static final long RAIZ = 1;
     private static final long AC = 2;
     private static final long SIGNATARIO = 3;
@@ -94,15 +103,31 @@ public final class PkiIcpSimulada {
     private final JAXBCertEntity signatario;
     private final JAXBCertEntity revogado;
     private final JAXBCertEntity tsa;
-    private final Date proximaAtualizacao = Date.from(Instant.now().plus(VALIDADE_REVOGACAO));
+    private final Supplier<Date> proximaAtualizacao;
 
-    private PkiIcpSimulada(JAXBCertEntityRepository repositorio, long deslocamento) {
+    private PkiIcpSimulada(JAXBCertEntityRepository repositorio, JAXBCertEntity raiz, JAXBCertEntity ac,
+                           JAXBCertEntity signatario, JAXBCertEntity revogado, JAXBCertEntity tsa,
+                           Supplier<Date> proximaAtualizacao) {
         this.repositorio = repositorio;
-        this.raiz = entidade(RAIZ + deslocamento);
-        this.ac = entidade(AC + deslocamento);
-        this.signatario = entidade(SIGNATARIO + deslocamento);
-        this.revogado = entidade(REVOGADO + deslocamento);
-        this.tsa = entidade(TSA + deslocamento);
+        this.raiz = raiz;
+        this.ac = ac;
+        this.signatario = signatario;
+        this.revogado = revogado;
+        this.tsa = tsa;
+        this.proximaAtualizacao = proximaAtualizacao;
+    }
+
+    /** Certificado e chave privada de uma entidade da PKI. */
+    public record Entidade(X509Certificate certificado, PrivateKey chave) {
+    }
+
+    /**
+     * Material que basta para reconstruir a PKI ({@link #restaurar(Material, Duration)}).
+     *
+     * @param revogadoEm instante da revogação do signatário revogado
+     */
+    public record Material(Entidade raiz, Entidade ac, Entidade signatario, Entidade revogado, Entidade tsa,
+                           Date revogadoEm) {
     }
 
     public static PkiIcpSimulada criar() {
@@ -123,10 +148,61 @@ public final class PkiIcpSimulada {
         JAXBCertEntityRepository repositorio = new JAXBCertEntityRepository();
         new JAXBPKILoader().persistPKI(repositorio, xml);
 
-        PkiIcpSimulada pki = new PkiIcpSimulada(repositorio, deslocamento);
+        Date validadeFixa = Date.from(Instant.now().plus(VALIDADE_REVOGACAO));
+        PkiIcpSimulada pki = new PkiIcpSimulada(repositorio, entidade(repositorio, RAIZ + deslocamento),
+                entidade(repositorio, AC + deslocamento), entidade(repositorio, SIGNATARIO + deslocamento),
+                entidade(repositorio, REVOGADO + deslocamento), entidade(repositorio, TSA + deslocamento),
+                () -> validadeFixa);
         pki.reemitirComIdentidade(pki.signatario, perfil);
         pki.reemitirComIdentidade(pki.revogado, PerfilSignatario.pessoaFisica("Revogado"));
         return pki;
+    }
+
+    /**
+     * Reconstrói a PKI a partir do material persistido: mesmas chaves e certificados e o revogado
+     * revogado em {@link Material#revogadoEm()} (keyCompromise). OCSP e LCR saem com {@code nextUpdate}
+     * de {@code validadeRevogacao} a partir de cada emissão (validade curta, sempre renovada).
+     */
+    public static PkiIcpSimulada restaurar(Material material, Duration validadeRevogacao) {
+        JAXBCertEntityRepository repositorio = new JAXBCertEntityRepository();
+        JAXBCertEntity raiz = restaurarEntidade(repositorio, material.raiz(), null);
+        raiz.setTrustAnchor(true);
+        JAXBCertEntity ac = restaurarEntidade(repositorio, material.ac(), raiz);
+        JAXBCertEntity revogado = restaurarEntidade(repositorio, material.revogado(), ac);
+        revogado.setRevocationDate(material.revogadoEm());
+        revogado.setRevocationReason(RevocationReason.KEY_COMPROMISE);
+        return new PkiIcpSimulada(repositorio, raiz, ac, restaurarEntidade(repositorio, material.signatario(), ac),
+                revogado, restaurarEntidade(repositorio, material.tsa(), ac),
+                () -> Date.from(Instant.now().plus(validadeRevogacao)));
+    }
+
+    /** Material para persistir a PKI e restaurá-la depois ({@link #restaurar(Material, Duration)}). */
+    public Material material() {
+        return new Material(entidadeDe(raiz), entidadeDe(ac), entidadeDe(signatario), entidadeDe(revogado),
+                entidadeDe(tsa), revogadoEm());
+    }
+
+    /** Instante da revogação do signatário revogado. */
+    public Date revogadoEm() {
+        return revogado.getRevocationDate();
+    }
+
+    /**
+     * Renova o certificado do signatário pela mesma AC: mesma chave, DN e extensões, serial novo e
+     * validade {@code validade} a partir de agora (limitada à da AC). O certificado anterior deixa de
+     * constar no repositório (OCSP e LCR o tratam como não revogado).
+     */
+    public void renovarSignatario(Period validade) {
+        Instant agora = Instant.now();
+        Date fim = Date.from(agora.atZone(ZoneOffset.UTC).plus(validade).toInstant());
+        if (fim.after(ac().getNotAfter())) {
+            fim = ac().getNotAfter();
+        }
+        long serial = SERIAIS.nextLong(1L << 56, 1L << 62);
+        X509Certificate renovado = Reemissao.renovar(signatario(), ac.getPrivateKey(), BigInteger.valueOf(serial),
+                Date.from(agora.minus(Duration.ofDays(1))), fim);
+        signatario.setSerialNumber(serial);
+        signatario.setCertificateToken(new CertificateToken(renovado));
     }
 
     public X509Certificate raiz() {
@@ -149,6 +225,10 @@ public final class PkiIcpSimulada {
         return certificado(tsa);
     }
 
+    public KeyPair chavesRaiz() {
+        return chaves(raiz);
+    }
+
     public KeyPair chavesAc() {
         return chaves(ac);
     }
@@ -159,6 +239,10 @@ public final class PkiIcpSimulada {
 
     public KeyPair chavesRevogado() {
         return chaves(revogado);
+    }
+
+    public KeyPair chavesTsa() {
+        return chaves(tsa);
     }
 
     /** Cadeia completa do signatário: [signatário, AC, raiz]. */
@@ -376,6 +460,14 @@ public final class PkiIcpSimulada {
             algoritmo.setLength(perfil.bitsChave());
         }
         certificado.setKeyAlgo(algoritmo);
+
+        if (perfil.validade() != null) {
+            XmlDateDefinitionType fim = new XmlDateDefinitionType();
+            fim.setYear(perfil.validade().getYears());
+            fim.setMonth(perfil.validade().getMonths());
+            fim.setDay(perfil.validade().getDays());
+            certificado.setNotAfter(fim);
+        }
     }
 
     private static XmlPki carregarXml() {
@@ -386,11 +478,29 @@ public final class PkiIcpSimulada {
         }
     }
 
-    private JAXBCertEntity entidade(long serial) {
+    private static JAXBCertEntity entidade(JAXBCertEntityRepository repositorio, long serial) {
         return repositorio.getAll().stream()
                 .filter(entidade -> entidade.getSerialNumber() == serial)
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Certificado de serial " + serial + " ausente da PKI"));
+    }
+
+    private static JAXBCertEntity restaurarEntidade(JAXBCertEntityRepository repositorio, Entidade material,
+                                                    JAXBCertEntity emissor) {
+        JAXBCertEntity entidade = new JAXBCertEntity();
+        X509Certificate certificado = material.certificado();
+        entidade.setSubject(certificado.getSubjectX500Principal().getName());
+        entidade.setSerialNumber(certificado.getSerialNumber().longValueExact());
+        entidade.setCertificateToken(new CertificateToken(certificado));
+        entidade.setPrivateKeyBinaries(material.chave().getEncoded());
+        entidade.setIssuer(emissor == null ? entidade : emissor);
+        entidade.setPkiName(PKI);
+        repositorio.save(entidade);
+        return entidade;
+    }
+
+    private static Entidade entidadeDe(JAXBCertEntity entidade) {
+        return new Entidade(certificado(entidade), entidade.getPrivateKey());
     }
 
     private static X509Certificate certificado(JAXBCertEntity entidade) {

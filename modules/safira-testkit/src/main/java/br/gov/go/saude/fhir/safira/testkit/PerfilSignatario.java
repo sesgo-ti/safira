@@ -7,6 +7,8 @@ package br.gov.go.saude.fhir.safira.testkit;
 
 import org.bouncycastle.asn1.x509.KeyUsage;
 
+import java.time.Period;
+
 /**
  * Perfil do certificado do signatário da {@link PkiIcpSimulada}.
  *
@@ -21,9 +23,11 @@ import org.bouncycastle.asn1.x509.KeyUsage;
  * @param algoritmo                   {@code RSA} ou {@code EC}
  * @param bitsChave                   tamanho da chave (EC: 256)
  * @param extensaoCriticaDesconhecida acrescenta extensão crítica de OID desconhecido (RFC 5280 exige rejeitar)
+ * @param validade                    validade a partir da criação (nulo = a do XML, 10 anos)
  */
 public record PerfilSignatario(String politica, int keyUsage, String dn, String sanOid, String sanValor,
-                               String algoritmo, int bitsChave, boolean extensaoCriticaDesconhecida) {
+                               String algoritmo, int bitsChave, boolean extensaoCriticaDesconhecida,
+                               Period validade) {
 
     /** OID do otherName ICP-Brasil com data de nascimento e CPF da pessoa física. */
     public static final String SAN_CPF = "2.16.76.1.3.1";
@@ -39,13 +43,13 @@ public record PerfilSignatario(String politica, int keyUsage, String dn, String 
     public static PerfilSignatario seS() {
         return new PerfilSignatario("2.16.76.1.2.201.1", KeyUsage.digitalSignature,
                 dnSimulado("Estabelecimento Teste", PkiIcpSimulada.CNPJ),
-                SAN_CNPJ, PkiIcpSimulada.CNPJ, "RSA", 2048, false);
+                SAN_CNPJ, PkiIcpSimulada.CNPJ, "RSA", 2048, false, null);
     }
 
     static PerfilSignatario pessoaFisica(String nome) {
         return new PerfilSignatario("2.16.76.1.2.3.1", KeyUsage.digitalSignature | KeyUsage.nonRepudiation,
                 dnSimulado(nome, PkiIcpSimulada.CPF),
-                SAN_CPF, sanCpf(PkiIcpSimulada.CPF), "RSA", 2048, false);
+                SAN_CPF, sanCpf(PkiIcpSimulada.CPF), "RSA", 2048, false, null);
     }
 
     /**
@@ -62,26 +66,31 @@ public record PerfilSignatario(String politica, int keyUsage, String dn, String 
     }
 
     public PerfilSignatario comPolitica(String oid) {
-        return new PerfilSignatario(oid, keyUsage, dn, sanOid, sanValor, algoritmo, bitsChave, extensaoCriticaDesconhecida);
+        return new PerfilSignatario(oid, keyUsage, dn, sanOid, sanValor, algoritmo, bitsChave, extensaoCriticaDesconhecida, validade);
     }
 
     public PerfilSignatario comKeyUsage(int bits) {
-        return new PerfilSignatario(politica, bits, dn, sanOid, sanValor, algoritmo, bitsChave, extensaoCriticaDesconhecida);
+        return new PerfilSignatario(politica, bits, dn, sanOid, sanValor, algoritmo, bitsChave, extensaoCriticaDesconhecida, validade);
     }
 
     public PerfilSignatario comDn(String novoDn) {
-        return new PerfilSignatario(politica, keyUsage, novoDn, sanOid, sanValor, algoritmo, bitsChave, extensaoCriticaDesconhecida);
+        return new PerfilSignatario(politica, keyUsage, novoDn, sanOid, sanValor, algoritmo, bitsChave, extensaoCriticaDesconhecida, validade);
     }
 
     public PerfilSignatario comSan(String oid, String valor) {
-        return new PerfilSignatario(politica, keyUsage, dn, oid, valor, algoritmo, bitsChave, extensaoCriticaDesconhecida);
+        return new PerfilSignatario(politica, keyUsage, dn, oid, valor, algoritmo, bitsChave, extensaoCriticaDesconhecida, validade);
     }
 
     public PerfilSignatario comChave(String novoAlgoritmo, int bits) {
-        return new PerfilSignatario(politica, keyUsage, dn, sanOid, sanValor, novoAlgoritmo, bits, extensaoCriticaDesconhecida);
+        return new PerfilSignatario(politica, keyUsage, dn, sanOid, sanValor, novoAlgoritmo, bits, extensaoCriticaDesconhecida, validade);
     }
 
     public PerfilSignatario comExtensaoCriticaDesconhecida() {
-        return new PerfilSignatario(politica, keyUsage, dn, sanOid, sanValor, algoritmo, bitsChave, true);
+        return new PerfilSignatario(politica, keyUsage, dn, sanOid, sanValor, algoritmo, bitsChave, true, validade);
+    }
+
+    public PerfilSignatario comValidade(Period periodo) {
+        return new PerfilSignatario(politica, keyUsage, dn, sanOid, sanValor, algoritmo, bitsChave,
+                extensaoCriticaDesconhecida, periodo);
     }
 }

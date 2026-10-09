@@ -19,6 +19,7 @@ import org.bouncycastle.cert.ocsp.OCSPReq;
 
 import java.io.IOException;
 import java.util.Date;
+import java.util.function.Supplier;
 
 /**
  * {@link PKIOCSPSource} da PKI simulada, com duas folgas sobre o original: responde sem URL de OCSP
@@ -31,14 +32,21 @@ final class OcspSimulado extends PKIOCSPSource {
     private final transient JAXBCertEntityRepository repositorio;
     private final boolean forcarStatus;
     private final transient CertEntityRevocation forcada;
+    private final transient Supplier<Date> proximaAtualizacao;
 
     OcspSimulado(JAXBCertEntityRepository repositorio, boolean forcarStatus, CertEntityRevocation forcada,
-                 Date proximaAtualizacao) {
+                 Supplier<Date> proximaAtualizacao) {
         super(repositorio);
         this.repositorio = repositorio;
         this.forcarStatus = forcarStatus;
         this.forcada = forcada;
-        setNextUpdate(proximaAtualizacao);
+        this.proximaAtualizacao = proximaAtualizacao;
+    }
+
+    /** {@code nextUpdate} avaliado a cada resposta. */
+    @Override
+    protected Date getNextUpdate() {
+        return proximaAtualizacao.get();
     }
 
     @Override

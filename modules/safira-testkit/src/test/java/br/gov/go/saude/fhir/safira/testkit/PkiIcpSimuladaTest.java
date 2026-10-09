@@ -51,6 +51,9 @@ import java.security.interfaces.RSAPublicKey;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509CRL;
 import java.security.cert.X509Certificate;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HexFormat;
@@ -242,6 +245,65 @@ class PkiIcpSimuladaTest {
         assertThat(outra.signatario().getSerialNumber()).isNotEqualTo(pki.signatario().getSerialNumber());
         assertThat(outra.ac().getSerialNumber()).isNotEqualTo(pki.ac().getSerialNumber());
         assertThat(outra.raiz().getPublicKey()).isNotEqualTo(pki.raiz().getPublicKey());
+    }
+
+    @Test
+    void shouldIssueSignerWithConfiguredValidity() {
+        PkiIcpSimulada curta = PkiIcpSimulada.criar(PerfilSignatario.a3().comValidade(Period.ofYears(2)));
+        Instant agora = Instant.now();
+
+        assertThat(curta.signatario().getNotAfter().toInstant())
+                .isBetween(agora.plus(Duration.ofDays(729)), agora.plus(Duration.ofDays(732)))
+                .isBefore(curta.ac().getNotAfter().toInstant());
+    }
+
+    @Test
+    void shouldRestorePkiFromPersistedMaterialKeepingRevocation() throws Exception {
+        PkiIcpSimulada.Material material = pki.material();
+
+        PkiIcpSimulada restaurada = PkiIcpSimulada.restaurar(material, Duration.ofDays(7));
+        CertificateToken ac = new CertificateToken(restaurada.ac());
+        CRLToken lcr = restaurada.fonteLcr().getRevocationToken(new CertificateToken(restaurada.revogado()), ac);
+        byte[] imprint = MessageDigest.getInstance("SHA-256").digest("restaurada".getBytes());
+        TimeStampToken carimbo = new TimeStampToken(new CMSSignedData(
+                restaurada.fonteTsp().getTimeStampResponse(DigestAlgorithm.SHA256, imprint).getBytes()));
+
+        assertThat(restaurada.cadeia()).isEqualTo(pki.cadeia());
+        assertThat(restaurada.tsa()).isEqualTo(pki.tsa());
+        assertThat(restaurada.revogadoEm()).isEqualTo(pki.revogadoEm());
+        assertThat(restaurada.chavesSignatario().getPrivate()).isEqualTo(pki.chavesSignatario().getPrivate());
+        assertThat(restaurada.fonteOcsp().getRevocationToken(new CertificateToken(restaurada.revogado()), ac)
+                .getStatus()).isEqualTo(CertificateStatus.REVOKED);
+        assertThat(restaurada.fonteOcsp().getRevocationToken(new CertificateToken(restaurada.signatario()), ac)
+                .getStatus()).isEqualTo(CertificateStatus.GOOD);
+        assertThat(restaurada.fonteOcsp().getRevocationToken(ac, new CertificateToken(restaurada.raiz()))
+                .getStatus()).isEqualTo(CertificateStatus.GOOD);
+        assertThat(lcr.getStatus()).isEqualTo(CertificateStatus.REVOKED);
+        assertThat(lcr.getNextUpdate()).isBetween(Date.from(Instant.now().plus(Duration.ofDays(6))),
+                Date.from(Instant.now().plus(Duration.ofDays(8))));
+        assertThat(carimbo.getSID().getSerialNumber()).isEqualTo(pki.tsa().getSerialNumber());
+        assertThat(carimbo.getTimeStampInfo().getPolicy().getId()).isEqualTo(PkiIcpSimulada.POLITICA_TSA);
+    }
+
+    @Test
+    void shouldRenewSignerKeepingKeyAndIssuer() throws Exception {
+        PkiIcpSimulada curta = PkiIcpSimulada.criar(PerfilSignatario.a3().comValidade(Period.ofDays(10)));
+        X509Certificate antigo = curta.signatario();
+
+        curta.renovarSignatario(Period.ofYears(2));
+        X509Certificate novo = curta.signatario();
+
+        novo.verify(curta.ac().getPublicKey());
+        assertThat(novo.getPublicKey()).isEqualTo(antigo.getPublicKey());
+        assertThat(novo.getSerialNumber()).isNotEqualTo(antigo.getSerialNumber());
+        assertThat(novo.getSubjectX500Principal()).isEqualTo(antigo.getSubjectX500Principal());
+        assertThat(novo.getExtensionValue(Extension.subjectAlternativeName.getId()))
+                .isEqualTo(antigo.getExtensionValue(Extension.subjectAlternativeName.getId()));
+        assertThat(politicas(novo)).isEqualTo(politicas(antigo));
+        assertThat(novo.getNotAfter().toInstant()).isAfter(Instant.now().plus(Duration.ofDays(700)));
+        assertThat(curta.cadeia().getFirst()).isEqualTo(novo);
+        assertThat(curta.fonteOcsp().getRevocationToken(new CertificateToken(novo),
+                new CertificateToken(curta.ac())).getStatus()).isEqualTo(CertificateStatus.GOOD);
     }
 
     private static RevokedStatus status(byte[] ocspDer) throws Exception {

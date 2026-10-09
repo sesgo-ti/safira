@@ -22,9 +22,11 @@ import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
+import java.util.Date;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -63,6 +65,23 @@ final class Reemissao {
                     construtor.build(new JcaContentSignerBuilder(ASSINATURA).build(chaveEmissor)));
         } catch (IOException | GeneralSecurityException | OperatorCreationException e) {
             throw new IllegalStateException("Falha ao reemitir certificado da PKI simulada", e);
+        }
+    }
+
+    /** Renova o certificado pelo mesmo emissor: mesma chave, DN e extensões; serial e validade novos. */
+    static X509Certificate renovar(X509Certificate original, PrivateKey chaveEmissor, BigInteger serial,
+                                   Date inicio, Date fim) {
+        try {
+            X509CertificateHolder base = new JcaX509CertificateHolder(original);
+            X509v3CertificateBuilder construtor = new X509v3CertificateBuilder(base.getIssuer(), serial, inicio, fim,
+                    base.getSubject(), base.getSubjectPublicKeyInfo());
+            for (Object oid : base.getExtensionOIDs()) {
+                construtor.addExtension(base.getExtension((ASN1ObjectIdentifier) oid));
+            }
+            return new JcaX509CertificateConverter().getCertificate(
+                    construtor.build(new JcaContentSignerBuilder(ASSINATURA).build(chaveEmissor)));
+        } catch (IOException | GeneralSecurityException | OperatorCreationException e) {
+            throw new IllegalStateException("Falha ao renovar certificado da PKI simulada", e);
         }
     }
 
