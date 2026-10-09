@@ -45,6 +45,7 @@
         <module>modules/safira-rest</module>
         <module>modules/safira-app</module>
         <module>modules/safira-simulador</module>
+        <module>modules/safira-cli</module>
     </modules>
 
     <properties>
@@ -66,6 +67,7 @@
         <netty.version>4.2.17.Final</netty.version>
         <vavr.version>0.10.4</vavr.version>
         <archunit.version>1.5.1</archunit.version>
+        <picocli.version>4.7.7</picocli.version>
 
         <surefire.version>3.2.5</surefire.version>
         <jacoco.version>0.8.12</jacoco.version>
