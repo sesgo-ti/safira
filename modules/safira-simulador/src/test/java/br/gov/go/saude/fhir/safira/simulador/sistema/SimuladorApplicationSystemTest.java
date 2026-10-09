@@ -124,12 +124,16 @@ class SimuladorApplicationSystemTest {
         assertThat(corpo.get("issuerSha256").asText()).isEqualTo(pki.issuerSha256());
         assertThat(resposta.body()).doesNotContain(Files.readString(pki.senha()).strip())
                 .doesNotContain("PRIVATE")
-                .doesNotContain(Base64.getEncoder().encodeToString(Files.readAllBytes(pki.signatario())).substring(0, 64));
+                .doesNotContain(linhaDoMeio(Files.readAllBytes(pki.signatario())));
         for (KeyPair chaves : List.of(pki.pki().chavesRaiz(), pki.pki().chavesAc(), pki.pki().chavesTsa(),
                 pki.pki().chavesSignatario(), pki.pki().chavesRevogado())) {
-            assertThat(resposta.body()).doesNotContain(
-                    Base64.getEncoder().encodeToString(chaves.getPrivate().getEncoded()).substring(0, 64));
+            assertThat(resposta.body()).doesNotContain(linhaDoMeio(chaves.getPrivate().getEncoded()));
         }
+    }
+
+    /** Terceira linha (64 caracteres) do Base64 do DER: aparece igual em PEM ou em Base64 corrido. */
+    private static String linhaDoMeio(byte[] der) {
+        return Base64.getEncoder().encodeToString(der).substring(128, 192);
     }
 
     @Test

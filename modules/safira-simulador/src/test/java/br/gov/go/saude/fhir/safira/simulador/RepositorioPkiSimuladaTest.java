@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.file.FileSystems;
@@ -22,6 +23,7 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.KeyPair;
 import java.security.KeyStore;
+import java.security.Signature;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
@@ -151,9 +153,22 @@ class RepositorioPkiSimuladaTest {
     @Test
     void shouldRenewSignerLeafWhenCloseToExpiry() throws Exception {
         PkiPersistida curta = RepositorioPkiSimulada.abrir(diretorio(), Period.ofDays(10));
+        X509Certificate antigo = curta.pki().signatario();
+        byte[] dados = "assinado antes da renovação".getBytes(StandardCharsets.UTF_8);
+        Signature assinador = Signature.getInstance("SHA256withRSA");
+        assinador.initSign(curta.pki().chavesSignatario().getPrivate());
+        assinador.update(dados);
+        byte[] assinatura = assinador.sign();
 
         PkiPersistida renovada = RepositorioPkiSimulada.abrir(diretorio());
         PkiPersistida depois = RepositorioPkiSimulada.abrir(diretorio());
+        Signature verificador = Signature.getInstance("SHA256withRSA");
+        verificador.initVerify(antigo.getPublicKey());
+        verificador.update(dados);
+
+        assertThat(renovada.pki().signatario().getSerialNumber()).isNotEqualTo(antigo.getSerialNumber());
+        antigo.verify(renovada.pki().ac().getPublicKey());
+        assertThat(verificador.verify(assinatura)).isTrue();
 
         assertThat(renovada.situacao()).isEqualTo(Situacao.FOLHA_RENOVADA);
         assertThat(renovada.pki().raiz()).isEqualTo(curta.pki().raiz());
