@@ -20,6 +20,9 @@ public final class Policy020 {
     public static final String CANONICALIZATION_URI =
             "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/canonicalizacao/fhir-json-lossless/0.2.0";
 
+    /** Máximo de certificados na cadeia (folha + ACs), na assinatura e no {@code x5c}; caminhos ICP-Brasil têm 3 a 4 níveis. */
+    public static final int MAX_CHAIN_LENGTH = 10;
+
     /** OID de <em>Verification Signature</em> (ASTM E1762-95), único propósito admitido. */
     public static final String VERIFICATION_SIGNATURE_OID = "1.2.840.10065.1.12.1.5";
 

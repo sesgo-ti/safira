@@ -13,6 +13,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
 import br.gov.go.saude.fhir.safira.jades.CertificateValidationService;
 import br.gov.go.saude.fhir.safira.steps.dss.DssOutcomes;
 import br.gov.go.saude.fhir.safira.steps.dss.PoliticaDeValidacaoDss;
+import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
@@ -51,15 +52,12 @@ import java.util.Optional;
  * {@code CERT.NOT-ICP-BRASIL} (criar 2.5) antes de revogação e de validade: prevalece inclusive
  * sobre {@code CERT.EXPIRED}.
  *
- * <p>Recusa entradas com mais de {@link #MAX_CHAIN_LENGTH} certificados antes de decodificá-los.
+ * <p>Recusa entradas com mais de {@link Policy020#MAX_CHAIN_LENGTH} certificados antes de decodificá-los.
  *
  * <p>Escreve {@code certificateChain} = caminho validado pelo DSS (folha primeiro, raiz por último).
  */
 @StepId("pkix-chain-validation")
 public class PkixChainValidationStep implements SigningStep {
-
-    /** Máximo de certificados aceitos na entrada 4 (folha + ACs); caminhos ICP-Brasil têm 3 a 4 níveis. */
-    public static final int MAX_CHAIN_LENGTH = 10;
 
     private final VerificadoresDss verifiers;
     private final Optional<CertificateValidationService> validationService;
@@ -75,9 +73,9 @@ public class PkixChainValidationStep implements SigningStep {
         if (raw == null || raw.isEmpty()) {
             return fail(SignatureExceptionCode.CERT_CHAIN_INCOMPLETE, "Nenhum certificado do signatário foi informado.", context);
         }
-        if (raw.size() > MAX_CHAIN_LENGTH) {
+        if (raw.size() > Policy020.MAX_CHAIN_LENGTH) {
             return fail(SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED,
-                    "A cadeia informada excede o limite de " + MAX_CHAIN_LENGTH + " certificados.", context);
+                    "A cadeia informada excede o limite de " + Policy020.MAX_CHAIN_LENGTH + " certificados.", context);
         }
         List<X509Certificate> certificates = new ArrayList<>();
         for (int i = 0; i < raw.size(); i++) {
