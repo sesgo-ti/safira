@@ -15,13 +15,11 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.Signature;
 import java.time.Instant;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -59,7 +57,7 @@ class RevocationGatingTest {
     private static List<InetAddress> validate(TestPki trusted) {
         List<InetAddress> contacted = new CopyOnWriteArrayList<>();
         CertificateVerifierFactory factory = CertificateVerifierFactory.online(5, 5,
-                (host, address) -> contacted.add(address), Set.of(URI.create(tsa.url()).getPort()));
+                (host, address) -> contacted.add(address));
         new JadesValidationService().validate(bt,
                 factory.create(CertificateVerifierFactory.acervo(List.of(trusted.caCert), List.of()), List.of()));
         return contacted;

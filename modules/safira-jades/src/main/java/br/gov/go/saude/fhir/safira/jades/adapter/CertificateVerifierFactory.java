@@ -18,7 +18,6 @@ import eu.europa.esig.dss.spi.x509.revocation.RevocationSource;
 import java.security.cert.X509Certificate;
 import java.util.Collection;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Fábrica do {@link CommonCertificateVerifier} central do Safira: o EU DSS decide cadeia,
@@ -68,16 +67,10 @@ public final class CertificateVerifierFactory {
      */
     public static CertificateVerifierFactory online(int ocspTimeoutSeconds, int crlTimeoutSeconds,
                                                     DestinationGuard guard) {
-        return online(ocspTimeoutSeconds, crlTimeoutSeconds, guard, RestrictedDataLoader.DEFAULT_PORTS);
-    }
-
-    /** Como {@link #online(int, int, DestinationGuard)}, com portas admitidas explícitas (testes). */
-    static CertificateVerifierFactory online(int ocspTimeoutSeconds, int crlTimeoutSeconds, DestinationGuard guard,
-                                             Set<Integer> allowedPorts) {
         RestrictedDataLoader ocspLoader = new RestrictedDataLoader(OCSP_CONTENT_TYPE, ocspTimeoutSeconds,
-                MAX_RESPONSE_BYTES, guard, allowedPorts);
+                MAX_RESPONSE_BYTES, guard);
         RestrictedDataLoader crlLoader = new RestrictedDataLoader(null, crlTimeoutSeconds,
-                MAX_RESPONSE_BYTES, guard, allowedPorts);
+                MAX_RESPONSE_BYTES, guard);
         return new CertificateVerifierFactory(new OnlineOCSPSource(ocspLoader), new OnlineCRLSource(crlLoader),
                 List.of(ocspLoader, crlLoader));
     }
