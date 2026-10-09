@@ -9,7 +9,7 @@ import br.gov.go.saude.fhir.safira.rest.service.JadesSigningSystemTest;
 import br.gov.go.saude.fhir.safira.rest.service.SignAndValidateSystemTest;
 import br.gov.go.saude.fhir.safira.simulador.AvisoSimulacaoAdvice;
 import br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada;
-import br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada.Resultado;
+import br.gov.go.saude.fhir.safira.simulador.PkiPersistida;
 import br.gov.go.saude.fhir.safira.simulador.SimuladorApplication;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,7 +49,7 @@ class SimuladorApplicationSystemTest {
     int porta;
 
     @Autowired
-    Resultado pki;
+    PkiPersistida pki;
 
     private final HttpClient http = HttpClient.newHttpClient();
     private final ObjectMapper mapper = new ObjectMapper();
@@ -76,7 +76,8 @@ class SimuladorApplicationSystemTest {
     }
 
     private HttpResponse<String> assinar(Path p12, String alias, String estrategia) throws Exception {
-        return enviar("/assinar", SimulacaoPki.signingBody(pki, p12, alias, Instant.now().getEpochSecond(), estrategia));
+        return enviar("/assinar", SimulacaoPki.signingBody(Files.readString(pki.senha()).strip(), p12, alias,
+                Instant.now().getEpochSecond(), estrategia));
     }
 
     private HttpResponse<String> validar(JsonNode assinada) throws Exception {

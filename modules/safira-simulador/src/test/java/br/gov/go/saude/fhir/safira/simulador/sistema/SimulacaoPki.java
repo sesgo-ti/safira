@@ -54,16 +54,22 @@ final class SimulacaoPki {
     /** Corpo de {@code POST /assinar} com um PKCS#12 da PKI informada e a estratégia ({@code iat} ou {@code tsa}). */
     static String signingBody(Resultado pki, Path p12, String alias, long referenceTimestamp, String estrategia)
             throws Exception {
+        return signingBody(pki.senha(), p12, alias, referenceTimestamp, estrategia);
+    }
+
+    /** Corpo de {@code POST /assinar} com o PKCS#12 informado, sua senha e a estratégia ({@code iat} ou {@code tsa}). */
+    static String signingBody(String senha, Path p12, String alias, long referenceTimestamp, String estrategia)
+            throws Exception {
         byte[] conteudo = Files.readAllBytes(p12);
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
         try (InputStream in = Files.newInputStream(p12)) {
-            keyStore.load(in, pki.senha().toCharArray());
+            keyStore.load(in, senha.toCharArray());
         }
         String folha = Base64.getEncoder().encodeToString(keyStore.getCertificate(alias).getEncoded());
         return "{\"bundle\":" + JadesSigningSystemTest.example("bundle.json")
                 + ",\"provenance\":" + JadesSigningSystemTest.example("provenance.json")
                 + ",\"signerCryptoMaterial\":{\"type\":\"PKCS12\",\"contentBase64\":\""
-                + Base64.getEncoder().encodeToString(conteudo) + "\",\"password\":\"" + pki.senha()
+                + Base64.getEncoder().encodeToString(conteudo) + "\",\"password\":\"" + senha
                 + "\",\"alias\":\"" + alias + "\"}"
                 + ",\"certificateChain\":[\"" + folha + "\"]"
                 + ",\"referenceTimestamp\":" + referenceTimestamp

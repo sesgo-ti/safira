@@ -8,7 +8,6 @@ package br.gov.go.saude.fhir.safira.simulador;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.jades.adapter.DestinationGuard;
 import br.gov.go.saude.fhir.safira.jades.adapter.TspSourceFactory;
-import br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada.Resultado;
 import br.gov.go.saude.fhir.safira.steps.config.SafiraStepsAutoConfiguration;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
@@ -37,10 +36,10 @@ import java.util.stream.Collectors;
  * {@code safira.simulacao.*}, no lugar do acervo ICP-Brasil e sem misturá-los. Os steps não mudam;
  * só trocam as fontes de confiança, revogação e carimbo:
  * <ul>
- *   <li>revogação: LCRs locais (PKI em arquivos) ou OCSP e LCR em memória da PKI gerada na partida
+ *   <li>revogação: LCRs locais (PKI em arquivos) ou OCSP e LCR em memória da PKI persistida
  *       ({@link PkiGeradaNaPartida}); sem nenhuma delas, as fontes online do DSS presas ao
  *       {@link DestinationGuard} padrão, que recusa todo destino;</li>
- *   <li>carimbo do tempo: TSA em memória da PKI gerada na partida; com PKI em arquivos, indisponível
+ *   <li>carimbo do tempo: TSA em memória da PKI persistida; com PKI em arquivos, indisponível
  *       ({@code TSA.UNAVAILABLE}). A TSA online nunca é usada.</li>
  * </ul>
  * Roda antes dos steps, cujos beans são {@code @ConditionalOnMissingBean}.
@@ -81,14 +80,14 @@ public class SafiraSimulacaoAutoConfiguration {
     }
 
     /**
-     * Carimbo do tempo sem rede: com a PKI gerada na partida, a TSA em memória do testkit; sem ela (PKI
+     * Carimbo do tempo sem rede: com a PKI persistida, a TSA em memória do testkit (chave da TSA persistida); sem ela (PKI
      * em arquivos), toda requisição de carimbo falha como TSA indisponível ({@code TSA.UNAVAILABLE}). A
      * {@code tsa-url} configurada nunca é contatada.
      */
     @Bean
     @ConditionalOnMissingBean
-    public TspSourceFactory simulacaoTspSourceFactory(ObjectProvider<Resultado> pkiGerada) {
-        Resultado pki = pkiGerada.getIfAvailable();
+    public TspSourceFactory simulacaoTspSourceFactory(ObjectProvider<PkiPersistida> pkiPersistida) {
+        PkiPersistida pki = pkiPersistida.getIfAvailable();
         if (pki != null) {
             return (tsaUrl, timeoutSeconds, policyOid) -> pki.pki().fonteTsp();
         }
@@ -138,15 +137,15 @@ public class SafiraSimulacaoAutoConfiguration {
     }
 
     /**
-     * PKI gerada na partida: revogação (OCSP e LCR) pelas fontes em memória do testkit.
+     * PKI persistida: revogação (OCSP e LCR) pelas fontes em memória do testkit, emitidas pela AC carregada.
      */
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnBean(Resultado.class)
+    @ConditionalOnBean(PkiPersistida.class)
     static class PkiEmMemoriaConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        CertificateVerifierFactory simulacaoRevogacaoEmMemoria(Resultado pki) {
+        CertificateVerifierFactory simulacaoRevogacaoEmMemoria(PkiPersistida pki) {
             return CertificateVerifierFactory.offline(pki.pki().fonteOcsp(), pki.pki().fonteLcr());
         }
 

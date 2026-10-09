@@ -11,7 +11,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 /**
  * Aplicação do simulador (SEM VALOR LEGAL): a mesma API do Safira ({@code safira-rest}, política
  * 0.2.0) com a PKI simulada no lugar do acervo ICP-Brasil, sem rede e sem a icpbrasil-truststore.
- * Sem âncoras configuradas, a PKI é gerada na partida ({@link PkiGeradaNaPartida}).
+ * Sem âncoras configuradas, a PKI é gerada na 1ª partida e reutilizada nas seguintes
+ * ({@link PkiGeradaNaPartida}, {@link RepositorioPkiSimulada}).
  */
 @SpringBootApplication
 public class SimuladorApplication {

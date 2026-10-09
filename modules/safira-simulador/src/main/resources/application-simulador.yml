@@ -7,9 +7,9 @@
 # Perfil "simulador", ativado por SimuladorApplication: o jar comum (biblioteca) no
 # classpath de outra aplicação não liga o modo simulação.
 #
-# Sem SAFIRA_SIMULACAO_TRUST_ANCHORS (e sem LCRs), a PKI é gerada na partida em
-# safira.simulador.diretorio (padrão: diretório temporário novo) com revogação e
-# carimbo do tempo em memória. Com as âncoras (ou um application-simulacao.yml do
+# Sem SAFIRA_SIMULACAO_TRUST_ANCHORS (e sem LCRs), a PKI é gerada na 1ª partida e
+# persistida em safira.simulador.diretorio (padrão: ~/.safira-simulador/pki), com
+# revogação e carimbo do tempo em memória. Com as âncoras (ou um application-simulacao.yml do
 # GeradorPkiSimulada via --spring.config.additional-location), vale a PKI em arquivos
 # com LCRs locais. Ver README.
 # -----------------------------------------------------------------------------
@@ -29,8 +29,8 @@ management:
 
 safira:
   simulador:
-    # Onde a PKI gerada na partida é gravada (vazio = diretório temporário novo)
-    diretorio: ${SAFIRA_SIMULADOR_DIRETORIO:}
+    # PKI gerada na 1ª partida e reutilizada nas seguintes (corrompida = falha na partida)
+    diretorio: ${SAFIRA_SIMULADOR_DIRETORIO:${user.home}/.safira-simulador/pki}
 
   simulacao:
     enabled: true

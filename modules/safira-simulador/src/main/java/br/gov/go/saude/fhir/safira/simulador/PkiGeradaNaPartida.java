@@ -5,8 +5,6 @@
 
 package br.gov.go.saude.fhir.safira.simulador;
 
-import br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada.Opcoes;
-import br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada.Resultado;
 import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,21 +16,19 @@ import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.util.StringUtils;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Gera a PKI simulada na partida da aplicação do simulador quando o modo está ligado e nenhuma
- * âncora ou LCR foi configurada: grava os artefatos em {@code safira.simulador.diretorio} (padrão:
- * diretório temporário novo; a PKI é efêmera), publica âncoras, ACs, allowlist e política TSA como
- * propriedades de maior precedência e registra o {@link Resultado}, cujas fontes OCSP, LCR e TSA em
- * memória a {@link SafiraSimulacaoAutoConfiguration} usa. As âncoras seguem o carregamento validado
- * de {@code safira.simulacao.trust-anchors} (marca, chave, validade).
+ * Abre a PKI simulada persistida ({@link RepositorioPkiSimulada}) na partida da aplicação do simulador
+ * quando o modo está ligado e nenhuma âncora ou LCR foi configurada: gera e grava na primeira partida
+ * em {@code safira.simulador.diretorio} (padrão {@code ${user.home}/.safira-simulador/pki}) e reutiliza
+ * nas seguintes. Publica âncoras, ACs, allowlist e política TSA como propriedades de maior precedência
+ * e registra a {@link PkiPersistida}, cujas fontes OCSP, LCR e TSA em memória a
+ * {@link SafiraSimulacaoAutoConfiguration} usa. As âncoras seguem o carregamento validado de
+ * {@code safira.simulacao.trust-anchors} (marca, chave, validade). O log mostra só caminhos, nunca a senha.
  */
 public final class PkiGeradaNaPartida implements ApplicationContextInitializer<ConfigurableApplicationContext> {
 
@@ -49,16 +45,28 @@ public final class PkiGeradaNaPartida implements ApplicationContextInitializer<C
                 || lcrsConfiguradas(ambiente)) {
             return;
         }
-        Resultado pki = GeradorPkiSimulada.gerar(diretorio(ambiente), Opcoes.padrao());
+        PkiPersistida pki = RepositorioPkiSimulada.abrir(diretorio(ambiente));
         ambiente.getPropertySources().addFirst(new MapPropertySource(FONTE, propriedades(pki)));
-        contexto.getBeanFactory().registerSingleton("pkiSimuladaGerada", pki);
+        contexto.getBeanFactory().registerSingleton("pkiSimuladaPersistida", pki);
         log.warn("""
 
-                PKI simulada (SEM VALOR LEGAL) gerada na partida em {}
-                  senha dos PKCS#12 : {}
-                  aliases           : {} (válido), {} (revogado)
-                  política (OID)    : {}""", pki.raiz().getParent(), pki.senha(),
-                GeradorPkiSimulada.ALIAS_SIGNATARIO, GeradorPkiSimulada.ALIAS_REVOGADO, pki.politicaOid());
+                PKI simulada (SEM VALOR LEGAL) {} em {}
+                  signatário (PKCS#12): {} (alias {})
+                  revogado (PKCS#12)  : {} (alias {})
+                  senha dos PKCS#12   : arquivo {}
+                  política (OID)      : {}
+                  validade da folha   : até {}""", situacao(pki), pki.diretorio(),
+                pki.signatario(), GeradorPkiSimulada.ALIAS_SIGNATARIO,
+                pki.revogado(), GeradorPkiSimulada.ALIAS_REVOGADO, pki.senha(), pki.politicaOid(),
+                pki.pki().signatario().getNotAfter().toInstant());
+    }
+
+    private static String situacao(PkiPersistida pki) {
+        return switch (pki.situacao()) {
+            case GERADA -> "gerada";
+            case REUTILIZADA -> "reutilizada";
+            case FOLHA_RENOVADA -> "reutilizada, com o certificado do signatário RENOVADO (baixe o signatario.p12 de novo)";
+        };
     }
 
     private static boolean lcrsConfiguradas(ConfigurableEnvironment ambiente) {
@@ -69,15 +77,11 @@ public final class PkiGeradaNaPartida implements ApplicationContextInitializer<C
 
     private static Path diretorio(ConfigurableEnvironment ambiente) {
         String configurado = ambiente.getProperty(DIRETORIO);
-        try {
-            return StringUtils.hasText(configurado) ? Path.of(configurado)
-                    : Files.createTempDirectory("safira-simulador-pki-");
-        } catch (IOException e) {
-            throw new UncheckedIOException("Falha ao criar o diretório da PKI simulada", e);
-        }
+        return StringUtils.hasText(configurado) ? Path.of(configurado)
+                : Path.of(System.getProperty("user.home"), ".safira-simulador", "pki");
     }
 
-    private static Map<String, Object> propriedades(Resultado pki) {
+    private static Map<String, Object> propriedades(PkiPersistida pki) {
         Map<String, Object> propriedades = new LinkedHashMap<>();
         propriedades.put("safira.simulacao.trust-anchors", pki.raiz().toUri().toString());
         propriedades.put("safira.simulacao.intermediates", pki.ac().toUri().toString());

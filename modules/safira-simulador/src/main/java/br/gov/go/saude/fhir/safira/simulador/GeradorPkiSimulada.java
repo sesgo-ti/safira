@@ -23,6 +23,7 @@ import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import java.time.Period;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
@@ -31,8 +32,8 @@ import java.util.Map;
  * Grava em arquivos uma PKI de simulação (SEM VALOR LEGAL) gerada pelo {@link PkiIcpSimulada} do
  * testkit (PKI factory do EU DSS): raiz, AC intermediária, signatário A3-like e um segundo signatário
  * revogado, LCRs da raiz e da AC e um trecho {@code application-simulacao.yml} com caminhos e
- * allowlist prontos. O {@link Resultado} guarda a PKI, cujas fontes OCSP, LCR e TSA em memória
- * servem à aplicação do simulador.
+ * allowlist prontos. O {@link Resultado} guarda também a PKI em memória (fontes OCSP, LCR e TSA).
+ * O signatário vale {@link #VALIDADE_FOLHA}. A aplicação do simulador usa o {@link RepositorioPkiSimulada}.
  *
  * <p>Uso avulso: {@code java -cp safira-simulador-<versão>-exec.jar
  * -Dloader.main=br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada
@@ -48,6 +49,8 @@ public final class GeradorPkiSimulada {
     public static final String POLITICA_PADRAO = "2.16.76.1.2.3.1";
     public static final String CPF_PADRAO = "52998224725";
     public static final String MARCA = PkiIcpSimulada.MARCA;
+    /** Validade do signatário (típica de A3), dentro da validade da AC. */
+    public static final Period VALIDADE_FOLHA = Period.ofYears(2);
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -171,9 +174,13 @@ public final class GeradorPkiSimulada {
         }
     }
 
-    /** Signatário A3 com a política e o CPF das opções (DN com SERIALNUMBER e otherName CPF no SAN). */
-    private static PerfilSignatario perfil(Opcoes opcoes) {
+    /**
+     * Signatário A3 com a política e o CPF das opções (DN com SERIALNUMBER e otherName CPF no SAN),
+     * válido por {@link #VALIDADE_FOLHA}.
+     */
+    static PerfilSignatario perfil(Opcoes opcoes) {
         return PerfilSignatario.a3()
+                .comValidade(VALIDADE_FOLHA)
                 .comPolitica(opcoes.politicaOid())
                 .comDn("CN=FULANO SIMULADO:" + opcoes.cpf() + ",SERIALNUMBER=" + opcoes.cpf() + ",O=" + MARCA + ",C=BR")
                 .comSan(PerfilSignatario.SAN_CPF, PerfilSignatario.sanCpf(opcoes.cpf()));
@@ -200,7 +207,7 @@ public final class GeradorPkiSimulada {
                 r.lcrAc().toUri(), r.politicaOid(), r.issuerSha256());
     }
 
-    private static void p12(Path destino, String alias, KeyPair chaves, String senha,
+    static void p12(Path destino, String alias, KeyPair chaves, String senha,
                             X509Certificate... cadeia) throws IOException, GeneralSecurityException {
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
         keyStore.load(null, null);
@@ -211,7 +218,7 @@ public final class GeradorPkiSimulada {
     }
 
     /** Arquivo com chave privada: criado com permissão 0600 quando o sistema de arquivos é POSIX. */
-    private static OutputStream arquivoPrivado(Path destino) throws IOException {
+    static OutputStream arquivoPrivado(Path destino) throws IOException {
         Files.deleteIfExists(destino);
         if (destino.getFileSystem().supportedFileAttributeViews().contains("posix")) {
             Files.createFile(destino, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
@@ -219,7 +226,7 @@ public final class GeradorPkiSimulada {
         return Files.newOutputStream(destino);
     }
 
-    private static String pem(X509Certificate certificado) throws GeneralSecurityException {
+    static String pem(X509Certificate certificado) throws GeneralSecurityException {
         String base64 = Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.US_ASCII))
                 .encodeToString(certificado.getEncoded());
         return "-----BEGIN CERTIFICATE-----\n" + base64 + "\n-----END CERTIFICATE-----\n";

@@ -5,7 +5,6 @@
 
 package br.gov.go.saude.fhir.safira.simulador;
 
-import br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada.Resultado;
 import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -38,7 +37,7 @@ class PkiGeradaNaPartidaTest {
     void shouldNotGenerateWhenModeIsOff() {
         GenericApplicationContext contexto = contexto("safira.simulacao.enabled=false");
 
-        assertThat(contexto.getBeanFactory().getBeanNamesForType(Resultado.class)).isEmpty();
+        assertThat(contexto.getBeanFactory().getBeanNamesForType(PkiPersistida.class)).isEmpty();
         assertThat(diretorio).isEmptyDirectory();
     }
 
@@ -47,7 +46,7 @@ class PkiGeradaNaPartidaTest {
         GenericApplicationContext contexto = contexto("safira.simulacao.enabled=true",
                 "safira.simulacao.trust-anchors=file:/tmp/raiz.pem");
 
-        assertThat(contexto.getBeanFactory().getBeanNamesForType(Resultado.class)).isEmpty();
+        assertThat(contexto.getBeanFactory().getBeanNamesForType(PkiPersistida.class)).isEmpty();
     }
 
     @Test
@@ -55,14 +54,14 @@ class PkiGeradaNaPartidaTest {
         GenericApplicationContext contexto = contexto("safira.simulacao.enabled=true",
                 "safira.simulacao.crls[0]=file:/tmp/lcr.crl");
 
-        assertThat(contexto.getBeanFactory().getBeanNamesForType(Resultado.class)).isEmpty();
+        assertThat(contexto.getBeanFactory().getBeanNamesForType(PkiPersistida.class)).isEmpty();
     }
 
     @Test
     void shouldPublishAnchorsAllowlistAndTsaPolicyWhenGenerating() {
         GenericApplicationContext contexto = contexto("safira.simulacao.enabled=true",
                 "safira.simulacao.trust-anchors=");
-        Resultado pki = contexto.getBeanFactory().getBean(Resultado.class);
+        PkiPersistida pki = contexto.getBeanFactory().getBean(PkiPersistida.class);
         var ambiente = contexto.getEnvironment();
 
         assertThat(pki.raiz()).isRegularFile().hasParent(diretorio.toAbsolutePath().normalize());
