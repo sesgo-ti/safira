@@ -19,6 +19,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.UseMainMethod;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.core.env.Environment;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -53,6 +54,9 @@ class SimuladorApplicationSystemTest {
 
     @Autowired
     PkiPersistida pki;
+
+    @Autowired
+    Environment ambiente;
 
     private final HttpClient http = HttpClient.newHttpClient();
     private final ObjectMapper mapper = new ObjectMapper();
@@ -104,6 +108,11 @@ class SimuladorApplicationSystemTest {
 
         assertThat(resposta.statusCode()).isEqualTo(200);
         assertThat(mapper.readTree(resposta.body()).get("status").asText()).isEqualTo("UP");
+    }
+
+    @Test
+    void shouldListenOnlyOnLoopbackByDefault() {
+        assertThat(ambiente.getProperty("server.address")).isEqualTo("127.0.0.1");
     }
 
     @Test

@@ -14,6 +14,11 @@
 # com LCRs locais. Ver README.
 # -----------------------------------------------------------------------------
 
+# Só loopback por padrão: o simulador não tem autenticação e GET /simulacao/pki revela o diretório
+# da PKI. Para expor (ex.: contêiner), --server.address=0.0.0.0 ou SERVER_ADDRESS=0.0.0.0.
+server:
+  address: 127.0.0.1
+
 management:
   endpoints:
     web:
