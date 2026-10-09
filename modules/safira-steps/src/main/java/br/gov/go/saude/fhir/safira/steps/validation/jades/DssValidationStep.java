@@ -23,10 +23,12 @@ import br.gov.go.saude.fhir.safira.steps.timestamp.TimestampTokenInspector.Inspe
 import br.gov.go.saude.fhir.safira.steps.timestamp.TsaChainVerification;
 import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
+import eu.europa.esig.dss.diagnostic.CertificateWrapper;
 import eu.europa.esig.dss.enumerations.Indication;
 import eu.europa.esig.dss.enumerations.SignatureLevel;
 import eu.europa.esig.dss.enumerations.SubIndication;
 import eu.europa.esig.dss.jaxb.object.Message;
+import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.simplereport.SimpleReport;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 import eu.europa.esig.dss.validation.reports.Reports;
@@ -45,7 +47,8 @@ import java.util.Optional;
  * o carimbo e a cadeia da TSA com prova de existência (5).
  *
  * <p>Âncoras: raízes do acervo ICP-Brasil e, em B-T, as do trust store TSA da política, cuja
- * cadeia do carimbo precisa terminar numa delas. Tempo: em B-B o DSS valida no instante atual
+ * cadeia do carimbo precisa terminar numa delas; a do signatário, mesmo aprovada pelo DSS, precisa
+ * terminar numa raiz do acervo, senão {@code CERT.NOT-ICP-BRASIL}. Tempo: em B-B o DSS valida no instante atual
  * (certificado revogado agora → {@code REVOKED_NO_POE} → {@code CERT.REVOKED}); em B-T o carimbo
  * é a POE e revogação posterior a ele não invalida a assinatura.
  *
@@ -134,6 +137,11 @@ public class DssValidationStep implements ValidationStep {
             return fail(code, "EU DSS: " + indication + (sub == null ? "" : "/" + sub)
                     + " " + DssOutcomes.messages(errors), context);
         }
+        // em B-T as âncoras da TSA estão no mesmo verificador: a cadeia do signatário precisa terminar no acervo
+        if (!terminaNoAcervo(reports.getDiagnosticData().getSignatureById(id).getCertificateChain(), acervo.get())) {
+            return fail(SignatureExceptionCode.CERT_NOT_ICP_BRASIL,
+                    "A cadeia do signatário montada pelo EU DSS não termina numa raiz do acervo ICP-Brasil.", context);
+        }
         SignatureLevel expected = level == JadesLevel.B_B ? SignatureLevel.JAdES_BASELINE_B : SignatureLevel.JAdES_BASELINE_T;
         if (report.getSignatureFormat(id) != expected) {
             return fail(SignatureExceptionCode.VALIDATION_JADES_LEVEL_INVALID,
@@ -141,6 +149,17 @@ public class DssValidationStep implements ValidationStep {
                     context);
         }
         return StepResult.success(getName(), context.toBuilder().attribute(ValidationKeys.DSS_APROVADO, true).build());
+    }
+
+    /** Último certificado da cadeia montada pelo DSS (sem binários no relatório: casado pelo id) é âncora do acervo. */
+    private boolean terminaNoAcervo(List<CertificateWrapper> chain, AcervoDeConfianca acervo) {
+        if (chain.isEmpty()) {
+            return false;
+        }
+        String rootId = chain.getLast().getId();
+        return acervo.raizes().stream()
+                .filter(raiz -> new CertificateToken(raiz).getDSSIdAsString().equals(rootId))
+                .anyMatch(raiz -> verifiers.ehAncora(acervo, raiz));
     }
 
     private StepResult<ValidationContext> fail(SignatureExceptionCode code, String diagnostics, ValidationContext context) {

@@ -224,6 +224,27 @@ class DssAndOutcomeStepsTest {
     }
 
     @Test
+    void shouldRejectBaselineTSignerChainedToTsaAnchorOutsideAcervo() {
+        // signatário e TSA de outra PKI cuja raiz só está no trust store TSA; a allowlist aceita o emissor
+        PkiIcpSimulada outra = PkiIcpSimulada.criar();
+        try (TsaHttpLocal tsaOutra = outra.iniciarTsaHttp()) {
+            SafiraPolicyProperties policyOutra = TestConfigs.policy(outra,
+                    TestConfigs.tsaPolicies(tempDir, PkiIcpSimulada.POLITICA_TSA, 1, outra.raiz()));
+            ValidationContext signed = SignedArtifactFixture.validationContext(
+                    SignedArtifactFixture.sign(outra, policyOutra, Instant.now().getEpochSecond(), tsaOutra));
+            ValidationContext parsed = new JwsStructureStep().execute(new SignatureBindingStep().execute(signed).context()).context();
+            DssValidationStep step = new DssValidationStep(new VerificadoresDss(trust,
+                    CertificateVerifierFactory.offline(EvidenceRevocationSources.ocspFromEvidence(List.of(
+                            outra.ocspBom(outra.signatario()), outra.ocspBom(outra.ac()),
+                            outra.ocspBom(tsaOutra.certificado()))), null)), policyOutra);
+
+            StepResult<ValidationContext> result = step.execute(SignedArtifactFixture.comAcervo(parsed, trust));
+
+            assertThat(code(result)).isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
+        }
+    }
+
+    @Test
     void shouldFailClosedWhenAcervoIsUnavailable() {
         assertThat(code(step(good()).execute(bbSemAcervo))).isEqualTo(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY);
     }
