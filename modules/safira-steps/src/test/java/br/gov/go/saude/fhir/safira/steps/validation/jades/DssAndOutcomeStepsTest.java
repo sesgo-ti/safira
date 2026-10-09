@@ -271,4 +271,14 @@ class DssAndOutcomeStepsTest {
         assertThat(issue.details().text()).isEqualTo("Assinatura digital validada com sucesso");
         assertThat(issue.diagnostics()).contains("assinatura PF").contains("JAdES-B-B").contains("RS256");
     }
+
+    @Test
+    void shouldCreditRevocationToDssInSuccessDiagnostics() {
+        ValidationContext aprovado = step(good()).execute(bb).context();
+
+        String diagnostics = new ValidationOutcomeStep().execute(aprovado).context().getOperationOutcome()
+                .issue().getFirst().diagnostics();
+
+        assertThat(diagnostics).contains("revogação decidida pelo EU DSS").doesNotContain("icpbrasil-truststore");
+    }
 }

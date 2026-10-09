@@ -40,7 +40,7 @@ public class ValidationOutcomeStep implements ValidationStep {
                 + "; canonicalização " + Policy020.CANONICALIZATION_URI
                 + "; iat " + Instant.ofEpochSecond(iat)
                 + "; referência " + Instant.ofEpochSecond(context.getReferenceTimestamp())
-                + "; revogação conclusiva via OCSP/CRL (icpbrasil-truststore)";
+                + "; revogação decidida pelo EU DSS";
 
         OperationOutcome outcome = OperationOutcome.createSignatureError("information", "informational",
                 SignatureExceptionCode.VALIDATION_SUCCESS.getCode(), text, diagnostics);
