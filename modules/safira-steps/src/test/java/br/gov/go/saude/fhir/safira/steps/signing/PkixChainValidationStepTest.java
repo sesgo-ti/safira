@@ -129,6 +129,25 @@ class PkixChainValidationStepTest {
     }
 
     @Test
+    void shouldRejectWhenIssuingCaIsRevoked() throws Exception {
+        RevocationSource<OCSP> caRevoked = EvidenceRevocationSources.ocspPorCertificado(pki.respostasComAcRevogada());
+
+        StepResult<SigningContext> result = step(caRevoked).execute(context(List.of(b64(pki.signatario()))));
+
+        assertThat(code(result)).isEqualTo(SignatureExceptionCode.CERT_REVOKED);
+        assertThat(diagnostics(result)).contains("/REVOKED_CA_NO_POE");
+    }
+
+    @Test
+    void shouldRejectWhenIssuingCaRevocationIsUnavailable() throws Exception {
+        StepResult<SigningContext> result = step(EvidenceRevocationSources.ocspPorCertificado(
+                pki.respostasSemRevogacaoDaAc())).execute(context(List.of(b64(pki.signatario()))));
+
+        assertThat(code(result)).isEqualTo(SignatureExceptionCode.REVOCATION_STATUS_UNKNOWN);
+        assertThat(diagnostics(result)).contains("revocation issuer");
+    }
+
+    @Test
     void shouldRejectSignerWhenRootIsOutsideAcervo() throws Exception {
         FonteDeConfianca other = FonteDeTeste.com(PkiIcpSimulada.criar().raiz());
 

@@ -394,6 +394,17 @@ class QaAssinaturaAtaquesTest {
     }
 
     @Test
+    void shouldRejectSigningWhenIssuingCaIsRevoked() throws Exception {
+        OfflineRevocationConfig.responder = PKI.respostasComAcRevogada();
+
+        MvcResult result = sign(baseBody());
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(422);
+        assertThat(code(result)).isEqualTo("CERT.REVOKED");
+        assertThat(diagnostics(result)).contains("/REVOKED_CA_NO_POE");
+    }
+
+    @Test
     void shouldRejectSigningWhenRevocationIsUnavailable() throws Exception {
         OfflineRevocationConfig.responder = PKI.respostasSemRevogacaoDoSignatario();
 

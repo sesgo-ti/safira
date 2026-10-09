@@ -52,6 +52,9 @@ import java.util.Optional;
  * {@code CERT.NOT-ICP-BRASIL} (criar 2.5) antes de revogação e de validade: prevalece inclusive
  * sobre {@code CERT.EXPIRED}.
  *
+ * <p>A conclusão do DSS é exigida em cada certificado do caminho (folha e ACs), não só na folha: AC
+ * revogada ou sem revogação recusa a cadeia como na validação (criar 2.6/2.8).
+ *
  * <p>Recusa entradas com mais de {@link Policy020#MAX_CHAIN_LENGTH} certificados antes de decodificá-los.
  *
  * <p>Escreve {@code certificateChain} = caminho validado pelo DSS (folha primeiro, raiz por último).
@@ -112,15 +115,19 @@ public class PkixChainValidationStep implements SigningStep {
         SimpleCertificateReport report = reports.getSimpleReport();
         CertificateWrapper subject = reports.getDiagnosticData().getUsedCertificateById(id);
         List<CertificateWrapper> issuers = subject.getCertificateChain();
-        Indication indication = report.getCertificateIndication(id);
-        if (indication != Indication.PASSED) {
-            SubIndication sub = report.getCertificateSubIndication(id);
-            List<CertificateWrapper> path = new ArrayList<>(List.of(subject));
-            issuers.stream().filter(issuer -> !issuer.getId().equals(id)).forEach(path::add);
-            List<Message> errors = report.getX509ValidationErrors(id);
+        List<CertificateWrapper> path = new ArrayList<>(List.of(subject));
+        issuers.stream().filter(issuer -> !issuer.getId().equals(id)).forEach(path::add);
+        // o DSS conclui por certificado da cadeia (SubXCV): a folha primeiro, depois cada AC
+        Optional<String> failed = path.stream().map(CertificateWrapper::getId)
+                .filter(certificate -> report.getCertificateIndication(certificate) != Indication.PASSED)
+                .findFirst();
+        if (failed.isPresent()) {
+            Indication indication = report.getCertificateIndication(failed.get());
+            SubIndication sub = report.getCertificateSubIndication(failed.get());
+            List<Message> errors = report.getX509ValidationErrors(failed.get());
             return fail(DssOutcomes.code(indication, sub, path, reports.getDiagnosticData().getValidationDate(), errors),
-                    "EU DSS (certificado): " + indication + (sub == null ? "" : "/" + sub) + " "
-                            + DssOutcomes.messages(errors), context);
+                    "EU DSS (certificado" + (failed.get().equals(id) ? "" : " da AC") + "): " + indication
+                            + (sub == null ? "" : "/" + sub) + " " + DssOutcomes.messages(errors), context);
         }
 
         List<X509Certificate> chain = new ArrayList<>(List.of(leaf));
