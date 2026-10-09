@@ -42,6 +42,7 @@ e o projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 - Pipelines da política 0.2.0 com steps obrigatórios conferidos na partida (`RequiredSteps`, `Policy020.REQUIRED_*_STEPS`): um `safira.pipelines` (inclusive por `--config` na CLI) que omita ou reordene um deles, como `dss-validation`, impede a partida. Em tempo de execução, `validation-outcome` só emite `VALIDATION.SUCCESS` com a aprovação do `dss-validation` (senão `VALIDATION.INDETERMINATE`) e `fhir-signature` só produz a assinatura com a cadeia aprovada pelo `pkix-chain-validation` (senão `CONFIG.INVALID-PARAMETER`).
 - Na validação, a cadeia do signatário aprovada pelo EU DSS precisa terminar numa raiz do acervo ICP-Brasil (`CERT.NOT-ICP-BRASIL`); em B-T as âncoras do trust store TSA não servem ao signatário.
 - O diagnóstico de sucesso da validação atribui a revogação ao EU DSS.
+- `OperationOutcome` (e `Issue`, `CodeableConcept`, `Coding`) não emite membros `null` (`@JsonInclude(NON_NULL)`) na API e na CLI.
 - Na criação, folha sem nenhum OID da allowlist retorna `CERT.NOT-ICP-BRASIL` (IG criar 2.5) antes de revogação, validade e extensões críticas, inclusive quando também está revogada, expirada ou ainda não é válida.
 
 ### Removido
