@@ -15,6 +15,8 @@ import br.gov.go.saude.fhir.safira.jades.JadesSigningService;
 import br.gov.go.saude.fhir.safira.jades.JadesSigningSession;
 import br.gov.go.saude.fhir.safira.steps.signing.CryptoSigningStep;
 import br.gov.go.saude.fhir.safira.steps.signing.SigningKeys;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Base64;
 
@@ -27,6 +29,8 @@ import java.util.Base64;
  */
 @StepId("jades-assemble")
 public class JadesAssembleStep implements SigningStep {
+
+    private static final Logger log = LoggerFactory.getLogger(JadesAssembleStep.class);
 
     private final JadesSigningService signingService;
 
@@ -52,9 +56,15 @@ public class JadesAssembleStep implements SigningStep {
                         "Valor de assinatura não encontrado no contexto. "
                                 + "Verifique se o step crypto-signing foi executado."));
 
+        byte[] signatureValue;
         try {
-            byte[] signatureValue = Base64.getUrlDecoder().decode(signatureB64Url);
+            signatureValue = Base64.getUrlDecoder().decode(signatureB64Url);
+        } catch (IllegalArgumentException e) {
+            return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_BASE64_INVALID,
+                    "Valor de assinatura não é base64url válido.", context);
+        }
 
+        try {
             String jwsFinal = signingService.sign(session, signatureValue);
 
             SigningContext updated = context.toBuilder()
@@ -62,12 +72,11 @@ public class JadesAssembleStep implements SigningStep {
                     .build();
 
             return StepResult.success(getName(), updated);
-        } catch (IllegalArgumentException e) {
-            return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_BASE64_INVALID,
-                    "Valor de assinatura não é base64url válido: " + e.getMessage(), context);
         } catch (Exception e) {
+            // O detalhe é interno (DSS, JVM): fica no log, nunca no diagnóstico
+            log.error("Falha ao montar o JWS JAdES", e);
             throw new StepException(SignatureExceptionCode.CRYPTO_SIGNATURE_CREATION_FAILED,
-                    "Erro ao montar o JWS JAdES: " + e.getMessage(), e);
+                    "Erro ao montar o JWS JAdES.", e);
         }
     }
 }

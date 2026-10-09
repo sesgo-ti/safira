@@ -18,6 +18,8 @@ import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TsaPolicy;
 import br.gov.go.saude.fhir.safira.steps.signing.SigningKeys;
 import eu.europa.esig.dss.spi.exception.DSSExternalResourceException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Passo {@code jades-extension}: etapas 12 e 13 do caso de uso de criação.
@@ -33,6 +35,8 @@ import eu.europa.esig.dss.spi.exception.DSSExternalResourceException;
  */
 @StepId("jades-extension")
 public class JadesExtensionStep implements SigningStep {
+
+    private static final Logger log = LoggerFactory.getLogger(JadesExtensionStep.class);
 
     public static final String TSA_POLICY_OID_KEY = "tsaPolicyOid";
 
@@ -67,11 +71,13 @@ public class JadesExtensionStep implements SigningStep {
                     .attribute(TSA_POLICY_OID_KEY, tsaPolicy.oid())
                     .build());
         } catch (DSSExternalResourceException e) {
+            log.warn("TSA inacessível em {}", tsaUrl, e);
             return StepResult.failure(getName(), SignatureExceptionCode.TSA_UNAVAILABLE,
-                    "TSA inacessível em " + tsaUrl + ": " + e.getMessage(), context);
+                    "TSA inacessível em " + tsaUrl + ".", context);
         } catch (Exception e) {
+            log.warn("Resposta da TSA rejeitada em {}", tsaUrl, e);
             return StepResult.failure(getName(), SignatureExceptionCode.TSA_INVALID_RESPONSE,
-                    "Resposta da TSA rejeitada (status, nonce, imprint ou política): " + e.getMessage(), context);
+                    "Resposta da TSA rejeitada (status, nonce, imprint ou política).", context);
         }
     }
 }

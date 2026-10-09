@@ -23,6 +23,8 @@ import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cms.CMSSignedData;
 import org.bouncycastle.tsp.TimeStampToken;
 import org.bouncycastle.tsp.TimeStampTokenInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -41,6 +43,8 @@ import java.util.Optional;
  * revogação são verificadas pelo EU DSS, contra o trust store TSA da política selecionada.
  */
 public final class TimestampTokenInspector {
+
+    private static final Logger log = LoggerFactory.getLogger(TimestampTokenInspector.class);
 
     /**
      * @param policyOid         {@code TSTInfo.policy}
@@ -87,8 +91,9 @@ public final class TimestampTokenInspector {
         } catch (TimestampTokenException e) {
             throw e;
         } catch (Exception e) {
+            log.warn("TimeStampToken malformado (CMS/TSTInfo)", e);
             throw new TimestampTokenException(SignatureExceptionCode.TSA_INVALID_TOKEN,
-                    "TimeStampToken malformado (CMS/TSTInfo): " + e.getMessage(), e);
+                    "TimeStampToken malformado (CMS/TSTInfo).", e);
         }
     }
 
@@ -113,7 +118,7 @@ public final class TimestampTokenInspector {
             return der;
         } catch (IllegalArgumentException e) {
             throw new TimestampTokenException(SignatureExceptionCode.TSA_INVALID_TOKEN,
-                    "sigTst.tstTokens[0].val não é Base64 padrão canônico: " + e.getMessage(), e);
+                    "sigTst.tstTokens[0].val não é Base64 padrão canônico.", e);
         }
     }
 

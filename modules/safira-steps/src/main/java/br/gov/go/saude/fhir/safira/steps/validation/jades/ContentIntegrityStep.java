@@ -13,6 +13,8 @@ import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationStep;
 import br.gov.go.saude.fhir.safira.steps.content.FramedContentDigest;
 import br.gov.go.saude.fhir.safira.steps.content.SignedContentRules;
 import br.gov.go.saude.fhir.safira.steps.policy.PolicyViolation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.security.MessageDigest;
 import java.util.Optional;
@@ -24,6 +26,8 @@ import java.util.Optional;
  */
 @StepId("content-integrity")
 public class ContentIntegrityStep implements ValidationStep {
+
+    private static final Logger log = LoggerFactory.getLogger(ContentIntegrityStep.class);
 
     @Override
     public StepResult<ValidationContext> execute(ValidationContext context) {
@@ -37,8 +41,9 @@ public class ContentIntegrityStep implements ValidationStep {
             recomputed = FramedContentDigest.sha256(
                     SignedContentRules.orderedParts(context.getBundleJson(), context.getProvenanceJson()));
         } catch (RuntimeException e) {
+            log.warn("Falha na canonicalização lossless do conteúdo", e);
             return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_CANONICALIZATION_FAILED,
-                    "Falha na canonicalização lossless do conteúdo: " + e.getMessage(), context);
+                    "Falha na canonicalização lossless do conteúdo.", context);
         }
         byte[] payload = context.getAttribute(ValidationKeys.PAYLOAD, byte[].class).orElse(new byte[0]);
         if (!MessageDigest.isEqual(recomputed, payload)) {
