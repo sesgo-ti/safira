@@ -137,7 +137,8 @@ public class SafiraSimulacaoAutoConfiguration {
     }
 
     /**
-     * PKI persistida: revogação (OCSP e LCR) pelas fontes em memória do testkit, emitidas pela AC carregada.
+     * PKI persistida: revogação (OCSP e LCR) pelas fontes em memória do testkit, emitidas pela AC
+     * carregada, e o material público em {@code GET /simulacao/pki}.
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnBean(PkiPersistida.class)
@@ -147,6 +148,12 @@ public class SafiraSimulacaoAutoConfiguration {
         @ConditionalOnMissingBean
         CertificateVerifierFactory simulacaoRevogacaoEmMemoria(PkiPersistida pki) {
             return CertificateVerifierFactory.offline(pki.pki().fonteOcsp(), pki.pki().fonteLcr());
+        }
+
+        /** {@code GET /simulacao/pki}: só material público da PKI persistida. */
+        @Bean
+        PkiPublicaController pkiPublicaController(PkiPersistida pki) {
+            return new PkiPublicaController(pki);
         }
 
     }

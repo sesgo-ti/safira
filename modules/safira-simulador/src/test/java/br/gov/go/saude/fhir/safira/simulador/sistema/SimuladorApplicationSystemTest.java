@@ -31,7 +31,10 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.KeyPair;
 import java.time.Instant;
+import java.util.Base64;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -101,6 +104,32 @@ class SimuladorApplicationSystemTest {
 
         assertThat(resposta.statusCode()).isEqualTo(200);
         assertThat(mapper.readTree(resposta.body()).get("status").asText()).isEqualTo("UP");
+    }
+
+    @Test
+    void shouldExposeOnlyPublicMaterialAtPkiEndpoint() throws Exception {
+        HttpResponse<String> resposta = http.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + porta + "/simulacao/pki")).build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        JsonNode corpo = mapper.readTree(resposta.body());
+
+        assertThat(resposta.statusCode()).isEqualTo(200);
+        assertThat(corpo.fieldNames()).toIterable().containsExactlyInAnyOrder(
+                "diretorio", "raiz", "ac", "cadeiaSignatario", "issuerSha256", "politicaOid");
+        assertThat(corpo.get("diretorio").asText()).isEqualTo(pki.diretorio().toString());
+        assertThat(corpo.get("raiz").asText()).isEqualTo(Files.readString(pki.raiz()));
+        assertThat(corpo.get("ac").asText()).isEqualTo(Files.readString(pki.ac()));
+        assertThat(corpo.get("cadeiaSignatario")).hasSize(3);
+        assertThat(corpo.get("cadeiaSignatario").get(2).asText()).isEqualTo(Files.readString(pki.raiz()));
+        assertThat(corpo.get("issuerSha256").asText()).isEqualTo(pki.issuerSha256());
+        assertThat(resposta.body()).doesNotContain(Files.readString(pki.senha()).strip())
+                .doesNotContain("PRIVATE")
+                .doesNotContain(Base64.getEncoder().encodeToString(Files.readAllBytes(pki.signatario())).substring(0, 64));
+        for (KeyPair chaves : List.of(pki.pki().chavesRaiz(), pki.pki().chavesAc(), pki.pki().chavesTsa(),
+                pki.pki().chavesSignatario(), pki.pki().chavesRevogado())) {
+            assertThat(resposta.body()).doesNotContain(
+                    Base64.getEncoder().encodeToString(chaves.getPrivate().getEncoded()).substring(0, 64));
+        }
     }
 
     @Test
