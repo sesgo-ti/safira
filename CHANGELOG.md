@@ -21,6 +21,7 @@ e o projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 - `safira-rest` empacotado como JAR executável (`java -jar`), com o goal `repackage` do `spring-boot-maven-plugin`.
 - Modo simulação (módulo `safira-simulador`, perfil `simulacao`): assina e valida pelo mesmo pipeline com raízes de confiança próprias (`safira.simulacao.trust-anchors`, `intermediates`, `crls`) no lugar do acervo ICP-Brasil, sem misturá-los; LCRs locais como fonte offline de revogação do DSS; falha na partida para âncoras ausentes, ilegíveis ou não autoassinadas; aviso `WARN` de ausência de valor legal. Desligado por padrão.
 - `GeradorPkiSimulada`: gera raiz, AC, signatário A3-like (PKCS#12, CPF no `otherName`), signatário revogado, LCRs e o `application-simulacao.yml` com a allowlist — nomes marcados `SIMULACAO - SEM VALOR LEGAL`.
+- Política de validação do EU DSS versionada (`safira-jades/src/main/resources/politica/safira-politica-validacao-0.2.0.xml`, derivada do `constraint.xml` do DSS 6.5), usada pelo `SignedDocumentValidator` e pelo `CertificateValidator`: extensão crítica não suportada na folha como `FAIL` e `PolicyIds` (`FAIL`) com a lista explícita dos OIDs de `safira.policy.accepted-certificate-policies`, gerada na partida (sem prefixos nem curinga). Allowlist sem OID válido recusa a operação com `CONFIG.INVALID-PARAMETER`. KeyUsage, tamanho de chave e não-CA continuam no perfil ICP-Brasil, para preservar códigos e precedência do IG.
 
 ### Alterado
 
@@ -31,6 +32,8 @@ e o projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 - `Signature`: `sigFormat` `application/jose+json`, `targetFormat` `application/fhir+json`, `type` *Verification Signature* (`1.2.840.10065.1.12.1.5`).
 - Assinatura B-B e extensão B-T criam o `CommonCertificateVerifier` sem AIA (o construtor padrão do DSS baixaria certificados pela rede).
 - Spring Boot 4.0.7 e BouncyCastle 1.86, com versões fixadas de Netty, HttpClient 5, Jackson e Log4j por correções de segurança.
+- Na criação, folha com extensão crítica não suportada ou proibida (`ocsp_noCheck`) retorna `CERT.CHAIN-VALIDATION-FAILED` (IG criar 2.7) em vez de `VALIDATION.INDETERMINATE`.
+- Na criação, folha sem nenhum OID da allowlist retorna `CERT.NOT-ICP-BRASIL` (IG criar 2.5) antes de revogação, validade e extensões críticas, inclusive quando também está revogada, expirada ou ainda não é válida.
 
 ### Removido
 
