@@ -11,6 +11,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.Step;
 import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.jades.adapter.DestinationGuard;
+import br.gov.go.saude.fhir.safira.jades.adapter.TspSourceFactory;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.signing.CertificatePolicyStep;
 import br.gov.go.saude.fhir.safira.steps.signing.ContextValidationStep;
@@ -71,6 +72,13 @@ public class SafiraStepsAutoConfiguration {
         return CertificateVerifierFactory.online(verification.ocspTimeout(), verification.crlTimeout(), destinationGuard);
     }
 
+    /** Fonte de carimbo do tempo do JAdES-B-T: TSA online; o simulador a troca por uma em memória. */
+    @Bean
+    @ConditionalOnMissingBean
+    public TspSourceFactory safiraTspSourceFactory() {
+        return TspSourceFactory.online();
+    }
+
     /** Verificadores do DSS por operação, com fontes reaproveitadas por geração do acervo. */
     @Bean
     @ConditionalOnMissingBean
@@ -83,6 +91,7 @@ public class SafiraStepsAutoConfiguration {
     public List<Step<?>> safiraAllSteps(FonteDeConfianca fonteDeConfianca,
                                         VerificadoresDss verificadores,
                                         SafiraPolicyProperties policyProperties,
+                                        TspSourceFactory tspSources,
                                         Clock clock) {
         List<Step<?>> steps = new ArrayList<>();
 
@@ -95,7 +104,7 @@ public class SafiraStepsAutoConfiguration {
         steps.add(new JadesDataToSignStep());
         steps.add(new CryptoSigningStep());
         steps.add(new JadesAssembleStep());
-        steps.add(new JadesExtensionStep(new JadesExtensionService(), policyProperties));
+        steps.add(new JadesExtensionStep(new JadesExtensionService(), policyProperties, tspSources));
         steps.add(new TsaTokenVerificationStep(verificadores, policyProperties));
         steps.add(new FhirSignatureStep());
 

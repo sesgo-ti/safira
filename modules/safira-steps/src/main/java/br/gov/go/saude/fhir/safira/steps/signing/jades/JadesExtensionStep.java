@@ -13,7 +13,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
 import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
-import br.gov.go.saude.fhir.safira.jades.adapter.TspSources;
+import br.gov.go.saude.fhir.safira.jades.adapter.TspSourceFactory;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TsaPolicy;
 import br.gov.go.saude.fhir.safira.steps.signing.SigningKeys;
@@ -42,10 +42,18 @@ public class JadesExtensionStep implements SigningStep {
 
     private final JadesExtensionService extensionService;
     private final SafiraPolicyProperties policy;
+    private final TspSourceFactory tspSources;
 
+    /** Carimbo pela TSA online de {@code safira.operational.verification.tsa-url}. */
     public JadesExtensionStep(JadesExtensionService extensionService, SafiraPolicyProperties policy) {
+        this(extensionService, policy, TspSourceFactory.online());
+    }
+
+    public JadesExtensionStep(JadesExtensionService extensionService, SafiraPolicyProperties policy,
+                              TspSourceFactory tspSources) {
         this.extensionService = extensionService;
         this.policy = policy;
+        this.tspSources = tspSources;
     }
 
     @Override
@@ -65,7 +73,7 @@ public class JadesExtensionStep implements SigningStep {
         String tsaUrl = verification.tsaUrl();
         try {
             String extended = extensionService.extendToBaselineT(jws,
-                    TspSources.online(tsaUrl, verification.tsaTimeout(), tsaPolicy.oid()));
+                    tspSources.create(tsaUrl, verification.tsaTimeout(), tsaPolicy.oid()));
             return StepResult.success(getName(), context.toBuilder()
                     .attribute(SigningKeys.JWS_FINAL, extended)
                     .attribute(TSA_POLICY_OID_KEY, tsaPolicy.oid())

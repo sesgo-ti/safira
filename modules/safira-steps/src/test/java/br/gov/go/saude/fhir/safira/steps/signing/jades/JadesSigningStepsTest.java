@@ -13,6 +13,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
+import br.gov.go.saude.fhir.safira.jades.adapter.TspSourceFactory;
 import br.gov.go.saude.fhir.safira.testkit.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.testkit.TsaHttpLocal;
@@ -46,6 +47,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
@@ -104,6 +106,21 @@ class JadesSigningStepsTest {
         StepResult<SigningContext> result = extend(signedContext(TimestampStrategy.TSA, "https://127.0.0.1:9/tsa"));
 
         assertThat(((StepResult.Failure<SigningContext>) result).code()).isEqualTo(SignatureExceptionCode.TSA_UNAVAILABLE);
+    }
+
+    @Test
+    void shouldUseInjectedTspSourceWhenStrategyIsTsa() throws Exception {
+        List<String> pedidos = new ArrayList<>();
+        TspSourceFactory emMemoria = (url, timeout, oid) -> {
+            pedidos.add(url + "|" + oid);
+            return pki.fonteTsp();
+        };
+
+        String jws = jws(new JadesExtensionStep(new JadesExtensionService(), policy, emMemoria)
+                .execute(signedContext(TimestampStrategy.TSA, "https://tsa.invalid/tsa")));
+
+        assertThat(dssFormat(jws)).isEqualTo(SignatureLevel.JAdES_BASELINE_T);
+        assertThat(pedidos).containsExactly("https://tsa.invalid/tsa|" + PkiIcpSimulada.POLITICA_TSA);
     }
 
     /** Contexto com o snapshot que {@code pkix-chain-validation} guardaria para o acervo de teste. */
