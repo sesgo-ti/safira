@@ -33,7 +33,9 @@ import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBras
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
 
+import java.security.cert.X509Certificate;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
@@ -74,6 +76,19 @@ public final class SignedArtifactFixture {
      * @param tsa TSA local para o resultado {@code tsa}; nulo produz JAdES-B-B
      */
     public static SigningResult sign(TestPki pki, SafiraPolicyProperties policy, long iat, TestPki.FakeTsa tsa) {
+        return sign(pki, policy, iat, tsa, true);
+    }
+
+    /**
+     * Assina sem a validação PKIX da cadeia, para produzir artefatos que o lado
+     * da assinatura recusaria (certificado do signatário inválido) e exercitar a validação.
+     */
+    public static SigningResult signSemVerificarCadeia(TestPki pki, SafiraPolicyProperties policy) {
+        return sign(pki, policy, Instant.now().getEpochSecond(), null, false);
+    }
+
+    private static SigningResult sign(TestPki pki, SafiraPolicyProperties policy, long iat, TestPki.FakeTsa tsa,
+                                      boolean verificarCadeia) {
         VerificadoresDss verifiers = new VerificadoresDss(
                 new FonteDeConfiancaIcpBrasil(() -> Optional.of(TrustMaterial.of(List.of(pki.caCert)))),
                 CertificateVerifierFactory.offline(pki.ocspGoodSource(), null));
@@ -88,16 +103,23 @@ public final class SignedArtifactFixture {
                     .policyIdentifierUri(Policy020.POLICY_URI)
                     .operationalConfig(TestConfigs.operational(tsa == null ? null : tsa.url()))
                     .build();
+            List<Step<SigningContext>> verificacoes = new ArrayList<>();
+            if (verificarCadeia) {
+                verificacoes.add(new PkixChainValidationStep(verifiers, policy));
+            } else {
+                context = context.toBuilder().certificateChain(new X509Certificate[]{pki.leafCert, pki.caCert}).build();
+            }
+            verificacoes.add(new CertificatePolicyStep(policy));
             List<Step<SigningContext>> steps = List.of(
-                    new PkixChainValidationStep(verifiers, policy),
-                    new CertificatePolicyStep(policy),
                     new FramedContentDigestStep(),
                     new JadesDataToSignStep(),
                     new CryptoSigningStep(),
                     new JadesAssembleStep(),
                     new JadesExtensionStep(new JadesExtensionService(), policy),
                     new FhirSignatureStep());
-            for (Step<SigningContext> step : steps) {
+            List<Step<SigningContext>> todos = new ArrayList<>(verificacoes);
+            todos.addAll(steps);
+            for (Step<SigningContext> step : todos) {
                 StepResult<SigningContext> result = step.execute(context);
                 if (!result.isSuccess()) {
                     throw new IllegalStateException("Falha ao assinar no step " + step.getName() + ": "

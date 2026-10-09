@@ -106,40 +106,46 @@ public final class TestPki {
      * @param rsaBits     tamanho da chave RSA
      */
     public record LeafProfile(String policyOid, int keyUsage, String subjectDn, String sanOid,
-                              String sanValue, String keyAlgorithm, int rsaBits) {
+                              String sanValue, String keyAlgorithm, int rsaBits,
+                              boolean unknownCriticalExtension) {
 
         /** A3 conforme a política 0.2.0: RSA-2048, digitalSignature, CPF em SERIALNUMBER e SAN. */
         public static LeafProfile a3() {
             return new LeafProfile("2.16.76.1.2.3.1", KeyUsage.digitalSignature | KeyUsage.nonRepudiation,
                     "CN=Fulano de Tal:" + TEST_CPF + ",SERIALNUMBER=" + TEST_CPF,
-                    "2.16.76.1.3.1", "01011990" + TEST_CPF + "000000000000000000", "RSA", 2048);
+                    "2.16.76.1.3.1", "01011990" + TEST_CPF + "000000000000000000", "RSA", 2048, false);
         }
 
         /** SE-S (selo): RSA-2048, digitalSignature, CNPJ em SERIALNUMBER e SAN. */
         public static LeafProfile seS() {
             return new LeafProfile("2.16.76.1.2.201.1", KeyUsage.digitalSignature,
                     "CN=Estabelecimento Teste:" + TEST_CNPJ + ",SERIALNUMBER=" + TEST_CNPJ,
-                    "2.16.76.1.3.3", TEST_CNPJ, "RSA", 2048);
+                    "2.16.76.1.3.3", TEST_CNPJ, "RSA", 2048, false);
         }
 
         public LeafProfile withPolicyOid(String oid) {
-            return new LeafProfile(oid, keyUsage, subjectDn, sanOid, sanValue, keyAlgorithm, rsaBits);
+            return new LeafProfile(oid, keyUsage, subjectDn, sanOid, sanValue, keyAlgorithm, rsaBits, unknownCriticalExtension);
         }
 
         public LeafProfile withKeyUsage(int bits) {
-            return new LeafProfile(policyOid, bits, subjectDn, sanOid, sanValue, keyAlgorithm, rsaBits);
+            return new LeafProfile(policyOid, bits, subjectDn, sanOid, sanValue, keyAlgorithm, rsaBits, unknownCriticalExtension);
         }
 
         public LeafProfile withSubjectDn(String dn) {
-            return new LeafProfile(policyOid, keyUsage, dn, sanOid, sanValue, keyAlgorithm, rsaBits);
+            return new LeafProfile(policyOid, keyUsage, dn, sanOid, sanValue, keyAlgorithm, rsaBits, unknownCriticalExtension);
         }
 
         public LeafProfile withSan(String oid, String value) {
-            return new LeafProfile(policyOid, keyUsage, subjectDn, oid, value, keyAlgorithm, rsaBits);
+            return new LeafProfile(policyOid, keyUsage, subjectDn, oid, value, keyAlgorithm, rsaBits, unknownCriticalExtension);
+        }
+
+        /** Acrescenta uma extensão crítica com OID desconhecido (RFC 5280 exige rejeitar o certificado). */
+        public LeafProfile withUnknownCriticalExtension() {
+            return new LeafProfile(policyOid, keyUsage, subjectDn, sanOid, sanValue, keyAlgorithm, rsaBits, true);
         }
 
         public LeafProfile withKey(String algorithm, int bits) {
-            return new LeafProfile(policyOid, keyUsage, subjectDn, sanOid, sanValue, algorithm, bits);
+            return new LeafProfile(policyOid, keyUsage, subjectDn, sanOid, sanValue, algorithm, bits, unknownCriticalExtension);
         }
     }
 
@@ -559,6 +565,9 @@ public final class TestPki {
                 ext.createSubjectKeyIdentifier(leafKeys.getPublic()));
         builder.addExtension(Extension.authorityKeyIdentifier, false,
                 ext.createAuthorityKeyIdentifier(caCert.getPublicKey()));
+        if (profile.unknownCriticalExtension()) {
+            builder.addExtension(new ASN1ObjectIdentifier("1.3.6.1.4.1.99999.1"), true, new DERUTF8String("x"));
+        }
 
         return convert(builder.build(signer(caKeys)));
     }
