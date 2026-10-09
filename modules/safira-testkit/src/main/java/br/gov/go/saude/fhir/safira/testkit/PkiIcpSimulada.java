@@ -41,6 +41,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
@@ -49,7 +50,6 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Function;
 
 /**
@@ -86,6 +86,7 @@ public final class PkiIcpSimulada {
     private static final long TSA = 5;
     private static final String EXTENSAO_DESCONHECIDA = "1.3.6.1.4.1.99999.1";
     private static final Duration VALIDADE_REVOGACAO = Duration.ofDays(3650);
+    private static final SecureRandom SERIAIS = new SecureRandom();
 
     private final JAXBCertEntityRepository repositorio;
     private final JAXBCertEntity raiz;
@@ -110,7 +111,8 @@ public final class PkiIcpSimulada {
 
     public static PkiIcpSimulada criar(PerfilSignatario perfil) {
         XmlPki xml = carregarXml();
-        long deslocamento = ThreadLocalRandom.current().nextLong(1L << 20, 1L << 52);
+        // Seriais imprevisíveis com ao menos 57 bits (o XML só admite long): deslocamento SecureRandom.
+        long deslocamento = SERIAIS.nextLong(1L << 56, 1L << 62);
         for (XmlCertificateType certificado : xml.getCertificate()) {
             certificado.setSerialNumber(certificado.getSerialNumber() + deslocamento);
             certificado.getIssuer().setSerialNumber(certificado.getIssuer().getSerialNumber() + deslocamento);

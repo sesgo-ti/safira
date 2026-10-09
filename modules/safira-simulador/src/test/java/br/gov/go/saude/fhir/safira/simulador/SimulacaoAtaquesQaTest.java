@@ -301,8 +301,8 @@ class SimulacaoAtaquesQaTest {
 
         Set<BigInteger> seriais = new HashSet<>();
         todos.forEach(c -> seriais.add(c.getSerialNumber()));
-        // Seriais da PKI factory do DSS (long): deslocamento aleatório por PKI, não 64 bits de entropia.
-        assertThat(seriais).hasSize(4).allMatch(s -> s.signum() > 0 && s.bitLength() > 20 && s.bitLength() <= 63);
+        // Seriais da PKI factory do DSS (long): deslocamento SecureRandom em [2^56, 2^62) por PKI.
+        assertThat(seriais).hasSize(4).allMatch(s -> s.signum() > 0 && s.bitLength() >= 57 && s.bitLength() <= 63);
         assertThat(todos).allMatch(c -> ((RSAPublicKey) c.getPublicKey()).getModulus().bitLength() >= 2048);
         assertThat(todos).allMatch(c -> c.getSigAlgName().toUpperCase().startsWith("SHA256"));
     }
