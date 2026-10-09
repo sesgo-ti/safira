@@ -27,7 +27,7 @@ class ValidationServiceTest {
 
     private static final String POLICY = "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0";
     private static final SafiraOperationalConfigProperties OPS =
-            new SafiraOperationalConfigProperties(null, null, null);
+            new SafiraOperationalConfigProperties(null, null);
 
     @Test
     void shouldRunSinglePolicyPipelineWithLosslessContext() {

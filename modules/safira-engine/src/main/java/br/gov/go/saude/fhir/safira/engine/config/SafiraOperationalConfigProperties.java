@@ -8,8 +8,6 @@ package br.gov.go.saude.fhir.safira.engine.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
-import java.util.List;
-
 /**
  * Propriedades de configuração operacional do engine de assinatura digital.
  * <p>
@@ -22,8 +20,7 @@ import java.util.List;
 public record SafiraOperationalConfigProperties(
 
         @DefaultValue VerificationProps verification,
-        @DefaultValue SecurityLimitsProps security,
-        @DefaultValue MiddlewareCryptoProps middlewareCrypto
+        @DefaultValue SecurityLimitsProps security
 
 ) {
 
@@ -70,58 +67,4 @@ public record SafiraOperationalConfigProperties(
             @DefaultValue("52428800")    Integer maxBundleSize,
             @DefaultValue("10")          Integer timoutVerificationBundle
     ) {}
-
-    // -------------------------------------------------------------------------
-    // Middleware criptográfico PKCS#11 (SMARTCARD / TOKEN)
-    // -------------------------------------------------------------------------
-
-    public record MiddlewareCryptoProps(
-            @DefaultValue LibraryProps library,
-            @DefaultValue Pkcs11Props pkcs11,
-            @DefaultValue SessionProps session,
-            @DefaultValue ConnectivityProps connectivity
-    ) {
-
-        /**
-         * @param path         Caminho absoluto para a biblioteca PKCS#11 (.dll/.so). Deve existir e ser acessível.
-         * @param architecture Especificação de arquitetura: "32" ou "64". Opcional.
-         */
-        public record LibraryProps(
-                String path,
-                String architecture
-        ) {}
-
-        /**
-         * @param slotId      Identificador do slot (inteiro não negativo). Opcional, padrão: descoberta automática.
-         * @param tokenLabel  Label do token (até 32 caracteres UTF-8). Opcional.
-         * @param mecanismos  Mecanismos PKCS#11 suportados. Valores válidos: {@code CKM_RSA_PKCS} | {@code CKM_ECDSA}.
-         */
-        public record Pkcs11Props(
-                Integer slotId,
-                String tokenLabel,
-                List<String> mecanismos
-        ) {}
-
-        /**
-         * @param modo                   Tipo de acesso à sessão PKCS#11. Valores: {@code read-only} | {@code read-write}. Padrão: "read-only".
-         * @param timeoutInatividade     Timeout de inatividade (segundos). Padrão: 300. Intervalo: [60, 3600].
-         * @param tentativasAutenticacao Tentativas de autenticação (PIN) antes de bloquear o token. Padrão: 3. Intervalo: [1, 10].
-         */
-        public record SessionProps(
-                @DefaultValue("read-only") String modo,
-                @DefaultValue("300")       Integer timeoutInatividade,
-                @DefaultValue("3")         Integer tentativasAutenticacao
-        ) {}
-
-        /**
-         * @param timeoutConexao Timeout (segundos) para conexão com o middleware. Padrão: 10. Intervalo: [3, 60].
-         * @param intervaloRetry Intervalo (segundos) entre tentativas de reconexão. Padrão: 2. Intervalo: [1, 30].
-         * @param maximoRetries  Número máximo de retries. Padrão: 3. Intervalo: [0, 10].
-         */
-        public record ConnectivityProps(
-                @DefaultValue("10") Integer timeoutConexao,
-                @DefaultValue("2")  Integer intervaloRetry,
-                @DefaultValue("3")  Integer maximoRetries
-        ) {}
-    }
 }
