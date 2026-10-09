@@ -115,8 +115,18 @@ final class GerenciadorDoServidor {
             Process processo = lancar(partida, log);
             EstadoDoServidor estado = new EstadoDoServidor(partida.modo(), processo.pid(), partida.porta(),
                     inicioDe(processo), Instant.now(), log);
-            estado.gravar(dir);
-            esperarProntidao(processo, estado, dir, partida.timeout());
+            try {
+                estado.gravar(dir);
+                esperarProntidao(processo, estado, dir, partida.timeout());
+            } catch (FalhaDoServidor e) {
+                throw e;
+            } catch (RuntimeException e) {
+                // nenhum filho fica órfão: qualquer falha depois do fork o encerra
+                encerrar(processo.toHandle(), TIMEOUT_FORCADO);
+                EstadoDoServidor.remover(dir);
+                throw new FalhaDoServidor("Falha ao registrar o servidor (PID " + processo.pid() + "): "
+                        + e.getMessage() + "; processo encerrado.", CodigosDeSaida.ERRO_INTERNO);
+            }
             return status(partida.modo(), estado, true);
         }
     }

@@ -60,6 +60,14 @@ class ServidorTest {
     void encerrar() {
         Cli.executar("servidor", "parar", "--modo", "simulacao", "--estado-dir", estado.toString());
         pids.forEach(pid -> ProcessHandle.of(pid).ifPresent(ProcessHandle::destroyForcibly));
+        servidoresFilhos().forEach(ProcessHandle::destroyForcibly);
+    }
+
+    /** Filhos vivos deste processo de teste que rodam {@code servidor executar}. */
+    private static List<ProcessHandle> servidoresFilhos() {
+        return ProcessHandle.current().descendants().filter(ProcessHandle::isAlive)
+                .filter(filho -> filho.info().arguments().map(List::of).orElse(List.of()).contains("executar"))
+                .toList();
     }
 
     private Resultado iniciar(String... extras) {
@@ -219,6 +227,19 @@ class ServidorTest {
         try (OutputStream saida = Files.newOutputStream(arquivoDeEstado())) {
             gravado.store(saida, null);
         }
+    }
+
+    @Test
+    void shouldKillChildWhenStateCannotBeWritten() throws Exception {
+        // o temporário da gravação atômica é um diretório não vazio: gravar o estado falha depois do fork
+        Files.createDirectories(estado.resolve("simulacao").resolve("servidor.properties.tmp").resolve("bloqueio"));
+
+        Resultado resultado = iniciar();
+
+        assertThat(resultado.saida()).isEqualTo(CodigosDeSaida.ERRO_INTERNO);
+        assertThat(resultado.err()).contains("processo encerrado");
+        await().atMost(Duration.ofSeconds(15)).until(() -> servidoresFilhos().isEmpty());
+        assertThat(arquivoDeEstado()).doesNotExist();
     }
 
     @Test
