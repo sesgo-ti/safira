@@ -12,6 +12,8 @@ import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.ParameterException;
 import picocli.CommandLine.Spec;
 
+import java.io.PrintWriter;
+
 /**
  * Linha de comando do Safira: {@code safira assinar} e {@code safira validar} sobre os serviços do
  * {@code safira-rest}, no modo {@code icpbrasil} (padrão) ou {@code simulacao}.
@@ -47,7 +49,8 @@ public final class SafiraCli implements Runnable {
     }
 
     public static void main(String[] args) {
-        System.exit(linhaDeComando().execute(args));
+        // PrintWriter direto sobre o PrintStream: checkError() enxerga a falha do stdout (ex.: pipe fechado)
+        System.exit(linhaDeComando().setOut(new PrintWriter(System.out, true)).execute(args));
     }
 
     /** Versão do jar (manifesto); em desenvolvimento, sem versão. */

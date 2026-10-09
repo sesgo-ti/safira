@@ -46,11 +46,19 @@ public final class ContextoSafira implements AutoCloseable {
     /**
      * @param pkiDir  diretório da PKI simulada (só no modo simulação; nulo = padrão)
      * @param config  YAML adicional (nulo = nenhum)
-     * @param verbose mostra o log de falha da partida do Spring e os avisos do EU DSS (stderr)
+     * @param verbose mostra o log do Spring (inclusive da falha da partida) e os avisos do EU DSS (stderr)
      */
     public static ContextoSafira iniciar(Modo modo, Path pkiDir, Path config, boolean verbose) {
+        return iniciar(modo, pkiDir, config, null, verbose);
+    }
+
+    /** @param timeoutAcervo timeout do download do acervo ICP-Brasil em segundos (só icpbrasil; nulo = padrão da CLI) */
+    public static ContextoSafira iniciar(Modo modo, Path pkiDir, Path config, Integer timeoutAcervo, boolean verbose) {
         if (pkiDir != null && !modo.simulacao()) {
             throw new FalhaDeUso("--pki-dir só vale com --modo simulacao: os modos não se misturam.");
+        }
+        if (timeoutAcervo != null && modo != Modo.ICPBRASIL) {
+            throw new FalhaDeUso("--timeout-acervo só vale com --modo icpbrasil: os modos não se misturam.");
         }
         if (config != null && !Files.isRegularFile(config)) {
             throw new FalhaDeUso("Arquivo de configuração não encontrado: " + config);
@@ -64,7 +72,7 @@ public final class ContextoSafira implements AutoCloseable {
         if (modo.simulacao()) {
             aplicacao.addInitializers(new PkiGeradaNaPartida());
         }
-        ConfigurableApplicationContext contexto = aplicacao.run(argumentos(modo, pkiDir, config, verbose));
+        ConfigurableApplicationContext contexto = aplicacao.run(argumentos(modo, pkiDir, config, timeoutAcervo, verbose));
         try {
             exigirFonteUnica(contexto, modo);
         } catch (RuntimeException e) {
@@ -74,14 +82,17 @@ public final class ContextoSafira implements AutoCloseable {
         return new ContextoSafira(contexto);
     }
 
-    private static String[] argumentos(Modo modo, Path pkiDir, Path config, boolean verbose) {
+    private static String[] argumentos(Modo modo, Path pkiDir, Path config, Integer timeoutAcervo, boolean verbose) {
         List<String> argumentos = new ArrayList<>(List.of(
                 "--spring.config.name=" + NOME_DA_CONFIGURACAO,
                 "--safira.simulacao.enabled=" + modo.simulacao(),
                 "--spring.autoconfigure.exclude=" + String.join(",", modo.excluidas()),
-                "--logging.level.org.springframework.boot.SpringApplication=" + (verbose ? "ERROR" : "OFF")));
+                "--logging.level.org.springframework=" + (verbose ? "WARN" : "OFF")));
         if (verbose) {
             argumentos.add("--logging.level.eu.europa.esig=WARN");
+        }
+        if (timeoutAcervo != null) {
+            argumentos.add("--icpbrasil-truststore.network.download-timeout-seconds=" + timeoutAcervo);
         }
         if (config != null) {
             argumentos.add("--spring.config.additional-location=file:" + config.toAbsolutePath());

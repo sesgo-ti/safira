@@ -71,7 +71,7 @@ final class Assinar implements Callable<Integer> {
 
     @Override
     public Integer call() {
-        return Execucao.executar(spec, opcoes, this::assinar);
+        return Execucao.executar(spec, opcoes, this::assinar, bundle, provenance, p12, senha.arquivo);
     }
 
     private Execucao.Resultado assinar(ContextoSafira contexto) {
@@ -79,7 +79,7 @@ final class Assinar implements Callable<Integer> {
         String bundleJson = entradas.bundle(bundle);
         String provenanceJson = entradas.objeto(provenance);
         byte[] conteudo = entradas.binario(p12);
-        String senhaDoP12 = senha.ler();
+        String senhaDoP12 = senha.ler(spec.commandLine().getErr());
         KeyStore chaves = abrir(conteudo, senhaDoP12);
         String aliasDaChave = aliasDaChave(chaves);
 

@@ -13,7 +13,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -105,6 +108,26 @@ class SafiraCliSimulacaoTest {
         assertThat(assinada.saida()).isEqualTo(CodigosDeSaida.SUCESSO);
         assertThat(assinada.out()).isEmpty();
         assertThat(saida).content().contains("\"signature\"");
+    }
+
+    @Test
+    void shouldExitWithOneWhenStdoutCannotBeWritten() {
+        OutputStream fechado = new OutputStream() {
+            @Override
+            public void write(int b) throws IOException {
+                throw new IOException("stdout fechado");
+            }
+        };
+        Cli.executar("validar", "--modo", "simulacao", "--pki-dir", pki.toString(), "--signature", bundle.toString(),
+                "--bundle", bundle.toString(), "--provenance", provenance.toString());
+
+        Resultado resultado = Cli.executar(new PrintWriter(fechado, true), "assinar", "--modo", "simulacao",
+                "--pki-dir", pki.toString(), "--bundle", bundle.toString(), "--provenance", provenance.toString(),
+                "--p12", pki.resolve("signatario.p12").toString(), "--alias", "signatario",
+                "--senha-arquivo", pki.resolve("senha.txt").toString(), "--estrategia", "iat");
+
+        assertThat(resultado.saida()).isEqualTo(CodigosDeSaida.ERRO_INTERNO);
+        assertThat(resultado.err()).contains("stdout");
     }
 
     @Test

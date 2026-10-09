@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 
 /**
  * Execução comum de {@code assinar} e {@code validar}: partida do contexto no modo, aviso de simulação,
@@ -33,12 +34,20 @@ final class Execucao {
     private Execucao() {
     }
 
-    static int executar(CommandSpec spec, OpcoesComuns opcoes, Operacao operacao) {
+    /** @param entradas arquivos conferidos antes da partida do Spring (existência e leitura) */
+    static int executar(CommandSpec spec, OpcoesComuns opcoes, Operacao operacao, Path... entradas) {
         PrintWriter out = spec.commandLine().getOut();
         PrintWriter err = spec.commandLine().getErr();
+        try {
+            opcoes.conferir(entradas);
+        } catch (FalhaDeUso e) {
+            err.println("Erro: " + e.getMessage());
+            return CodigosDeSaida.USO;
+        }
         ContextoSafira contexto;
         try {
-            contexto = ContextoSafira.iniciar(opcoes.modo, opcoes.pkiDir, opcoes.config, opcoes.verbose);
+            contexto = ContextoSafira.iniciar(opcoes.modo, opcoes.pkiDir, opcoes.config, opcoes.timeoutAcervo,
+                    opcoes.verbose);
         } catch (FalhaDeUso e) {
             err.println("Erro: " + e.getMessage());
             return CodigosDeSaida.USO;
@@ -67,6 +76,9 @@ final class Execucao {
         } catch (FalhaDeUso e) {
             err.println("Erro: " + e.getMessage());
             return CodigosDeSaida.USO;
+        } catch (SaidaIndisponivel e) {
+            err.println("Erro: não foi possível escrever o resultado no stdout.");
+            return CodigosDeSaida.ERRO_INTERNO;
         } catch (Exception e) {
             err.println("Erro interno: " + e.getClass().getSimpleName() + ". Use --verbose para ver a causa.");
             detalhar(opcoes, err, e);
@@ -78,6 +90,9 @@ final class Execucao {
         if (opcoes.saida == null) {
             out.println(json);
             out.flush();
+            if (out.checkError()) {
+                throw new SaidaIndisponivel();
+            }
             return;
         }
         try {
@@ -85,6 +100,10 @@ final class Execucao {
         } catch (IOException e) {
             throw new FalhaDeUso("Não foi possível gravar " + opcoes.saida + ": " + e.getMessage());
         }
+    }
+
+    /** O stdout recusou a escrita (ex.: pipe fechado): o {@code PrintWriter} não lança, só marca o erro. */
+    private static final class SaidaIndisponivel extends RuntimeException {
     }
 
     private static void detalhar(OpcoesComuns opcoes, PrintWriter err, Exception e) {

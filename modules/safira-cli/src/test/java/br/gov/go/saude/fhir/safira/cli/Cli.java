@@ -43,12 +43,18 @@ final class Cli {
 
     static Resultado executar(String... argumentos) {
         StringWriter out = new StringWriter();
+        Resultado resultado = executar(new PrintWriter(out, true), argumentos);
+        return new Resultado(resultado.saida(), out.toString(), resultado.err());
+    }
+
+    /** Com o stdout informado (ex.: um destino que falha); {@code out} do resultado fica vazio. */
+    static Resultado executar(PrintWriter out, String... argumentos) {
         StringWriter err = new StringWriter();
         CommandLine linha = SafiraCli.linhaDeComando();
-        linha.setOut(new PrintWriter(out, true));
+        linha.setOut(out);
         linha.setErr(new PrintWriter(err, true));
         int saida = linha.execute(argumentos);
-        return new Resultado(saida, out.toString(), err.toString());
+        return new Resultado(saida, "", err.toString());
     }
 
     /** Copia o exemplo da política 0.2.0 ({@code bundle.json} ou {@code provenance.json}) para o diretório. */

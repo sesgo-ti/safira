@@ -13,6 +13,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.json.LosslessJsonException;
 import br.gov.go.saude.fhir.safira.rest.request.BoundedRequestBody;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
@@ -85,8 +86,19 @@ final class Entradas {
                                 "A entrada excede o limite de " + Math.min(limite, limiteTotal - consumido)
                                         + " bytes ('" + arquivo.getFileName() + "', " + tamanho + " bytes)."));
             }
-            consumido += tamanho;
-            return Files.readAllBytes(arquivo);
+            // o arquivo pode crescer entre o size e a leitura: lê no máximo o limite + 1 e confere de novo
+            long permitido = Math.min(limite, limiteTotal - consumido);
+            byte[] conteudo;
+            try (InputStream in = Files.newInputStream(arquivo)) {
+                conteudo = in.readNBytes((int) Math.min(permitido + 1, Integer.MAX_VALUE - 8));
+            }
+            if (conteudo.length > permitido) {
+                throw new FalhaDeUso("O arquivo " + arquivo + " excede o limite de tamanho.",
+                        outcome(SignatureExceptionCode.SECURITY_BUNDLE_SIZE_LIMIT_EXCEEDED, "too-costly",
+                                "A entrada excede o limite de " + permitido + " bytes ('" + arquivo.getFileName() + "')."));
+            }
+            consumido += conteudo.length;
+            return conteudo;
         } catch (IOException e) {
             throw new FalhaDeUso("Não foi possível ler " + arquivo + ": " + e.getMessage());
         }

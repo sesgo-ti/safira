@@ -125,6 +125,15 @@ class CodigosDeSaidaTest {
     }
 
     @Test
+    void shouldTreatMissingSeverityAsError() {
+        assertThat(CodigosDeSaida.de(outcome(null, "CERT.REVOKED"), Operacao.VALIDACAO)).isEqualTo(CodigosDeSaida.REPROVADA);
+        assertThat(CodigosDeSaida.de(outcome(null, "VALIDATION.SUCCESS"), Operacao.VALIDACAO))
+                .isEqualTo(CodigosDeSaida.INCONCLUSIVO);
+        assertThat(CodigosDeSaida.de(juntar(outcome("information", "VALIDATION.SUCCESS"), outcome(null, "CERT.REVOKED")),
+                Operacao.VALIDACAO)).isEqualTo(CodigosDeSaida.REPROVADA);
+    }
+
+    @Test
     void shouldNotExitWithSuccessForSigningOutcome() {
         assertThat(CodigosDeSaida.de(outcome("information", "VALIDATION.SUCCESS"), Operacao.ASSINATURA))
                 .isEqualTo(CodigosDeSaida.INCONCLUSIVO);

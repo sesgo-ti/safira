@@ -6,12 +6,17 @@
 package br.gov.go.saude.fhir.safira.cli;
 
 import br.gov.go.saude.fhir.safira.cli.Cli.Resultado;
+import br.gov.go.saude.fhir.safira.simulador.AvisoSimulacaoAdvice;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -135,13 +140,31 @@ class SafiraCliEntradaTest {
         assertThat(resultado.err()).contains("--pki-dir");
     }
 
+    /** Executa com o stdout e o stderr reais do processo redirecionados para buffers. */
+    private static Resultado comSaidasDoProcesso(Supplier<Resultado> execucao, ByteArrayOutputStream out,
+                                                 ByteArrayOutputStream err) {
+        PrintStream outOriginal = System.out;
+        PrintStream errOriginal = System.err;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
+            return execucao.get();
+        } finally {
+            System.setOut(outOriginal);
+            System.setErr(errOriginal);
+        }
+    }
+
     @Test
     void shouldNeverWriteStackTraceToStdout() throws Exception {
         Files.createDirectories(pki);
         Cli.escrever(pki.resolve("pki.properties"), "corrompido");
+        ByteArrayOutputStream stdoutDoProcesso = new ByteArrayOutputStream();
 
-        Resultado resultado = validarSimulado(bundle, bundle);
-        Resultado detalhado = validarSimulado(bundle, bundle, "--verbose");
+        Resultado resultado = comSaidasDoProcesso(() -> validarSimulado(bundle, bundle), stdoutDoProcesso,
+                new ByteArrayOutputStream());
+        Resultado detalhado = comSaidasDoProcesso(() -> validarSimulado(bundle, bundle, "--verbose"), stdoutDoProcesso,
+                new ByteArrayOutputStream());
 
         assertThat(resultado.saida()).isEqualTo(CodigosDeSaida.USO);
         assertThat(resultado.out()).isEmpty();
@@ -149,6 +172,76 @@ class SafiraCliEntradaTest {
         assertThat(detalhado.saida()).isEqualTo(CodigosDeSaida.USO);
         assertThat(detalhado.out()).isEmpty();
         assertThat(detalhado.err()).contains("\tat ");
+        assertThat(stdoutDoProcesso.toString(StandardCharsets.UTF_8)).doesNotContain("\tat ").doesNotContain("Exception");
+    }
+
+    @Test
+    void shouldSilenceSpringLogsOnStartupFailureWithoutVerbose() throws Exception {
+        Path config = Cli.escrever(diretorio.resolve("misturado.yml"), """
+                spring:
+                  main:
+                    sources: >-
+                      br.gov.go.saude.truststore.icpbrasil.config.TrustStoreAutoConfiguration,
+                      br.gov.go.saude.fhir.safira.app.icpbrasil.SafiraIcpBrasilAutoConfiguration
+                """);
+        ByteArrayOutputStream stderrDoProcesso = new ByteArrayOutputStream();
+        ByteArrayOutputStream stderrDetalhado = new ByteArrayOutputStream();
+
+        Resultado resultado = comSaidasDoProcesso(() -> validarSimulado(bundle, bundle, "--config", config.toString()),
+                new ByteArrayOutputStream(), stderrDoProcesso);
+        comSaidasDoProcesso(() -> validarSimulado(bundle, bundle, "--config", config.toString(), "--verbose"),
+                new ByteArrayOutputStream(), stderrDetalhado);
+
+        assertThat(resultado.saida()).isEqualTo(CodigosDeSaida.USO);
+        assertThat(resultado.err()).startsWith("Erro: falha na partida");
+        assertThat(stderrDoProcesso.toString(StandardCharsets.UTF_8)).doesNotContain("Exception encountered");
+        assertThat(stderrDetalhado.toString(StandardCharsets.UTF_8)).contains("Exception encountered");
+    }
+
+    @Test
+    void shouldNotEchoArgumentAfterUnknownOption() {
+        Resultado resultado = Cli.executar("assinar", "--modo", "simulacao", "--bundle", bundle.toString(),
+                "--provenance", provenance.toString(), "--p12", "a.p12", "--estrategia", "iat",
+                "--senha-arquivo", "s.txt", "--senha", "-" + SEGREDO);
+
+        assertThat(resultado.saida()).isEqualTo(CodigosDeSaida.USO);
+        assertThat(resultado.out() + resultado.err()).doesNotContain(SEGREDO).contains("--senha");
+    }
+
+    @Test
+    void shouldCheckInputFilesBeforeStartingSpring() {
+        Resultado validacao = validarSimulado(diretorio.resolve("nao-existe.json"), bundle);
+        Resultado assinatura = Cli.executar("assinar", "--modo", "simulacao", "--pki-dir", pki.toString(),
+                "--bundle", bundle.toString(), "--provenance", provenance.toString(),
+                "--p12", diretorio.resolve("nao-existe.p12").toString(), "--estrategia", "iat",
+                "--senha-arquivo", diretorio.resolve("nao-existe.txt").toString());
+
+        assertThat(validacao.saida()).isEqualTo(CodigosDeSaida.USO);
+        assertThat(assinatura.saida()).isEqualTo(CodigosDeSaida.USO);
+        assertThat(validacao.err() + assinatura.err()).doesNotContain(AvisoSimulacaoAdvice.TEXTO);
+        assertThat(assinatura.err()).contains("nao-existe.p12");
+        assertThat(pki).doesNotExist();
+    }
+
+    @Test
+    void shouldRejectTrustTimeoutOutsideLibraryRange() {
+        Resultado curto = Cli.executar("validar", "--timeout-acervo", "5", "--signature", bundle.toString(),
+                "--bundle", bundle.toString(), "--provenance", provenance.toString());
+        Resultado longo = Cli.executar("validar", "--timeout-acervo", "301", "--signature", bundle.toString(),
+                "--bundle", bundle.toString(), "--provenance", provenance.toString());
+
+        assertThat(curto.saida()).isEqualTo(CodigosDeSaida.USO);
+        assertThat(longo.saida()).isEqualTo(CodigosDeSaida.USO);
+        assertThat(curto.err()).contains("--timeout-acervo");
+    }
+
+    @Test
+    void shouldRejectTrustTimeoutInSimulationMode() {
+        Resultado resultado = validarSimulado(bundle, bundle, "--timeout-acervo", "30");
+
+        assertThat(resultado.saida()).isEqualTo(CodigosDeSaida.USO);
+        assertThat(resultado.err()).contains("--timeout-acervo");
+        assertThat(pki).doesNotExist();
     }
 
     @Test

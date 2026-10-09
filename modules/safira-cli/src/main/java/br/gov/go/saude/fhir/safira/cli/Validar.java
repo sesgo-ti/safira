@@ -52,7 +52,7 @@ final class Validar implements Callable<Integer> {
 
     @Override
     public Integer call() {
-        return Execucao.executar(spec, opcoes, this::validar);
+        return Execucao.executar(spec, opcoes, this::validar, signature, bundle, provenance);
     }
 
     private Execucao.Resultado validar(ContextoSafira contexto) {
@@ -71,10 +71,20 @@ final class Validar implements Callable<Integer> {
 
         PipelineResult<OperationOutcome> resultado = contexto.validacao().validate(corpo.toString());
         OperationOutcome outcome = resultado.isSuccess() ? resultado.getValue() : resultado.getExceptionDetails();
-        int saida = CodigosDeSaida.de(outcome, Operacao.VALIDACAO);
+        int saida = saida(resultado);
         if (saida == CodigosDeSaida.SUCESSO && opcoes.modo.simulacao()) {
             outcome = AvisoSimulacaoAdvice.marcar(outcome);
         }
         return new Execucao.Resultado(contexto.json(outcome), saida);
+    }
+
+    /** 0 só com o pipeline bem-sucedido e {@code VALIDATION.SUCCESS}; sem {@code OperationOutcome}, inconclusivo. */
+    static int saida(PipelineResult<OperationOutcome> resultado) {
+        OperationOutcome outcome = resultado.isSuccess() ? resultado.getValue() : resultado.getExceptionDetails();
+        if (outcome == null) {
+            return CodigosDeSaida.INCONCLUSIVO;
+        }
+        int saida = CodigosDeSaida.de(outcome, Operacao.VALIDACAO);
+        return saida == CodigosDeSaida.SUCESSO && !resultado.isSuccess() ? CodigosDeSaida.INCONCLUSIVO : saida;
     }
 }

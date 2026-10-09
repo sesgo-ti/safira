@@ -54,7 +54,7 @@ public final class CodigosDeSaida {
 
     /**
      * Saída para o {@code OperationOutcome}, com evidência positiva: a primeira issue
-     * {@code error}/{@code fatal} decide (o erro prevalece sobre {@code VALIDATION.SUCCESS}); sem ela,
+     * {@code error}/{@code fatal} (ou sem severidade) decide (o erro prevalece sobre {@code VALIDATION.SUCCESS}); sem ela,
      * só a validação com uma issue {@code VALIDATION.SUCCESS} sai com 0. Qualquer outro caso (sem issues,
      * só avisos, sem coding, ou {@code OperationOutcome} da assinatura, que nunca é o resultado de
      * sucesso) é inconclusivo, nunca 0.
@@ -62,7 +62,7 @@ public final class CodigosDeSaida {
     public static int de(OperationOutcome outcome, Operacao operacao) {
         List<OperationOutcome.Issue> issues = outcome.issue() == null ? List.of() : outcome.issue();
         Optional<OperationOutcome.Issue> erro = issues.stream()
-                .filter(issue -> issue != null && ("error".equals(issue.severity()) || "fatal".equals(issue.severity())))
+                .filter(issue -> issue != null && erro(issue))
                 .findFirst();
         if (erro.isPresent()) {
             return codigo(erro.get()).map(codigo -> paraCodigo(codigo, operacao)).orElse(INCONCLUSIVO);
@@ -71,6 +71,11 @@ public final class CodigosDeSaida {
                 .filter(issue -> issue != null)
                 .anyMatch(issue -> codigo(issue).filter(SUCESSO_DA_VALIDACAO::equals).isPresent());
         return validada ? SUCESSO : INCONCLUSIVO;
+    }
+
+    /** {@code error}, {@code fatal} ou sem severidade (na dúvida, erro). */
+    private static boolean erro(OperationOutcome.Issue issue) {
+        return issue.severity() == null || "error".equals(issue.severity()) || "fatal".equals(issue.severity());
     }
 
     private static Optional<String> codigo(OperationOutcome.Issue issue) {
