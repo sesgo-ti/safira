@@ -12,6 +12,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
 import br.gov.go.saude.fhir.safira.jades.CertificateValidationService;
 import br.gov.go.saude.fhir.safira.steps.dss.DssOutcomes;
+import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
 import eu.europa.esig.dss.diagnostic.CertificateWrapper;
 import eu.europa.esig.dss.enumerations.Indication;
@@ -38,7 +39,8 @@ import java.util.Optional;
  * EU DSS ({@link CertificateValidationService}) a construção e validação do caminho no instante
  * atual: âncoras = raízes do acervo ICP-Brasil, candidatos = ACs do acervo e certificados
  * recebidos, revogação OCSP/CRL obtida pelo próprio DSS. Os certificados recebidos são apenas
- * candidatos: a confiança vem exclusivamente do acervo.
+ * candidatos: a confiança vem exclusivamente do acervo. O snapshot do acervo usado fica em
+ * {@link SigningKeys#ACERVO} para os demais steps da operação.
  *
  * <p>Recusa entradas com mais de {@link #MAX_CHAIN_LENGTH} certificados antes de decodificá-los.
  *
@@ -85,14 +87,15 @@ public class PkixChainValidationStep implements SigningStep {
             }
         }
 
-        Optional<CommonCertificateVerifier> verifier = verifiers.paraOperacao(List.of());
-        if (verifier.isEmpty()) {
+        Optional<AcervoDeConfianca> acervo = verifiers.acervoAtual();
+        if (acervo.isEmpty()) {
             return fail(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY,
                     "Acervo ICP-Brasil indisponível ou expirado: nenhuma âncora de confiança carregada.", context);
         }
+        CommonCertificateVerifier verifier = verifiers.paraOperacao(acervo.get(), List.of());
         X509Certificate leaf = certificates.getFirst();
         CertificateReports reports = validationService.validate(leaf, certificates.subList(1, certificates.size()),
-                verifier.get());
+                verifier);
         String id = new CertificateToken(leaf).getDSSIdAsString();
         SimpleCertificateReport report = reports.getSimpleReport();
         CertificateWrapper subject = reports.getDiagnosticData().getUsedCertificateById(id);
@@ -118,6 +121,7 @@ public class PkixChainValidationStep implements SigningStep {
                     "A cadeia deve conter ao menos o certificado do signatário e a raiz ICP-Brasil.", context);
         }
         return StepResult.success(getName(), context.toBuilder()
+                .attribute(SigningKeys.ACERVO, acervo.get())
                 .certificateChain(chain.toArray(X509Certificate[]::new))
                 .build());
     }

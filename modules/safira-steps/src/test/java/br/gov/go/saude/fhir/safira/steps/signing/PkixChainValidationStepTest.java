@@ -10,6 +10,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
 import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
@@ -66,6 +67,13 @@ class PkixChainValidationStepTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.context().getCertificateChain().orElseThrow()).containsExactly(pki.leafCert, pki.caCert);
+    }
+
+    @Test
+    void shouldCaptureAcervoSnapshotInContext() throws Exception {
+        StepResult<SigningContext> result = step(pki.ocspGoodSource()).execute(context(List.of(b64(pki.leafCert))));
+
+        assertThat(result.context().getAttribute(SigningKeys.ACERVO, AcervoDeConfianca.class)).isPresent();
     }
 
     @Test

@@ -27,10 +27,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -44,6 +46,7 @@ class DssAndOutcomeStepsTest {
     private static SafiraPolicyProperties policy;
     private static TrustMaterialSource trust;
     private static ValidationContext bb;
+    private static ValidationContext bbSemAcervo;
     private static ValidationContext bt;
     private static Instant btTimestampTime;
 
@@ -53,7 +56,9 @@ class DssAndOutcomeStepsTest {
         tsa = pki.startFakeTsa();
         policy = TestConfigs.policy(pki, TestConfigs.tsaPolicies(tempDir, TestPki.TSA_POLICY_OID, 1, pki.caCert));
         trust = () -> Optional.of(TrustMaterial.of(List.of(pki.caCert)));
-        bb = structured(SignedArtifactFixture.validationContext(SignedArtifactFixture.sign(pki, policy)));
+        ValidationContext signed = SignedArtifactFixture.validationContext(SignedArtifactFixture.sign(pki, policy));
+        bb = structured(signed);
+        bbSemAcervo = new JwsStructureStep().execute(new SignatureBindingStep().execute(signed).context()).context();
         btTimestampTime = Instant.now();
         bt = structured(SignedArtifactFixture.validationContext(
                 SignedArtifactFixture.sign(pki, policy, Instant.now().getEpochSecond(), tsa)));
@@ -67,17 +72,13 @@ class DssAndOutcomeStepsTest {
     private static ValidationContext structured(ValidationContext context) {
         ValidationContext bound = new SignatureBindingStep().execute(context).context();
         ValidationContext parsed = new JwsStructureStep().execute(bound).context();
-        return new SignerCertificateStep(policy, trust).execute(parsed).context();
+        return new SignerCertificateStep(policy).execute(SignedArtifactFixture.comAcervo(parsed, trust)).context();
     }
 
     /** DSS offline: respostas OCSP prontas (sem rede) sobre o acervo informado. */
-    private static DssValidationStep step(TrustMaterialSource acervo, RevocationSource<OCSP> ocsp) {
-        return new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(acervo),
-                CertificateVerifierFactory.offline(ocsp, null)), policy);
-    }
-
     private static DssValidationStep step(RevocationSource<OCSP> ocsp) {
-        return step(trust, ocsp);
+        return new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
+                CertificateVerifierFactory.offline(ocsp, null)), policy);
     }
 
     /** OCSP GOOD, assinado pela CA de teste, para o titular e para a TSA. */
@@ -135,12 +136,29 @@ class DssAndOutcomeStepsTest {
     void shouldRejectSignerWhenRootIsOutsideAcervo() {
         TrustMaterialSource otherAcervo = () -> Optional.of(TrustMaterial.of(List.of(TestPki.create().caCert)));
 
-        assertThat(code(step(otherAcervo, good()).execute(bb))).isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
+        assertThat(code(step(good()).execute(SignedArtifactFixture.comAcervo(bb, otherAcervo)))).isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
+    }
+
+    @Test
+    void shouldUseSameAcervoGenerationAcrossValidationSteps() {
+        AtomicReference<TrustMaterialSource> vigente = new AtomicReference<>(trust);
+        FonteDeConfiancaIcpBrasil fonte = new FonteDeConfiancaIcpBrasil(() -> vigente.get().current());
+        ValidationContext signed = SignedArtifactFixture.validationContext(SignedArtifactFixture.sign(pki, policy));
+        ValidationContext context = new ValidationRequestContextStep(policy, fonte, Clock.systemUTC())
+                .execute(signed).context();
+        context = new JwsStructureStep().execute(new SignatureBindingStep().execute(context).context()).context();
+        vigente.set(() -> Optional.of(TrustMaterial.of(List.of(TestPki.create().caCert))));
+
+        ValidationContext verified = new SignerCertificateStep(policy).execute(context).context();
+        DssValidationStep dss = new DssValidationStep(new VerificadoresDss(fonte,
+                CertificateVerifierFactory.offline(good(), null)), policy);
+
+        assertThat(dss.execute(verified).isSuccess()).isTrue();
     }
 
     @Test
     void shouldFailClosedWhenAcervoIsUnavailable() {
-        assertThat(code(step(Optional::empty, good()).execute(bb))).isEqualTo(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY);
+        assertThat(code(step(good()).execute(bbSemAcervo))).isEqualTo(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY);
     }
 
     @Test

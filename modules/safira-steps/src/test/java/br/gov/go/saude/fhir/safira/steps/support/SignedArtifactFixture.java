@@ -26,9 +26,12 @@ import br.gov.go.saude.fhir.safira.steps.signing.PkixChainValidationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesAssembleStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesDataToSignStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesExtensionStep;
+import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
+import br.gov.go.saude.fhir.safira.steps.validation.jades.ValidationKeys;
 import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
+import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
 
 import java.time.Instant;
 import java.util.Base64;
@@ -40,6 +43,16 @@ import java.util.Optional;
  * política 0.2.0 com a PKI de teste — insumo dos testes de validação.
  */
 public final class SignedArtifactFixture {
+
+    /** Snapshot do acervo que a fonte informada entrega agora. */
+    public static AcervoDeConfianca acervo(TrustMaterialSource source) {
+        return new FonteDeConfiancaIcpBrasil(source).atual().orElseThrow();
+    }
+
+    /** Contexto com o snapshot que {@code validation-context} guardaria para essa fonte. */
+    public static ValidationContext comAcervo(ValidationContext context, TrustMaterialSource source) {
+        return context.toBuilder().attribute(ValidationKeys.ACERVO, acervo(source)).build();
+    }
 
     public static final String U1 = "urn:uuid:3fa85f64-5717-4562-b3fc-2c963f66afa6";
     public static final String U2 = "urn:uuid:9b2b8c1e-2f4a-4d5b-8c6d-7e8f9a0b1c2d";

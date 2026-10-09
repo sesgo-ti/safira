@@ -22,6 +22,7 @@ import br.gov.go.saude.fhir.safira.steps.timestamp.TimestampTokenException;
 import br.gov.go.saude.fhir.safira.steps.timestamp.TimestampTokenInspector;
 import br.gov.go.saude.fhir.safira.steps.timestamp.TimestampTokenInspector.Inspection;
 import br.gov.go.saude.fhir.safira.steps.timestamp.TsaChainVerification;
+import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 import eu.europa.esig.dss.validation.reports.Reports;
@@ -89,13 +90,15 @@ public class TsaTokenVerificationStep implements SigningStep {
             return rules;
         }
         List<X509Certificate> anchors = TsaTrustStores.load(tsaPolicy.get().trustStore().reference());
-        Optional<CommonCertificateVerifier> verifier = verifiers.paraOperacao(anchors);
-        if (verifier.isEmpty()) {
+        Optional<AcervoDeConfianca> acervo = context.getAttribute(SigningKeys.ACERVO, AcervoDeConfianca.class)
+                .or(verifiers::acervoAtual);
+        if (acervo.isEmpty()) {
             return Optional.of(new PolicyViolation(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY,
                     "Acervo ICP-Brasil indisponível."));
         }
+        CommonCertificateVerifier verifier = verifiers.paraOperacao(acervo.get(), anchors);
         Reports reports = validationService.validate(token, signatureText.getBytes(StandardCharsets.US_ASCII),
-                verifier.get());
+                verifier);
         return DssOutcomes.timestamp(reports, reports.getSimpleReport().getFirstTimestampId(), anchors,
                 tsaPolicy.get().oid());
     }

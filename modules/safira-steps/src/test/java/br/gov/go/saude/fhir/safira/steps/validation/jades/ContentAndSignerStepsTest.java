@@ -47,6 +47,11 @@ class ContentAndSignerStepsTest {
         return ((StepResult.Failure<ValidationContext>) result).code();
     }
 
+    private static StepResult<ValidationContext> signer(SafiraPolicyProperties properties, TrustMaterialSource source,
+                                                        ValidationContext context) {
+        return new SignerCertificateStep(properties).execute(SignedArtifactFixture.comAcervo(context, source));
+    }
+
     @Test
     void shouldConfirmContentIntegrity() {
         assertThat(new ContentIntegrityStep().execute(structured).isSuccess()).isTrue();
@@ -75,7 +80,7 @@ class ContentAndSignerStepsTest {
 
     @Test
     void shouldAcceptSignerCertificate() {
-        StepResult<ValidationContext> result = new SignerCertificateStep(policy, trust).execute(structured);
+        StepResult<ValidationContext> result = signer(policy, trust, structured);
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.context().getAttribute(ValidationKeys.SIGNER_IDENTITY, Object.class)).isPresent();
@@ -87,7 +92,7 @@ class ContentAndSignerStepsTest {
                 .signatureJson(structured.getSignatureJson().with("when", new JsonString("2026-01-01T00:00:00Z")))
                 .build();
 
-        assertThat(code(new SignerCertificateStep(policy, trust).execute(changed)))
+        assertThat(code(signer(policy, trust, changed)))
                 .isEqualTo(SignatureExceptionCode.TEMPORAL_IAT_INVALID);
     }
 
@@ -97,7 +102,7 @@ class ContentAndSignerStepsTest {
                 .referenceTimestamp(structured.getAttribute(ValidationKeys.IAT, Long.class).orElseThrow() - 1)
                 .build();
 
-        assertThat(code(new SignerCertificateStep(policy, trust).execute(earlier)))
+        assertThat(code(signer(policy, trust, earlier)))
                 .isEqualTo(SignatureExceptionCode.TEMPORAL_IAT_INVALID);
     }
 
@@ -105,7 +110,7 @@ class ContentAndSignerStepsTest {
     void shouldRejectRootOutsideTrustStore() {
         TrustMaterialSource other = () -> Optional.of(TrustMaterial.of(List.of(TestPki.create().caCert)));
 
-        assertThat(code(new SignerCertificateStep(policy, other).execute(structured)))
+        assertThat(code(signer(policy, other, structured)))
                 .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
     }
 
@@ -113,7 +118,7 @@ class ContentAndSignerStepsTest {
     void shouldReportPolicyComplianceWhenLeafPolicyNotInAllowlist() {
         TestPki other = TestPki.create();
 
-        assertThat(code(new SignerCertificateStep(TestConfigs.policy(other), trust).execute(structured)))
+        assertThat(code(signer(TestConfigs.policy(other), trust, structured)))
                 .isEqualTo(SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED);
     }
 
@@ -121,7 +126,7 @@ class ContentAndSignerStepsTest {
     void shouldRejectSignatureWhoDifferentFromCertificate() {
         String who = LosslessJson.write(structured.getSignatureJson()).replace(TestPki.TEST_CPF, "11144477735");
 
-        assertThat(code(new SignerCertificateStep(policy, trust).execute(structured.toBuilder()
+        assertThat(code(signer(policy, trust, structured.toBuilder()
                 .signatureJson(LosslessJson.parseObject(who)).build())))
                 .isEqualTo(SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED);
     }

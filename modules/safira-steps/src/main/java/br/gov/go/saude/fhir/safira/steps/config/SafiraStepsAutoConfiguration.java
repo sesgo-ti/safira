@@ -90,7 +90,7 @@ public class SafiraStepsAutoConfiguration {
     }
 
     @Bean
-    public List<Step<?>> safiraAllSteps(TrustMaterialSource trustMaterialSource,
+    public List<Step<?>> safiraAllSteps(FonteDeConfianca fonteDeConfianca,
                                         VerificadoresDss verificadores,
                                         SafiraPolicyProperties policyProperties,
                                         Clock clock) {
@@ -110,11 +110,11 @@ public class SafiraStepsAutoConfiguration {
         steps.add(new FhirSignatureStep());
 
         // Validação — política 0.2.0 (EU DSS decide cadeia, revogação e carimbo sobre o acervo ICP-Brasil)
-        steps.add(new ValidationRequestContextStep(policyProperties, trustMaterialSource, clock));
+        steps.add(new ValidationRequestContextStep(policyProperties, fonteDeConfianca, clock));
         steps.add(new SignatureBindingStep());
         steps.add(new JwsStructureStep());
         steps.add(new ContentIntegrityStep());
-        steps.add(new SignerCertificateStep(policyProperties, trustMaterialSource));
+        steps.add(new SignerCertificateStep(policyProperties));
         steps.add(new DssValidationStep(verificadores, policyProperties));
         steps.add(new TimestampValidationStep(policyProperties));
         steps.add(new ValidationOutcomeStep());

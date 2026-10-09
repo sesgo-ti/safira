@@ -20,6 +20,7 @@ import br.gov.go.saude.fhir.safira.steps.timestamp.TimestampTokenException;
 import br.gov.go.saude.fhir.safira.steps.timestamp.TimestampTokenInspector;
 import br.gov.go.saude.fhir.safira.steps.timestamp.TimestampTokenInspector.Inspection;
 import br.gov.go.saude.fhir.safira.steps.timestamp.TsaChainVerification;
+import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
 import eu.europa.esig.dss.enumerations.Indication;
 import eu.europa.esig.dss.enumerations.SignatureLevel;
@@ -84,11 +85,12 @@ public class DssValidationStep implements ValidationStep {
             }
         }
 
-        Optional<CommonCertificateVerifier> verifier = verifiers.paraOperacao(tsaAnchors);
-        if (verifier.isEmpty()) {
+        Optional<AcervoDeConfianca> acervo = context.getAttribute(ValidationKeys.ACERVO, AcervoDeConfianca.class);
+        if (acervo.isEmpty()) {
             return fail(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY, "Acervo ICP-Brasil indisponível.", context);
         }
-        Reports reports = validationService.validate(jws, verifier.get());
+        CommonCertificateVerifier verifier = verifiers.paraOperacao(acervo.get(), tsaAnchors);
+        Reports reports = validationService.validate(jws, verifier);
         SimpleReport report = reports.getSimpleReport();
         String id = report.getFirstSignatureId();
 

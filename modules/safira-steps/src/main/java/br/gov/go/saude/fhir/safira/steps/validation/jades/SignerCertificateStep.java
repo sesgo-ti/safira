@@ -15,9 +15,8 @@ import br.gov.go.saude.fhir.safira.steps.certificate.IcpBrasilCertificateProfile
 import br.gov.go.saude.fhir.safira.steps.certificate.ProfileResult;
 import br.gov.go.saude.fhir.safira.steps.certificate.SignerIdentity;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 
-import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPublicKey;
 import java.time.OffsetDateTime;
@@ -36,21 +35,23 @@ import java.util.Optional;
 public class SignerCertificateStep implements ValidationStep {
 
     private final SafiraPolicyProperties policy;
-    private final TrustMaterialSource trustMaterialSource;
 
-    public SignerCertificateStep(SafiraPolicyProperties policy, TrustMaterialSource trustMaterialSource) {
+    public SignerCertificateStep(SafiraPolicyProperties policy) {
         this.policy = policy;
-        this.trustMaterialSource = trustMaterialSource;
     }
 
     @Override
     public StepResult<ValidationContext> execute(ValidationContext context) {
+        Optional<AcervoDeConfianca> acervo = context.getAttribute(ValidationKeys.ACERVO, AcervoDeConfianca.class);
+        if (acervo.isEmpty()) {
+            return fail(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY, "Acervo ICP-Brasil indisponível.", context);
+        }
         List<X509Certificate> chain = context.getCertificateChain().orElse(List.of());
         if (chain.size() < 2) {
             return fail(SignatureExceptionCode.CERT_CHAIN_INCOMPLETE,
                     "x5c deve conter a cadeia completa até a raiz ICP-Brasil.", context);
         }
-        if (!isTrustedAnchor(chain.getLast())) {
+        if (!isTrustedAnchor(chain.getLast(), acervo.get())) {
             return fail(SignatureExceptionCode.CERT_NOT_ICP_BRASIL,
                     "A última posição de x5c não corresponde (SHA-256 do DER) a uma âncora do acervo ICP-Brasil.", context);
         }
@@ -87,12 +88,10 @@ public class SignerCertificateStep implements ValidationStep {
         return StepResult.success(getName(), context.toBuilder().attribute(ValidationKeys.SIGNER_IDENTITY, identity).build());
     }
 
-    private boolean isTrustedAnchor(X509Certificate root) {
+    private static boolean isTrustedAnchor(X509Certificate root, AcervoDeConfianca acervo) {
         String rootSha256 = IcpBrasilCertificateProfile.sha256Hex(root);
-        return trustMaterialSource.current().stream()
-                .flatMap(trust -> trust.anchors().stream())
-                .map(TrustAnchor::getTrustedCert)
-                .anyMatch(anchor -> anchor != null && IcpBrasilCertificateProfile.sha256Hex(anchor).equals(rootSha256));
+        return acervo.raizes().stream()
+                .anyMatch(anchor -> IcpBrasilCertificateProfile.sha256Hex(anchor).equals(rootSha256));
     }
 
     /** Códigos da validação (4.1) para as recusas do perfil, definidos com os da criação. */

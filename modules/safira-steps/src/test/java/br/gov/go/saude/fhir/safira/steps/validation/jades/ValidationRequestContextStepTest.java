@@ -12,6 +12,9 @@ import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
+import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
+import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
 import org.junit.jupiter.api.BeforeAll;
@@ -20,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -37,7 +41,7 @@ class ValidationRequestContextStepTest {
     }
 
     private static StepResult<ValidationContext> run(ValidationContext context, TrustMaterialSource trust) {
-        return new ValidationRequestContextStep(policy, trust, Clock.systemUTC()).execute(context);
+        return new ValidationRequestContextStep(policy, new FonteDeConfiancaIcpBrasil(trust), Clock.systemUTC()).execute(context);
     }
 
     private static TrustMaterialSource loaded() {
@@ -90,5 +94,25 @@ class ValidationRequestContextStepTest {
     @Test
     void shouldRejectWhenTrustStoreIsNotLoaded() {
         assertThat(code(run(valid, Optional::empty))).isEqualTo(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY);
+    }
+
+    @Test
+    void shouldStoreAcervoSnapshotInContext() {
+        StepResult<ValidationContext> result = run(valid, loaded());
+
+        assertThat(result.context().getAttribute(ValidationKeys.ACERVO, AcervoDeConfianca.class)).isPresent();
+    }
+
+    @Test
+    void shouldQueryFonteOnlyOncePerExecution() {
+        AtomicInteger calls = new AtomicInteger();
+        FonteDeConfianca fonte = () -> {
+            calls.incrementAndGet();
+            return new FonteDeConfiancaIcpBrasil(loaded()).atual();
+        };
+
+        new ValidationRequestContextStep(policy, fonte, Clock.systemUTC()).execute(valid);
+
+        assertThat(calls).hasValue(1);
     }
 }

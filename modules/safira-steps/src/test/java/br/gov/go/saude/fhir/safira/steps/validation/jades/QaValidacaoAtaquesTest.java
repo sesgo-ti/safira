@@ -159,11 +159,11 @@ class QaValidacaoAtaquesTest {
     private static String validate(Artifact artifact, SafiraPolicyProperties policy, TrustMaterialSource trust,
                                    RevocationSource<OCSP> ocsp) {
         List<ValidationStep> steps = List.of(
-                new ValidationRequestContextStep(policy, trust, Clock.systemUTC()),
+                new ValidationRequestContextStep(policy, new FonteDeConfiancaIcpBrasil(trust), Clock.systemUTC()),
                 new SignatureBindingStep(),
                 new JwsStructureStep(),
                 new ContentIntegrityStep(),
-                new SignerCertificateStep(policy, trust),
+                new SignerCertificateStep(policy),
                 new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
                         CertificateVerifierFactory.offline(ocsp, null)),
                         policy),
@@ -203,7 +203,7 @@ class QaValidacaoAtaquesTest {
                 .build();
         context = new SignatureBindingStep().execute(context).context();
         context = new JwsStructureStep().execute(context).context();
-        context = new SignerCertificateStep(policy, trust).execute(context).context();
+        context = new SignerCertificateStep(policy).execute(SignedArtifactFixture.comAcervo(context, trust)).context();
         return new ValidationOutcomeStep().execute(context).context().getOperationOutcome().issue().getFirst().diagnostics();
     }
 

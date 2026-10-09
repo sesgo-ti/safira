@@ -15,6 +15,9 @@ public final class SigningKeys {
     /** JWS General JSON Serialization produzido (String). */
     public static final String JWS_FINAL = "jwsFinal";
 
+    /** Snapshot do acervo de confiança capturado uma vez por operação ({@code AcervoDeConfianca}). */
+    public static final String ACERVO = "acervo";
+
     private SigningKeys() {
     }
 }

@@ -44,7 +44,25 @@ public class VerificadoresDss {
      */
     public Optional<CommonCertificateVerifier> paraOperacao(Collection<X509Certificate> ancorasExtras) {
         Objects.requireNonNull(ancorasExtras, "ancorasExtras");
-        return fonte.atual().map(acervo -> factory.create(fontes(acervo), ancorasExtras));
+        return acervoAtual().map(acervo -> paraOperacao(acervo, ancorasExtras));
+    }
+
+    /** Acervo vigente da fonte; o chamador o guarda e o reusa durante toda a operação. */
+    public Optional<AcervoDeConfianca> acervoAtual() {
+        return fonte.atual();
+    }
+
+    /**
+     * Verificador novo preso ao snapshot informado, sem nova consulta à fonte; reaproveita as
+     * fontes do DSS da mesma geração.
+     *
+     * @param acervo        snapshot capturado no início da operação
+     * @param ancorasExtras âncoras adicionais só desta operação (ex.: trust store TSA da política)
+     */
+    public CommonCertificateVerifier paraOperacao(AcervoDeConfianca acervo, Collection<X509Certificate> ancorasExtras) {
+        Objects.requireNonNull(acervo, "acervo");
+        Objects.requireNonNull(ancorasExtras, "ancorasExtras");
+        return factory.create(fontes(acervo), ancorasExtras);
     }
 
     private Acervo fontes(AcervoDeConfianca acervo) {

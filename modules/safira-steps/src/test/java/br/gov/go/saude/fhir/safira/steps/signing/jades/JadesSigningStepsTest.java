@@ -19,6 +19,8 @@ import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.signing.CryptoSigningStep;
 import br.gov.go.saude.fhir.safira.steps.signing.SigningKeys;
+import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
+import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
 import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
@@ -112,6 +114,18 @@ class JadesSigningStepsTest {
                 .execute(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context());
 
         assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void shouldUseSameAcervoGenerationAcrossSigningSteps() throws Exception {
+        AcervoDeConfianca capturado = SignedArtifactFixture.acervo(() -> Optional.of(TrustMaterial.of(List.of(pki.caCert))));
+        SigningContext context = extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context().toBuilder()
+                .attribute(SigningKeys.ACERVO, capturado).build();
+        VerificadoresDss mudou = new VerificadoresDss(
+                new FonteDeConfiancaIcpBrasil(Optional::empty),
+                CertificateVerifierFactory.offline(pki.ocspGoodSource(), null));
+
+        assertThat(new TsaTokenVerificationStep(mudou, policy).execute(context).isSuccess()).isTrue();
     }
 
     @Test
