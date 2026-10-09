@@ -66,8 +66,8 @@ public class SafiraSimulacaoAutoConfiguration {
 
     /** Marca o sucesso de {@code /validar} como simulação (sem validade jurídica ICP-Brasil). */
     @Bean
-    public AvisoSimulacao avisoSimulacao() {
-        return new AvisoSimulacao();
+    public AvisoSimulacaoAdvice avisoSimulacaoAdvice() {
+        return new AvisoSimulacaoAdvice();
     }
 
     /**

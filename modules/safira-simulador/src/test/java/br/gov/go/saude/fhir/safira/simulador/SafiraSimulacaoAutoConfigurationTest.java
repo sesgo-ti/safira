@@ -83,6 +83,17 @@ class SafiraSimulacaoAutoConfigurationTest {
     }
 
     @Test
+    void shouldRegisterSimulationAdviceWhenEnabled() {
+        runner.withPropertyValues(habilitado(pki.raiz().toUri().toString())).run(context ->
+                assertThat(context).hasSingleBean(AvisoSimulacaoAdvice.class));
+    }
+
+    @Test
+    void shouldNotRegisterSimulationAdviceWhenModeIsDisabled() {
+        runner.run(context -> assertThat(context).doesNotHaveBean(AvisoSimulacaoAdvice.class));
+    }
+
+    @Test
     void shouldReplaceLibraryTrustMaterialSourceWhenEnabled() {
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(TrustStoreAutoConfiguration.class,
