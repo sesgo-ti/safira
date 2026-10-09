@@ -15,6 +15,13 @@ import java.util.Optional;
  */
 public interface FonteDeConfianca {
 
-    /** Acervo vigente, ou vazio quando indisponível. */
+    /**
+     * Acervo vigente, ou vazio quando indisponível.
+     *
+     * <p>Chamadas sucessivas podem devolver gerações diferentes; o consumidor chama uma vez por
+     * operação e usa só aquele snapshot. A implementação deve ser thread-safe e barata. Falha ao
+     * obter o acervo vira {@code Optional.empty()}, nunca exceção: o fail-closed não pode depender
+     * do chamador.
+     */
     Optional<AcervoDeConfianca> atual();
 }
