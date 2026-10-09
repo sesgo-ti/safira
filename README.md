@@ -230,11 +230,11 @@ Sem `--senha`, a senha é aleatória e impressa; a informada nunca é impressa. 
 ./mvnw verify
 ```
 
-O `package` gera o JAR executável do serviço em `modules/safira-app/target/safira-app-<versão>.jar` (o `safira-rest` é biblioteca e não tem `main`):
+O `package` gera o JAR executável do serviço em `modules/safira-app/target/safira-app-<versão>-exec.jar` (o jar comum do `safira-app` e o `safira-rest` são bibliotecas):
 
 ```bash
 ./mvnw -DskipTests package
-java -jar modules/safira-app/target/safira-app-*.jar
+java -jar modules/safira-app/target/safira-app-*-exec.jar
 ```
 
 Relatório de cobertura (JaCoCo) por módulo em `modules/<módulo>/target/site/jacoco/index.html`.

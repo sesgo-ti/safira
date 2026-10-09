@@ -64,12 +64,16 @@
 
     <build>
         <plugins>
-            <!-- O pom raiz não herda de spring-boot-starter-parent, então o goal
-                 repackage precisa ser ligado explicitamente para `package` gerar
-                 um JAR executável com `java -jar`. -->
+            <!-- JAR executável do serviço (safira-app-*-exec.jar) ao lado do jar comum, que segue
+                 utilizável como biblioteca (CLI). O pom raiz não herda de spring-boot-starter-parent,
+                 então o goal repackage é ligado explicitamente. -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <classifier>exec</classifier>
+                    <mainClass>br.gov.go.saude.fhir.safira.app.SafiraApplication</mainClass>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>
