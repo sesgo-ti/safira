@@ -1226,7 +1226,7 @@ class QaValidacaoAtaquesTest {
         long iat = now() - 5;
 
         assertThat(validate(artifact(sign(header(chain, Long.toString(iat))).json(), iat)))
-                .isIn(SignatureExceptionCode.CERT_CHAIN_INCOMPLETE.getCode(), SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED.getCode());
+                .isEqualTo(SignatureExceptionCode.FORMAT_JWS_MALFORMED.getCode());
     }
 
     @Test
