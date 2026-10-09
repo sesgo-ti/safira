@@ -90,6 +90,22 @@ class PkixChainValidationStepTest {
     }
 
     @Test
+    void shouldMarkDssChainApproval() throws Exception {
+        StepResult<SigningContext> result = step(pki.fonteOcsp()).execute(context(List.of(b64(pki.signatario()))));
+
+        assertThat(result.context().getAttribute(SigningKeys.CADEIA_APROVADA_DSS, Boolean.class)).contains(true);
+    }
+
+    @Test
+    void shouldNotMarkDssChainApprovalWhenSignerIsRevoked() throws Exception {
+        StepResult<SigningContext> result = step(EvidenceRevocationSources.ocspFromEvidence(List.of(
+                pki.ocspRevogado(pki.signatario()), pki.ocspBom(pki.ac())))).execute(context(List.of(b64(pki.signatario()))));
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.context().getAttribute(SigningKeys.CADEIA_APROVADA_DSS, Boolean.class)).isEmpty();
+    }
+
+    @Test
     void shouldStoreSameChainWhenRootIsAlsoSupplied() throws Exception {
         StepResult<SigningContext> result = step(pki.fonteOcsp())
                 .execute(context(List.of(b64(pki.signatario()), b64(pki.ac()), b64(pki.raiz()))));

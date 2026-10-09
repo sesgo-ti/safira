@@ -17,6 +17,8 @@ public final class SigningKeys {
 
     /** Snapshot do acervo de confiança capturado uma vez por operação ({@code AcervoDeConfianca}). */
     public static final String ACERVO = "acervo";
+    /** Evidência de que o {@code pkix-chain-validation} aprovou a cadeia pelo EU DSS (Boolean); exigida por {@code fhir-signature}. */
+    public static final String CADEIA_APROVADA_DSS = "cadeiaAprovadaDss";
 
     private SigningKeys() {
     }

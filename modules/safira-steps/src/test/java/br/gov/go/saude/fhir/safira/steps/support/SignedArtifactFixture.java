@@ -24,6 +24,7 @@ import br.gov.go.saude.fhir.safira.steps.signing.CryptoSigningStep;
 import br.gov.go.saude.fhir.safira.steps.signing.FhirSignatureStep;
 import br.gov.go.saude.fhir.safira.steps.signing.FramedContentDigestStep;
 import br.gov.go.saude.fhir.safira.steps.signing.PkixChainValidationStep;
+import br.gov.go.saude.fhir.safira.steps.signing.SigningKeys;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesAssembleStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesDataToSignStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesExtensionStep;
@@ -105,7 +106,11 @@ public final class SignedArtifactFixture {
             if (verificarCadeia) {
                 verificacoes.add(new PkixChainValidationStep(verifiers, policy));
             } else {
-                context = context.toBuilder().certificateChain(pki.cadeia().toArray(X509Certificate[]::new)).build();
+                // simula a evidência do pkix-chain-validation pulado
+                context = context.toBuilder().certificateChain(pki.cadeia().toArray(X509Certificate[]::new))
+                        .attribute(SigningKeys.ACERVO, acervo(FonteDeTeste.com(pki.raiz(), pki.ac())))
+                        .attribute(SigningKeys.CADEIA_APROVADA_DSS, true)
+                        .build();
             }
             verificacoes.add(new CertificatePolicyStep(policy));
             List<Step<SigningContext>> steps = List.of(

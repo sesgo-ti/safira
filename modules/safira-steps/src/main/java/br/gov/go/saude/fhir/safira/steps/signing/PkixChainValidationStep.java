@@ -57,7 +57,8 @@ import java.util.Optional;
  *
  * <p>Recusa entradas com mais de {@link Policy020#MAX_CHAIN_LENGTH} certificados antes de decodificá-los.
  *
- * <p>Escreve {@code certificateChain} = caminho validado pelo DSS (folha primeiro, raiz por último).
+ * <p>Escreve {@code certificateChain} = caminho validado pelo DSS (folha primeiro, raiz por último)
+ * e, só no sucesso, a evidência {@link SigningKeys#CADEIA_APROVADA_DSS} exigida por {@code fhir-signature}.
  */
 @StepId("pkix-chain-validation")
 public class PkixChainValidationStep implements SigningStep {
@@ -142,6 +143,7 @@ public class PkixChainValidationStep implements SigningStep {
         }
         return StepResult.success(getName(), context.toBuilder()
                 .attribute(SigningKeys.ACERVO, acervo.get())
+                .attribute(SigningKeys.CADEIA_APROVADA_DSS, true)
                 .certificateChain(chain.toArray(X509Certificate[]::new))
                 .build());
     }
