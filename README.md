@@ -11,7 +11,7 @@
 Implementação da criação e da validação de assinaturas eletrônicas qualificadas e selos eletrônicos sobre recursos FHIR R4, conforme a **Política de Assinatura 0.2.0** do [Guia de Segurança da Informação em Saúde da SES-GO](https://fhir.saude.go.gov.br/r4/seguranca/):
 
 - política `https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0` — única versão implementada;
-- JWS General JSON Serialization, **JAdES-B-B** (resultado `iat`) ou **JAdES-B-T** (resultado `tsa`), gerados e validados pelo [EU DSS](https://github.com/esig/dss) 6.4;
+- JWS General JSON Serialization, **JAdES-B-B** (resultado `iat`) ou **JAdES-B-T** (resultado `tsa`), gerados e validados pelo [EU DSS](https://github.com/esig/dss) 6.5;
 - canonicalização `fhir-json-lossless/0.2.0` (tokens `decimal` preservados) e artefato enquadrado `UINT64_BE` → SHA-256 como payload attached;
 - certificados ICP-Brasil A3, A4, SE-S e SE-H (RSA, `RS256`): acervo carregado pela biblioteca [icpbrasil-truststore](https://github.com/sesgo-ti/icpbrasil-truststore); cadeia, revogação OCSP/CRL e carimbos decididos pelo EU DSS.
 

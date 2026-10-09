@@ -10,7 +10,7 @@ e o projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 ### Adicionado
 
 - Política de assinatura `https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0` como única versão implementada (IG seguranca SES-GO 0.2.0), com pipelines de assinatura e de validação.
-- JAdES-B-B e JAdES-B-T (ETSI TS 119 182-1) via EU DSS 6.4: protected header `{alg, x5t#S256, x5c, iat, sigPId, srCms}`, `etsiU` em claro com um único `sigTst`, carimbo com nonce, `reqPolicy` e imprint SHA-256.
+- JAdES-B-B e JAdES-B-T (ETSI TS 119 182-1) via EU DSS 6.5: protected header `{alg, x5t#S256, x5c, iat, sigPId, srCms}`, `etsiU` em claro com um único `sigTst`, carimbo com nonce, `reqPolicy` e imprint SHA-256.
 - Canonicalização `fhir-json-lossless/0.2.0` e artefato enquadrado `UINT64_BE(N) || len(Ti) || Ti || len(Ri) || Ri`, sobre parser JSON sem perda (tokens `decimal` preservados, membros duplicados rejeitados).
 - Elegibilidade do certificado folha por allowlist (`safira.policy.accepted-certificate-policies`: OID completo, tipo A3/A4/SE-S/SE-H e SHA-256 do emissor), RSA 2048/4096 por tipo, `digitalSignature`, identidade CPF/CNPJ com dígitos verificadores.
 - Validação: parsing estrito do JWS, vínculo `Signature` × `Provenance.signature` × `Provenance.agent`, recomputação do payload, EU DSS decidindo cadeia, revogação (B-B no instante atual; B-T com o carimbo como prova de existência) e carimbo, com as regras da política 0.2.0 sobre o `TimeStampToken` e trust store TSA separado (B-T).
@@ -24,6 +24,7 @@ e o projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ### Alterado
 
+- EU DSS atualizado de 6.4 para 6.5 (corrige DSS-3876, concorrência na validação JAdES); BouncyCastle segue alinhado em 1.86 (`bcprov`, `bcpkix`, `bcutil`).
 - **Incompatível:** `POST /assinar` e `POST /validar` recebem o corpo JSON cru; `/assinar` devolve `{"signature", "provenance"}` e `/validar` exige `signature`, `bundle` e `provenance`.
 - **Incompatível:** a URI de política passa a ser `…/assinatura/politica/0.2.0`; URIs `…/ImplementationGuide/br.go.ses.seguranca|x.y.z` retornam `POLICY.URI-INVALID`.
 - Dependência de acervo, PKIX e revogação migrada para `br.gov.go.saude:icpbrasil-truststore-autoconfigure:0.0.2` (propriedades `icpbrasil-truststore.*`). Na 0.0.2 o acervo descarta raízes fora da lista fixada (v5, v6, v7, v10, v11, v12), um certificado só é considerado revogado a partir da data de revogação e o BouncyCastle não é mais registrado na JVM; o safira usa instâncias próprias do provider.

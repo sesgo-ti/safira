@@ -43,7 +43,7 @@ import java.util.Optional;
  * (certificado revogado agora → {@code REVOKED_NO_POE} → {@code CERT.REVOKED}); em B-T o carimbo
  * é a POE e revogação posterior a ele não invalida a assinatura.
  *
- * <p>Política de validação: a padrão do DSS 6.4 (ETSI EN 319 102-1). As regras específicas da
+ * <p>Política de validação: a padrão do DSS 6.5 (ETSI EN 319 102-1). As regras específicas da
  * SES-GO (OIDs ICP-Brasil, keyUsage, identidade, janela do carimbo) ficam nos passos próprios;
  * uma política XML versionada só se justifica se a padrão divergir do IG.
  */

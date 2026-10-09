@@ -32,7 +32,7 @@ import java.util.Set;
  *       e revalidadas pelo DSS como qualquer outro certificado;</li>
  *   <li><b>rede</b>: somente OCSP e CRL, pelo {@link RestrictedDataLoader} com o
  *       {@link DestinationGuard} recebido, e somente para cadeias que terminam numa âncora
- *       ({@code checkRevocationForUntrustedChains=false}, padrão do DSS 6.4 fixado aqui) — as
+ *       ({@code checkRevocationForUntrustedChains=false}, padrão do DSS 6.5 fixado aqui) — as
  *       URLs consultadas vêm de certificados emitidos por ACs confiáveis.</li>
  * </ul>
  *

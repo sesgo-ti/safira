@@ -37,7 +37,7 @@ import java.util.Set;
  * teto de tamanho de resposta e {@link DestinationGuard} aplicado a cada endereço resolvido na
  * conexão (as URLs vêm de quem envia a assinatura: SSRF).
  *
- * <p>O {@link CommonsDataLoader} do DSS 6.4 aceita também {@code file:}, {@code ftp:} e
+ * <p>O {@link CommonsDataLoader} do DSS 6.5 aceita também {@code file:}, {@code ftp:} e
  * {@code ldap:} e não limita o tamanho da resposta; ambas as restrições são aplicadas pelos
  * pontos de extensão do próprio DSS (métodos protegidos e {@code HttpClientResponseHandler}).
  * O filtro de destino entra pelo {@link DnsResolver} do connection manager. Proxy é proibido
