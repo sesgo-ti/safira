@@ -15,6 +15,9 @@ import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
 import br.gov.go.saude.fhir.safira.steps.certificate.CertificateType;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TrustStoreRef;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TsaPolicies;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TsaPolicy;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
@@ -138,6 +141,19 @@ class DssAndOutcomeStepsTest {
 
         assertThat(code(step.execute(SignedArtifactFixture.comAcervo(parsed, criticalTrust))))
                 .isEqualTo(SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED);
+    }
+
+    @Test
+    void shouldNotLeakTrustStoreReferenceWhenTsaTrustStoreIsUnreadable() {
+        SafiraPolicyProperties broken = TestConfigs.policy(pki, new TsaPolicies("1.0.0", List.of(new TsaPolicy(
+                TestPki.TSA_POLICY_OID, 1L, new TrustStoreRef("file:/segredo-caminho/ausente.pem")))));
+        DssValidationStep step = new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
+                CertificateVerifierFactory.offline(good(), null)), broken);
+
+        StepResult<ValidationContext> result = step.execute(bt);
+
+        assertThat(code(result)).isEqualTo(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY);
+        assertThat(((StepResult.Failure<ValidationContext>) result).diagnostics()).doesNotContain("segredo-caminho");
     }
 
     @Test

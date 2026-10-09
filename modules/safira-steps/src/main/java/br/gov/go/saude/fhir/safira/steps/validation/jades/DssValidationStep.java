@@ -31,6 +31,9 @@ import eu.europa.esig.dss.simplereport.SimpleReport;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 import eu.europa.esig.dss.validation.reports.Reports;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Optional;
@@ -56,6 +59,8 @@ import java.util.Optional;
 // DIVERGENCIA-IG D7: validade histórica (intervalo I) em B-T decidida pelo DSS com o carimbo como POE
 @StepId("dss-validation")
 public class DssValidationStep implements ValidationStep {
+
+    private static final Logger log = LoggerFactory.getLogger(DssValidationStep.class);
 
     private final VerificadoresDss verifiers;
     private final SafiraPolicyProperties policy;
@@ -87,7 +92,9 @@ public class DssValidationStep implements ValidationStep {
             } catch (TimestampTokenException e) {
                 return fail(e.getCode(), e.getMessage(), context);
             } catch (IllegalArgumentException e) {
-                return fail(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY, e.getMessage(), context);
+                log.error("Trust store da política TSA indisponível", e);
+                return fail(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY,
+                        "Trust store da política TSA indisponível.", context);
             }
         }
 

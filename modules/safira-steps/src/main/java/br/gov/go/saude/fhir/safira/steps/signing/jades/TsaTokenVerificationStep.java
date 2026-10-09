@@ -27,6 +27,9 @@ import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 import eu.europa.esig.dss.validation.reports.Reports;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
@@ -43,6 +46,8 @@ import java.util.Optional;
  */
 @StepId("tsa-token-verification")
 public class TsaTokenVerificationStep implements SigningStep {
+
+    private static final Logger log = LoggerFactory.getLogger(TsaTokenVerificationStep.class);
 
     private final VerificadoresDss verifiers;
     private final SafiraPolicyProperties policy;
@@ -64,7 +69,9 @@ public class TsaTokenVerificationStep implements SigningStep {
         } catch (TimestampTokenException e) {
             violation = Optional.of(new PolicyViolation(e.getCode(), e.getMessage()));
         } catch (IllegalArgumentException e) {
-            violation = Optional.of(new PolicyViolation(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY, e.getMessage()));
+            log.error("Trust store da política TSA indisponível", e);
+            violation = Optional.of(new PolicyViolation(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY,
+                    "Trust store da política TSA indisponível."));
         }
         return violation
                 .map(v -> StepResult.failure(getName(), v.code(), v.diagnostics(), context))

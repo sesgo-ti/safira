@@ -17,6 +17,9 @@ import br.gov.go.saude.fhir.safira.jades.fixture.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
 import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TrustStoreRef;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TsaPolicies;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TsaPolicy;
 import br.gov.go.saude.fhir.safira.steps.signing.CryptoSigningStep;
 import br.gov.go.saude.fhir.safira.steps.signing.SigningKeys;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
@@ -143,6 +146,19 @@ class JadesSigningStepsTest {
                 CertificateVerifierFactory.offline(pki.ocspGoodSource(), null));
 
         assertThat(new TsaTokenVerificationStep(mudou, policy).execute(context).isSuccess()).isTrue();
+    }
+
+    @Test
+    void shouldNotLeakTrustStoreReferenceWhenTsaTrustStoreIsUnreadable() throws Exception {
+        SafiraPolicyProperties broken = TestConfigs.policy(pki, new TsaPolicies("1.0.0", List.of(new TsaPolicy(
+                TestPki.TSA_POLICY_OID, 1L, new TrustStoreRef("file:/segredo-caminho/ausente.pem")))));
+
+        StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.ocspGoodSource()), broken)
+                .execute(comSnapshot(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context()));
+
+        assertThat(((StepResult.Failure<SigningContext>) result).code())
+                .isEqualTo(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY);
+        assertThat(((StepResult.Failure<SigningContext>) result).diagnostics()).doesNotContain("segredo-caminho");
     }
 
     @Test
