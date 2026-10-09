@@ -16,10 +16,9 @@ import br.gov.go.saude.fhir.safira.jades.JadesSigningService;
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
 import eu.europa.esig.dss.model.SignatureValue;
 import eu.europa.esig.dss.model.ToBeSigned;
+import eu.europa.esig.dss.token.AbstractKeyStoreTokenConnection;
 import eu.europa.esig.dss.token.DSSPrivateKeyEntry;
 import eu.europa.esig.dss.token.KSPrivateKeyEntry;
-import eu.europa.esig.dss.token.KeyStoreSignatureTokenConnection;
-import eu.europa.esig.dss.token.Pkcs12SignatureToken;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.openssl.PEMEncryptedKeyPair;
@@ -31,10 +30,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
+import java.security.KeyStoreException;
 import java.security.KeyStore.PasswordProtection;
 import java.security.MessageDigest;
 import java.security.PrivateKey;
@@ -48,13 +47,17 @@ import java.security.interfaces.RSAPrivateCrtKey;
 import java.security.interfaces.RSAPublicKey;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Enumeration;
+
+import javax.security.auth.DestroyFailedException;
 
 /**
  * Step: cria a assinatura digital (passo 10 da especificação).
  *
- * <p>A chave é carregada e usada por um {@code SignatureTokenConnection} do EU DSS: PKCS#12 por
- * {@link Pkcs12SignatureToken}; PEM (lido com BouncyCastle) por {@link KeyStoreSignatureTokenConnection}
- * sobre um PKCS#12 efêmero em memória. O valor RS256 ({@code RSASSA-PKCS1-v1_5} com SHA-256, único
+ * <p>A chave é usada por um {@code SignatureTokenConnection} do EU DSS ({@link AbstractKeyStoreTokenConnection})
+ * sobre um {@link KeyStore} PKCS#12 carregado uma única vez: o PKCS#12 do cliente, ou, para PEM (lido com
+ * BouncyCastle), um KeyStore em memória com a entrada única da chave e de {@code chain[0]}. Só a entrada
+ * escolhida é decifrada. O valor RS256 ({@code RSASSA-PKCS1-v1_5} com SHA-256, único
  * algoritmo da política 0.2.0 — C18) é produzido sobre o signing input e codificado em Base64Url.
  *
  * <p>O DSS não confere a chave com o certificado nem verifica o valor produzido; por isso o step mantém:
@@ -111,7 +114,7 @@ public class CryptoSigningStep implements SigningStep {
                                 + "Verifique se o step pkix-chain-validation foi executado."));
         PublicKey signerPublicKey = signerCertificate.getPublicKey();
 
-        try (KeyStoreSignatureTokenConnection token = openToken(material, signerCertificate)) {
+        try (LoadedKeyStoreToken token = openToken(material, signerCertificate)) {
             KSPrivateKeyEntry entry = selectEntry(token, material, signerPublicKey);
             PrivateKey privateKey = entry.getPrivateKey();
 
@@ -143,7 +146,7 @@ public class CryptoSigningStep implements SigningStep {
         }
     }
 
-    private byte[] sign(KeyStoreSignatureTokenConnection token, DSSPrivateKeyEntry entry, byte[] signingInputBytes) {
+    private byte[] sign(LoadedKeyStoreToken token, DSSPrivateKeyEntry entry, byte[] signingInputBytes) {
         try {
             SignatureValue value = token.sign(new ToBeSigned(signingInputBytes), SignatureAlgorithm.RSA_SHA256, entry);
             return value.getValue();
@@ -154,7 +157,7 @@ public class CryptoSigningStep implements SigningStep {
         }
     }
 
-    private KeyStoreSignatureTokenConnection openToken(CryptoMaterial material, X509Certificate signer)
+    private LoadedKeyStoreToken openToken(CryptoMaterial material, X509Certificate signer)
             throws KeyLoadingException {
         try {
             return switch (material) {
@@ -170,7 +173,7 @@ public class CryptoSigningStep implements SigningStep {
         }
     }
 
-    private KSPrivateKeyEntry selectEntry(KeyStoreSignatureTokenConnection token, CryptoMaterial material,
+    private KSPrivateKeyEntry selectEntry(LoadedKeyStoreToken token, CryptoMaterial material,
                                           PublicKey signerPublicKey) throws KeyLoadingException {
         try {
             String alias = material instanceof CryptoMaterial.Pkcs12Material p12 ? p12.alias() : PEM_ALIAS;
@@ -181,11 +184,10 @@ public class CryptoSigningStep implements SigningStep {
                 throw new KeyLoadingException(SignatureExceptionCode.DEVICE_CERTIFICATE_NOT_FOUND,
                         "O alias '" + alias + "' não foi encontrado no PKCS#12 ou não possui chave privada associada.");
             }
-            for (DSSPrivateKeyEntry candidate : token.getKeys()) {
-                if (candidate instanceof KSPrivateKeyEntry entry && MessageDigest.isEqual(
-                        entry.getCertificate().getPublicKey().getEncoded(), signerPublicKey.getEncoded())) {
-                    return entry;
-                }
+            // Escolhe pelo certificado, sem decifrar as demais entradas (cada uma tem seu PBKDF e pode ter outra senha).
+            String matching = token.keyAliasFor(signerPublicKey);
+            if (matching != null && token.getKey(matching) instanceof KSPrivateKeyEntry entry) {
+                return entry;
             }
             throw new KeyLoadingException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
                     "Nenhuma chave privada do PKCS#12 corresponde ao certificado do signatário.");
@@ -207,7 +209,7 @@ public class CryptoSigningStep implements SigningStep {
                 && key.getModulus().equals(rsa.getModulus());
     }
 
-    private KeyStoreSignatureTokenConnection openPkcs12Token(CryptoMaterial.Pkcs12Material p12) throws KeyLoadingException {
+    private LoadedKeyStoreToken openPkcs12Token(CryptoMaterial.Pkcs12Material p12) throws KeyLoadingException {
         byte[] p12Bytes;
         try {
             p12Bytes = Base64.getDecoder().decode(p12.contentBase64());
@@ -217,10 +219,14 @@ public class CryptoSigningStep implements SigningStep {
         }
 
         char[] password = p12.password() != null ? p12.password().toCharArray() : new char[0];
+        // PasswordProtection clona a senha; o token destrói a cópia no close(), e aqui no caminho de falha.
+        PasswordProtection protection = new PasswordProtection(password);
         try {
-            // PasswordProtection clona a senha; o token destrói a cópia no close().
-            return new Pkcs12SignatureToken(p12Bytes, new PasswordProtection(password));
+            KeyStore keyStore = KeyStore.getInstance("PKCS12");
+            keyStore.load(new ByteArrayInputStream(p12Bytes), password);
+            return new LoadedKeyStoreToken(keyStore, protection);
         } catch (Exception e) {
+            destroy(protection);
             throw new KeyLoadingException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
                     "Não foi possível abrir o PKCS#12 com a senha fornecida.");
         } finally {
@@ -228,20 +234,29 @@ public class CryptoSigningStep implements SigningStep {
         }
     }
 
-    /** Única cola: chave PEM lida pelo BouncyCastle num PKCS#12 efêmero em memória (entrada única com {@code chain[0]}). */
-    private KeyStoreSignatureTokenConnection openPemToken(CryptoMaterial.PemMaterial pem, X509Certificate signer)
-            throws Exception {
+    /** Única cola: chave PEM lida pelo BouncyCastle num KeyStore PKCS#12 em memória (entrada única com {@code chain[0]}). */
+    private LoadedKeyStoreToken openPemToken(CryptoMaterial.PemMaterial pem, X509Certificate signer) throws Exception {
         PrivateKey privateKey = loadPemPrivateKey(pem);
         char[] ephemeral = Base64.getEncoder().encodeToString(randomBytes(24)).toCharArray();
+        PasswordProtection protection = new PasswordProtection(ephemeral);
         try {
             KeyStore keyStore = KeyStore.getInstance("PKCS12");
             keyStore.load(null, null);
             keyStore.setKeyEntry(PEM_ALIAS, privateKey, ephemeral, new Certificate[]{signer});
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            keyStore.store(out, ephemeral);
-            return new KeyStoreSignatureTokenConnection(out.toByteArray(), "PKCS12", new PasswordProtection(ephemeral));
+            return new LoadedKeyStoreToken(keyStore, protection);
+        } catch (Exception e) {
+            destroy(protection);
+            throw e;
         } finally {
             Arrays.fill(ephemeral, '\0');
+        }
+    }
+
+    private static void destroy(PasswordProtection protection) {
+        try {
+            protection.destroy();
+        } catch (DestroyFailedException e) {
+            log.warn("Não foi possível destruir a senha do material criptográfico");
         }
     }
 
@@ -295,6 +310,50 @@ public class CryptoSigningStep implements SigningStep {
 
             throw new KeyLoadingException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
                     "O conteúdo PEM não contém uma chave privada reconhecível.");
+        }
+    }
+
+    /**
+     * Token do DSS sobre um {@link KeyStore} já carregado (ponto de extensão
+     * {@link AbstractKeyStoreTokenConnection}): o PKCS#12 é aberto uma única vez e só a entrada escolhida é decifrada.
+     */
+    private static final class LoadedKeyStoreToken extends AbstractKeyStoreTokenConnection {
+
+        private final KeyStore keyStore;
+        private final PasswordProtection protection;
+
+        LoadedKeyStoreToken(KeyStore keyStore, PasswordProtection protection) {
+            this.keyStore = keyStore;
+            this.protection = protection;
+        }
+
+        @Override
+        protected KeyStore getKeyStore() {
+            return keyStore;
+        }
+
+        @Override
+        protected PasswordProtection getKeyProtectionParameter() {
+            return protection;
+        }
+
+        /** Alias da entrada de chave cujo certificado tem a chave pública informada, sem decifrar nenhuma chave. */
+        String keyAliasFor(PublicKey publicKey) throws KeyStoreException {
+            Enumeration<String> aliases = keyStore.aliases();
+            while (aliases.hasMoreElements()) {
+                String alias = aliases.nextElement();
+                Certificate certificate = keyStore.getCertificate(alias);
+                if (keyStore.isKeyEntry(alias) && certificate != null
+                        && MessageDigest.isEqual(certificate.getPublicKey().getEncoded(), publicKey.getEncoded())) {
+                    return alias;
+                }
+            }
+            return null;
+        }
+
+        @Override
+        public void close() {
+            destroy(protection);
         }
     }
 

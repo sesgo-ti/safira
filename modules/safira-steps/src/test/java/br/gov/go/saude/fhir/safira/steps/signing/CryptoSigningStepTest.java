@@ -160,6 +160,27 @@ class CryptoSigningStepTest {
         assertTrue(verifyRsa(keys.getPublic(), signingInput, Base64.getUrlDecoder().decode(getSignature(result))));
     }
 
+    @Test
+    void shouldSignWithPkcs12WithoutAliasWhenForeignEntryHasAnotherKeyPassword() throws Exception {
+        KeyPair other = generateRsaKeyPair(2048);
+        KeyPair keys = generateRsaKeyPair(2048);
+        X509Certificate cert = selfSign(keys, "CN=Test");
+        KeyStore keyStore = KeyStore.getInstance("PKCS12");
+        keyStore.load(null, null);
+        keyStore.setKeyEntry("a-outro", other.getPrivate(), "outra-senha".toCharArray(),
+                new Certificate[]{selfSign(other, "CN=Outro")});
+        keyStore.setKeyEntry("b-titular", keys.getPrivate(), "senha".toCharArray(), new Certificate[]{cert});
+        var baos = new java.io.ByteArrayOutputStream();
+        keyStore.store(baos, "senha".toCharArray());
+        var material = new CryptoMaterial.Pkcs12Material(Base64.getEncoder().encodeToString(baos.toByteArray()), "senha", null);
+        byte[] signingInput = "data".getBytes(StandardCharsets.UTF_8);
+
+        var result = step.execute(contextWith(material, cert, signingInput));
+
+        assertSuccess(result);
+        assertTrue(verifyRsa(keys.getPublic(), signingInput, Base64.getUrlDecoder().decode(getSignature(result))));
+    }
+
     // ===== PKCS12 alias não encontrado =====
 
     @Test
