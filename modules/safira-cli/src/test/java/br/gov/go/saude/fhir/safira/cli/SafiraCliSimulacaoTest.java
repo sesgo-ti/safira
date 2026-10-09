@@ -51,12 +51,16 @@ class SafiraCliSimulacaoTest {
         return Cli.executar(argumentos);
     }
 
-    private Resultado validar(JsonNode assinada, Path bundleValidado) throws Exception {
+    private Resultado validar(JsonNode assinada, Path bundleValidado, String... extras) throws Exception {
         Path signature = Cli.escrever(diretorio.resolve("signature.json"), assinada.get("signature").toString());
         Path provenanceFinal = Cli.escrever(diretorio.resolve("provenance-final.json"), assinada.get("provenance").toString());
-        return Cli.executar("validar", "--modo", "simulacao", "--pki-dir", pki.toString(),
+        String[] base = {"validar", "--modo", "simulacao", "--pki-dir", pki.toString(),
                 "--signature", signature.toString(), "--bundle", bundleValidado.toString(),
-                "--provenance", provenanceFinal.toString());
+                "--provenance", provenanceFinal.toString()};
+        String[] argumentos = new String[base.length + extras.length];
+        System.arraycopy(base, 0, argumentos, 0, base.length);
+        System.arraycopy(extras, 0, argumentos, base.length, extras.length);
+        return Cli.executar(argumentos);
     }
 
     @Test
@@ -71,6 +75,31 @@ class SafiraCliSimulacaoTest {
 
         assertThat(validada.saida()).isEqualTo(CodigosDeSaida.SUCESSO);
         assertThat(validada.codigo()).isEqualTo("VALIDATION.SUCCESS");
+    }
+
+    @Test
+    void shouldFailStartupWhenConfigOmitsDssValidationFromPipeline() throws Exception {
+        Resultado assinada = assinar("--senha-arquivo", pki.resolve("senha.txt").toString());
+        Path semDss = Cli.escrever(diretorio.resolve("sem-dss.yml"), """
+                safira:
+                  pipelines:
+                    - version: "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0"
+                      operation: VALIDATION
+                      steps:
+                        - "validation-context"
+                        - "signature-binding"
+                        - "jws-structure"
+                        - "content-integrity"
+                        - "signer-certificate"
+                        - "timestamp-validation"
+                        - "validation-outcome"
+                """);
+
+        Resultado validada = validar(assinada.json(), bundle, "--config", semDss.toString());
+
+        assertThat(validada.saida()).isEqualTo(CodigosDeSaida.USO);
+        assertThat(validada.out()).isEmpty();
+        assertThat(validada.err()).startsWith("Erro: falha na partida").contains("dss-validation");
     }
 
     @Test

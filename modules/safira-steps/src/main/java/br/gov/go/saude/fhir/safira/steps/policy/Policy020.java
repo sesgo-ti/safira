@@ -5,6 +5,7 @@
 
 package br.gov.go.saude.fhir.safira.steps.policy;
 
+import java.util.List;
 import java.util.regex.Pattern;
 
 /**
@@ -41,6 +42,20 @@ public final class Policy020 {
     /** {@code urn:uuid:} canônico (RFC 4122), inteiramente em minúsculas. */
     public static final Pattern LOWERCASE_UUID_URN = Pattern.compile(
             "^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$");
+
+    /**
+     * Steps obrigatórios, nesta ordem, do pipeline SIGNING da política (casos de uso de criação);
+     * conferidos na partida — o YAML pode acrescentar steps, nunca omitir ou reordenar estes.
+     */
+    public static final List<String> REQUIRED_SIGNING_STEPS = List.of(
+            "context-validation", "payload-validation", "pkix-chain-validation", "certificate-policy",
+            "framed-content-digest", "jades-data-to-sign", "crypto-signing", "jades-assemble",
+            "jades-extension", "tsa-token-verification", "fhir-signature");
+
+    /** Steps obrigatórios, nesta ordem, do pipeline VALIDATION da política (caso de uso de validação). */
+    public static final List<String> REQUIRED_VALIDATION_STEPS = List.of(
+            "validation-context", "signature-binding", "jws-structure", "content-integrity",
+            "signer-certificate", "dss-validation", "timestamp-validation", "validation-outcome");
 
     private Policy020() {
     }

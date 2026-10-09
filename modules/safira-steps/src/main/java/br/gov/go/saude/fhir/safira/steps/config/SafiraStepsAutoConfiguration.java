@@ -7,11 +7,15 @@ package br.gov.go.saude.fhir.safira.steps.config;
 
 import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties;
 import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties.VerificationProps;
+import br.gov.go.saude.fhir.safira.engine.domain.OperationType;
 import br.gov.go.saude.fhir.safira.engine.domain.Step;
+import br.gov.go.saude.fhir.safira.engine.domain.pipelines.PipelineKey;
+import br.gov.go.saude.fhir.safira.engine.domain.pipelines.RequiredSteps;
 import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.jades.adapter.DestinationGuard;
 import br.gov.go.saude.fhir.safira.jades.adapter.TspSourceFactory;
+import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.signing.CertificatePolicyStep;
 import br.gov.go.saude.fhir.safira.steps.signing.ContextValidationStep;
@@ -85,6 +89,19 @@ public class SafiraStepsAutoConfiguration {
     public VerificadoresDss safiraVerificadoresDss(FonteDeConfianca fonteDeConfianca,
                                                    CertificateVerifierFactory factory) {
         return new VerificadoresDss(fonteDeConfianca, factory);
+    }
+
+    /** Steps obrigatórios do pipeline SIGNING da política 0.2.0, conferidos na partida pelo {@code PipelineConfig}. */
+    @Bean
+    public RequiredSteps safiraRequiredSigningSteps() {
+        return new RequiredSteps(new PipelineKey(Policy020.POLICY_URI, OperationType.SIGNING), Policy020.REQUIRED_SIGNING_STEPS);
+    }
+
+    /** Steps obrigatórios do pipeline VALIDATION da política 0.2.0 (sem {@code dss-validation} a partida falha). */
+    @Bean
+    public RequiredSteps safiraRequiredValidationSteps() {
+        return new RequiredSteps(new PipelineKey(Policy020.POLICY_URI, OperationType.VALIDATION),
+                Policy020.REQUIRED_VALIDATION_STEPS);
     }
 
     @Bean
