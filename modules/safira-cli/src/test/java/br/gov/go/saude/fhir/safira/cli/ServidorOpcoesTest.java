@@ -15,6 +15,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -79,5 +80,27 @@ class ServidorOpcoesTest {
 
         assertThat(resultado.saida()).isEqualTo(CodigosDeSaida.USO);
         assertThat(resultado.err()).contains("--pki-dir só vale com --modo simulacao");
+    }
+
+    @Test
+    void shouldParseIdleTimeout() {
+        assertThat(ExecucaoDoServidor.ociosidade("90s")).contains(Duration.ofSeconds(90));
+        assertThat(ExecucaoDoServidor.ociosidade("30m")).contains(Duration.ofMinutes(30));
+        assertThat(ExecucaoDoServidor.ociosidade("2h")).contains(Duration.ofHours(2));
+        assertThat(ExecucaoDoServidor.ociosidade("PT5M")).contains(Duration.ofMinutes(5));
+        assertThat(ExecucaoDoServidor.ociosidade("")).isEmpty();
+        assertThat(ExecucaoDoServidor.ociosidade(null)).isEmpty();
+        assertThatThrownBy(() -> ExecucaoDoServidor.ociosidade("logo")).isInstanceOf(FalhaDeUso.class);
+        assertThatThrownBy(() -> ExecucaoDoServidor.ociosidade("0s")).isInstanceOf(FalhaDeUso.class);
+    }
+
+    @Test
+    void shouldRefuseInvalidIdleTimeoutBeforeStarting() {
+        Resultado resultado = Cli.executar("servidor", "iniciar", "--modo", "simulacao",
+                "--estado-dir", diretorio.toString(), "--ociosidade", "logo");
+
+        assertThat(resultado.saida()).isEqualTo(CodigosDeSaida.USO);
+        assertThat(resultado.err()).contains("ociosidade");
+        assertThat(diretorio.resolve("simulacao").resolve("servidor.properties")).doesNotExist();
     }
 }

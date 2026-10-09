@@ -62,7 +62,8 @@ final class GerenciadorDoServidor {
     }
 
     /** O que subir: modo, diretório do estado, porta, opções do modo e limites de tempo. */
-    record Partida(Modo modo, Path diretorio, int porta, Path pkiDir, Path config, Duration timeout) {
+    record Partida(Modo modo, Path diretorio, int porta, Path pkiDir, Path config, Duration timeout,
+                   Duration ociosidade) {
     }
 
     private final PrintWriter err;
@@ -227,6 +228,9 @@ final class GerenciadorDoServidor {
         }
         if (partida.config() != null) {
             comando.addAll(List.of("--config", partida.config().toAbsolutePath().toString()));
+        }
+        if (partida.ociosidade() != null) {
+            comando.addAll(List.of("--ociosidade", partida.ociosidade().toString()));
         }
         return comando;
     }

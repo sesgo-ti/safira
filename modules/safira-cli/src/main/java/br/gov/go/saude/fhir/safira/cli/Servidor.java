@@ -131,6 +131,11 @@ final class Servidor implements Runnable {
                 description = "Espera máxima pela prontidão (padrão 60 simulacao, 300 icpbrasil: a 1ª partida baixa o acervo).")
         Integer timeout;
 
+        @Option(names = "--ociosidade", paramLabel = "DURACAO",
+                description = "Encerra o servidor após esse tempo sem requisições (ex.: 30m, 2h; padrão "
+                        + "SAFIRA_IDLE_TIMEOUT; vazio = nunca).")
+        String ociosidade;
+
         @Override
         public Integer call() {
             Modo modo = opcaoModo.modo;
@@ -148,9 +153,11 @@ final class Servidor implements Runnable {
                     throw new FalhaDeUso("--timeout deve estar entre 1 e 3600 segundos.");
                 }
                 int portaEfetiva = GerenciadorDoServidor.porta(porta, opcaoEstado.ambiente, modo);
+                Duration ocioso = ExecucaoDoServidor.ociosidade(ociosidade != null ? ociosidade
+                        : opcaoEstado.ambiente.apply(ExecucaoDoServidor.VARIAVEL_OCIOSIDADE)).orElse(null);
                 Duration espera = Duration.ofSeconds(timeout != null ? timeout : modo.simulacao() ? 60 : 300);
                 return new GerenciadorDoServidor(err).iniciar(new GerenciadorDoServidor.Partida(modo,
-                        opcaoEstado.diretorio(modo), portaEfetiva, pkiDir, config, espera));
+                        opcaoEstado.diretorio(modo), portaEfetiva, pkiDir, config, espera, ocioso));
             });
         }
     }
@@ -232,10 +239,14 @@ final class Servidor implements Runnable {
         @Option(names = "--config")
         Path config;
 
+        @Option(names = "--ociosidade")
+        String ociosidade;
+
         @Override
         public Integer call() throws InterruptedException {
             try {
-                ExecucaoDoServidor.executar(opcaoModo.modo, porta, pkiDir, config);
+                ExecucaoDoServidor.executar(opcaoModo.modo, porta, pkiDir, config,
+                        ExecucaoDoServidor.ociosidade(ociosidade).orElse(null));
                 return CodigosDeSaida.SUCESSO;
             } catch (RuntimeException e) {
                 spec.commandLine().getErr().println("Erro: falha na partida do servidor (modo "

@@ -183,6 +183,17 @@ class ServidorTest {
         assertThat(arquivoDeEstado()).doesNotExist();
     }
 
+    @Test
+    void shouldStopServerAfterIdleTimeout() {
+        long pid = iniciar("--ociosidade", "2s").json().get("pid").asLong();
+
+        await().atMost(Duration.ofSeconds(30))
+                .until(() -> !ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false));
+
+        assertThat(status().json().get("estado").asText()).isEqualTo("PARADO");
+        assertThat(arquivoDeEstado()).doesNotExist();
+    }
+
     private int prontidao() throws Exception {
         try (HttpClient cliente = HttpClient.newHttpClient()) {
             return cliente.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + porta
