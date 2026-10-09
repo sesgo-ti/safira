@@ -21,6 +21,7 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.io.StringWriter;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -149,7 +150,7 @@ class CryptoSigningStepTest {
         keyStore.setKeyEntry("a-outro", other.getPrivate(), "senha".toCharArray(),
                 new Certificate[]{selfSign(other, "CN=Outro")});
         keyStore.setKeyEntry("b-titular", keys.getPrivate(), "senha".toCharArray(), new Certificate[]{cert});
-        var baos = new java.io.ByteArrayOutputStream();
+        var baos = new ByteArrayOutputStream();
         keyStore.store(baos, "senha".toCharArray());
         var material = new CryptoMaterial.Pkcs12Material(Base64.getEncoder().encodeToString(baos.toByteArray()), "senha", null);
         byte[] signingInput = "data".getBytes(StandardCharsets.UTF_8);
@@ -170,7 +171,7 @@ class CryptoSigningStepTest {
         keyStore.setKeyEntry("a-outro", other.getPrivate(), "outra-senha".toCharArray(),
                 new Certificate[]{selfSign(other, "CN=Outro")});
         keyStore.setKeyEntry("b-titular", keys.getPrivate(), "senha".toCharArray(), new Certificate[]{cert});
-        var baos = new java.io.ByteArrayOutputStream();
+        var baos = new ByteArrayOutputStream();
         keyStore.store(baos, "senha".toCharArray());
         var material = new CryptoMaterial.Pkcs12Material(Base64.getEncoder().encodeToString(baos.toByteArray()), "senha", null);
         byte[] signingInput = "data".getBytes(StandardCharsets.UTF_8);
@@ -189,7 +190,7 @@ class CryptoSigningStepTest {
         keyStore.load(null, null);
         keyStore.setKeyEntry("titular", keys.getPrivate(), "senha".toCharArray(), new Certificate[]{cert});
         keyStore.setCertificateEntry("so-certificado", cert);
-        var baos = new java.io.ByteArrayOutputStream();
+        var baos = new ByteArrayOutputStream();
         keyStore.store(baos, "senha".toCharArray());
         var material = new CryptoMaterial.Pkcs12Material(
                 Base64.getEncoder().encodeToString(baos.toByteArray()), "senha", "so-certificado");
@@ -348,7 +349,7 @@ class CryptoSigningStepTest {
         keyStore.load(null, null);
         keyStore.setKeyEntry(alias, privateKey, password.toCharArray(), new Certificate[]{cert});
 
-        var baos = new java.io.ByteArrayOutputStream();
+        var baos = new ByteArrayOutputStream();
         keyStore.store(baos, password.toCharArray());
         return Base64.getEncoder().encodeToString(baos.toByteArray());
     }
