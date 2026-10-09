@@ -129,6 +129,7 @@ class VerificadoresDssTest {
         assertThat(chamadas).hasValue(1);
     }
 
+    /** Teste de fumaça: a intercalação das threads não é determinística. */
     @Test
     void shouldNeverMixGenerationsWhenCalledConcurrently() throws Exception {
         AcervoDeConfianca g1 = acervo("g1", pki);
@@ -146,6 +147,7 @@ class VerificadoresDssTest {
             Future<?> alternador = executor.submit(() -> {
                 while (rodando.get()) {
                     atual.set(atual.get() == g1 ? g2 : g1);
+                    Thread.onSpinWait();
                 }
             });
             List<Callable<List<List<CertificateToken>>>> tarefas = new ArrayList<>();
