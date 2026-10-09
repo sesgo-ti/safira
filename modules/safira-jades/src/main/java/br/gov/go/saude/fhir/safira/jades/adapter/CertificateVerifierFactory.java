@@ -29,8 +29,9 @@ import java.util.Set;
  *       ICP-Brasil (e âncoras extras por chamada, como o trust store TSA da política) — o DSS
  *       trata certificado confiável como âncora e não verifica sua revogação;</li>
  *   <li><b>adjuntos</b> ({@link CommonCertificateSource}): ACs do acervo, candidatas à cadeia
- *       e revalidadas pelo DSS como qualquer outro certificado; uma fonte nova por verificador,
- *       pois o DSS não admite compartilhar a adjunta entre operações (doc. §20.2.1);</li>
+ *       e revalidadas pelo DSS como qualquer outro certificado; fonte e {@link CertificateToken}s
+ *       novos por verificador, pois a adjunta é própria de cada operação (doc. do DSS §20.2.1) e o
+ *       DSS grava no token o resultado da verificação de assinatura (emissor, validade);</li>
  *   <li><b>rede</b>: somente OCSP e CRL, pelo {@link RestrictedDataLoader} com o
  *       {@link DestinationGuard} recebido, e somente para cadeias que terminam numa âncora
  *       ({@code checkRevocationForUntrustedChains=false}, padrão do DSS 6.5 fixado aqui) — as
@@ -100,7 +101,7 @@ public final class CertificateVerifierFactory {
     public static Acervo acervo(Collection<X509Certificate> roots, Collection<X509Certificate> cas) {
         CommonTrustedCertificateSource trusted = new CommonTrustedCertificateSource();
         roots.forEach(root -> trusted.addCertificate(new CertificateToken(root)));
-        return new Acervo(trusted, cas.stream().map(CertificateToken::new).toList());
+        return new Acervo(trusted, List.copyOf(cas));
     }
 
     /**
@@ -119,7 +120,7 @@ public final class CertificateVerifierFactory {
             verifier.setTrustedCertSources(acervo.trusted(), extra);
         }
         CommonCertificateSource adjunct = new CommonCertificateSource();
-        acervo.cas().forEach(adjunct::addCertificate);
+        acervo.cas().forEach(ca -> adjunct.addCertificate(new CertificateToken(ca)));
         verifier.setAdjunctCertSources(adjunct);
         verifier.setOcspSource(ocspSource);
         verifier.setCrlSource(crlSource);
@@ -134,13 +135,14 @@ public final class CertificateVerifierFactory {
     }
 
     /**
-     * Acervo já convertido para o DSS: a fonte confiável é compartilhada entre verificadores (nunca
-     * alterada depois de pronta); as ACs viram uma fonte adjunta nova a cada {@link #create}.
+     * Acervo pronto para o DSS: a fonte confiável é compartilhada entre verificadores (nunca
+     * alterada depois de pronta, como admite a doc. do DSS §20.2.1); as ACs ficam como certificados
+     * e viram fonte adjunta e tokens novos a cada {@link #create}.
      *
      * @param trusted raízes confiáveis
      * @param cas     ACs candidatas à cadeia
      */
-    public record Acervo(CommonTrustedCertificateSource trusted, List<CertificateToken> cas) {
+    public record Acervo(CommonTrustedCertificateSource trusted, List<X509Certificate> cas) {
 
         public Acervo {
             cas = List.copyOf(cas);

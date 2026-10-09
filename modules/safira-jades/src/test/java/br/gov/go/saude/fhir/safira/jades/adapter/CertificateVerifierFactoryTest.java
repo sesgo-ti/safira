@@ -78,6 +78,15 @@ class CertificateVerifierFactoryTest {
     }
 
     @Test
+    void shouldGiveEachVerifierItsOwnCaTokensWhenAcervoIsReused() {
+        CertificateVerifierFactory factory = CertificateVerifierFactory.offline(null, null);
+        CertificateVerifierFactory.Acervo shared = acervo();
+
+        assertThat(factory.create(shared, List.of()).getAdjunctCertSources().getCertificates().getFirst())
+                .isNotSameAs(factory.create(shared, List.of()).getAdjunctCertSources().getCertificates().getFirst());
+    }
+
+    @Test
     void shouldUseDssOnlineRevocationWithoutAiaWhenOnline() {
         CommonCertificateVerifier verifier = CertificateVerifierFactory.online(7, 9, (host, address) -> { }).create(acervo(), List.of());
 
