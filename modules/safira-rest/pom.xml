@@ -20,7 +20,7 @@
     <artifactId>safira-rest</artifactId>
     <packaging>jar</packaging>
     <name>Safira :: REST</name>
-    <description>Spring Boot REST API consuming the Safira Engine.</description>
+    <description>Biblioteca da API REST do Safira (controllers e serviços registrados por auto-configuração).</description>
 
     <dependencies>
         <dependency>
@@ -87,17 +87,21 @@
 
     <build>
         <plugins>
-            <!-- O pom raiz não herda de spring-boot-starter-parent, então o goal
-                 repackage precisa ser ligado explicitamente para `package` gerar
-                 um JAR executável com `java -jar`. -->
+            <!-- test-jar: compartilha os auxiliares dos testes de sistema com o safira-app -->
             <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
                 <executions>
                     <execution>
                         <goals>
-                            <goal>repackage</goal>
+                            <goal>test-jar</goal>
                         </goals>
+                        <configuration>
+                            <excludes>
+                                <exclude>application.yml</exclude>
+                                <exclude>br/gov/go/saude/fhir/safira/rest/SafiraRestTestApplication*</exclude>
+                            </excludes>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

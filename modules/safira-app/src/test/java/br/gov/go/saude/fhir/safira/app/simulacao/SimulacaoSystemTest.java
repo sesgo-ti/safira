@@ -3,8 +3,10 @@
  * Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
  */
 
-package br.gov.go.saude.fhir.safira.rest.service;
+package br.gov.go.saude.fhir.safira.app.simulacao;
 
+import br.gov.go.saude.fhir.safira.rest.service.JadesSigningSystemTest;
+import br.gov.go.saude.fhir.safira.rest.service.SignAndValidateSystemTest;
 import br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -28,12 +28,12 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
@@ -49,10 +49,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @Import(OfflineRevocationConfig.class)
-class JadesSigningSystemTest {
+public class JadesSigningSystemTest {
 
-    static final String POLICY_URI = "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0";
-    static final TestPki PKI = TestPki.create();
+    public static final String POLICY_URI = "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0";
+    public static final TestPki PKI = TestPki.create();
 
     @MockitoBean
     FonteDeConfianca fonteDeConfianca;
@@ -64,7 +64,7 @@ class JadesSigningSystemTest {
     private final ObjectMapper mapper = new ObjectMapper();
 
     @DynamicPropertySource
-    static void policy(DynamicPropertyRegistry registry) {
+    public static void policy(DynamicPropertyRegistry registry) {
         registry.add("safira.policy.accepted-certificate-policies[0].oid", () -> "2.16.76.1.2.3.1");
         registry.add("safira.policy.accepted-certificate-policies[0].type", () -> "A3");
         registry.add("safira.policy.accepted-certificate-policies[0].issuer-sha256", PKI::issuerSha256);
@@ -77,11 +77,13 @@ class JadesSigningSystemTest {
         OfflineRevocationConfig.reset();
     }
 
-    static String example(String name) throws Exception {
-        return Files.readString(Path.of("src/test/resources/examples/politica-0.2.0/" + name), StandardCharsets.UTF_8);
+    public static String example(String name) throws Exception {
+        try (InputStream in = JadesSigningSystemTest.class.getResourceAsStream("/examples/politica-0.2.0/" + name)) {
+            return new String(Objects.requireNonNull(in, name).readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 
-    static String signingBody(String policyUri, long referenceTimestamp) throws Exception {
+    public static String signingBody(String policyUri, long referenceTimestamp) throws Exception {
         return "{\"bundle\":" + example("bundle.json")
                 + ",\"provenance\":" + example("provenance.json")
                 + ",\"signerCryptoMaterial\":{\"type\":\"PEM\",\"privateKeyBase64\":\"" + PKI.leafKeyPemBase64() + "\"}"

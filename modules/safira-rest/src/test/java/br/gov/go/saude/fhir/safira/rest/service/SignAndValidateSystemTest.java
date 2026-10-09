@@ -37,7 +37,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  */
 @SpringBootTest
 @Import(OfflineRevocationConfig.class)
-class SignAndValidateSystemTest {
+public class SignAndValidateSystemTest {
 
     @MockitoBean
     FonteDeConfianca fonteDeConfianca;
@@ -72,11 +72,11 @@ class SignAndValidateSystemTest {
         return mapper.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8));
     }
 
-    static String validationBody(String signature, String bundle, String provenance) {
+    public static String validationBody(String signature, String bundle, String provenance) {
         return validationBody(signature, bundle, provenance, Instant.now().getEpochSecond());
     }
 
-    static String validationBody(String signature, String bundle, String provenance, long referenceTimestamp) {
+    public static String validationBody(String signature, String bundle, String provenance, long referenceTimestamp) {
         return "{\"signature\":" + signature + ",\"bundle\":" + bundle + ",\"provenance\":" + provenance
                 + ",\"referenceTimestamp\":" + referenceTimestamp
                 + ",\"policyIdentifierUri\":\"" + JadesSigningSystemTest.POLICY_URI + "\"}";

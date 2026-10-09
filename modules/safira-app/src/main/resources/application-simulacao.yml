@@ -3,7 +3,7 @@
 
 # -----------------------------------------------------------------------------
 # Perfil "simulacao" — PKI própria no lugar do acervo ICP-Brasil (SEM VALOR LEGAL).
-# Uso: java -jar safira-rest.jar --spring.profiles.active=simulacao, com as
+# Uso: java -jar safira-app.jar --spring.profiles.active=simulacao, com as
 # variáveis SAFIRA_SIMULACAO_* abaixo (ou um application-simulacao.yml gerado pelo
 # GeradorPkiSimulada via --spring.config.additional-location). Ver README.
 # -----------------------------------------------------------------------------

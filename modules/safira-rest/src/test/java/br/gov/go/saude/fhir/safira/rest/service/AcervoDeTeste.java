@@ -13,14 +13,14 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
 /** Acervo de teste com uma única raiz e geração própria a cada chamada. */
-final class AcervoDeTeste {
+public final class AcervoDeTeste {
 
     private static final AtomicLong GERACOES = new AtomicLong();
 
     private AcervoDeTeste() {
     }
 
-    static Optional<AcervoDeConfianca> com(X509Certificate raiz) {
+    public static Optional<AcervoDeConfianca> com(X509Certificate raiz) {
         return Optional.of(new AcervoDeConfianca("teste-" + GERACOES.incrementAndGet(), List.of(raiz), List.of()));
     }
 }

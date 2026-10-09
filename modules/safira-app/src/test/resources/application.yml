@@ -1,24 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
 
-# -----------------------------------------------------------------------------
-# Health e probes (Spring Boot Actuator). Só o endpoint health é exposto.
-# /actuator/health/readiness usa o readinessState padrão, que só passa a
-# ACCEPTING_TRAFFIC depois dos ApplicationRunners, entre eles o bootstrap
-# síncrono do acervo ICP-Brasil da icpbrasil-truststore. Assim orquestradores
-# (e o hubsaude-cli) não enviam tráfego antes de o acervo carregar.
-#
-# O grupo readiness inclui também fonteDeConfianca (FonteDeConfiancaHealthIndicator,
-# do safira-rest): DOWN (503) quando a porta de confiança não tem acervo vigente,
-# mesmo depois do bootstrap (por exemplo, se um refresh deixar de entregar acervo).
-#
-# O application.yml de teste substitui este nos testes e repete o grupo readiness: manter os dois
-# em sincronia.
-#
-# O indicador trustStoreCache da biblioteca não é incluído: a versão 0.0.2 ainda o
-# condiciona a org.springframework.boot.actuate.health.HealthIndicator (Spring
-# Boot 3), ausente no Spring Boot 4, e incluí-lo num grupo aborta o startup.
-# -----------------------------------------------------------------------------
+# Desativa cargas em background do trust-store: os beans são mockados nos testes e
+# chamadas concorrentes nos mocks corrompem o stubbing do Mockito.
+icpbrasil-truststore:
+  scheduling:
+    enabled: false
+  bootstrap:
+    enabled: false
+  filesystem:
+    base-dir: target/icpbrasil-truststore-test
+
+# Mesmo grupo readiness do application.yml principal (este arquivo o substitui nos testes).
 management:
   endpoints:
     web:
@@ -31,16 +24,6 @@ management:
       group:
         readiness:
           include: readinessState,fonteDeConfianca
-
-# -----------------------------------------------------------------------------
-# Acervo ICP-Brasil (lib icpbrasil-truststore): download do ITI, cache, PKIX e revogação.
-# As URLs oficiais do ITI são defaults da biblioteca; demais propriedades no README da lib.
-# -----------------------------------------------------------------------------
-icpbrasil-truststore:
-  storage:
-    type: filesystem
-  filesystem:
-    base-dir: ${SAFIRA_TRUSTSTORE_DIR:/var/safira/icpbrasil-truststore}
 
 safira:
   # ---------------------------------------------------------------------------

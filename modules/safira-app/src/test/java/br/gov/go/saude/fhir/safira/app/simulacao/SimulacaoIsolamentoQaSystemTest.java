@@ -3,14 +3,17 @@
  * Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
  */
 
-package br.gov.go.saude.fhir.safira.rest.service;
+package br.gov.go.saude.fhir.safira.app.simulacao;
 
+import br.gov.go.saude.fhir.safira.app.SafiraApplication;
 import br.gov.go.saude.fhir.safira.engine.domain.PipelineResult;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
-import br.gov.go.saude.fhir.safira.rest.Application;
+import br.gov.go.saude.fhir.safira.rest.service.AcervoDeTeste;
+import br.gov.go.saude.fhir.safira.rest.service.JadesSigningSystemTest;
+import br.gov.go.saude.fhir.safira.rest.service.SignAndValidateSystemTest;
+import br.gov.go.saude.fhir.safira.rest.service.SigningService;
 import br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,8 +40,6 @@ import java.security.cert.Certificate;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,7 +58,7 @@ class SimulacaoIsolamentoQaSystemTest {
     static SigningResult assinaturaComRaizNoX5c;
 
     @MockitoBean
-    TrustMaterialSource trustMaterialSource;
+    FonteDeConfianca fonteDeConfianca;
 
     @Autowired
     WebApplicationContext webApplicationContext;
@@ -101,7 +102,7 @@ class SimulacaoIsolamentoQaSystemTest {
 
     @BeforeAll
     static void assinarEmModoSimulacao() throws Exception {
-        try (ConfigurableApplicationContext simulacao = new SpringApplicationBuilder(Application.class)
+        try (ConfigurableApplicationContext simulacao = new SpringApplicationBuilder(SafiraApplication.class)
                 .web(WebApplicationType.NONE)
                 .profiles("simulacao")
                 .properties(ambiente())
@@ -115,8 +116,8 @@ class SimulacaoIsolamentoQaSystemTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        when(trustMaterialSource.current())
-                .thenReturn(Optional.of(TrustMaterial.of(List.of(JadesSigningSystemTest.PKI.caCert))));
+        when(fonteDeConfianca.atual())
+                .thenReturn(AcervoDeTeste.com(JadesSigningSystemTest.PKI.caCert));
     }
 
     @Test
@@ -135,7 +136,7 @@ class SimulacaoIsolamentoQaSystemTest {
 
     @Test
     void shouldFailStartupWhenSimulationProfileHasNoAnchors() {
-        assertThatThrownBy(() -> new SpringApplicationBuilder(Application.class)
+        assertThatThrownBy(() -> new SpringApplicationBuilder(SafiraApplication.class)
                 .web(WebApplicationType.NONE)
                 .profiles("simulacao")
                 .properties("SAFIRA_TRUSTSTORE_DIR=target/icpbrasil-truststore-simulacao-qa")
@@ -145,7 +146,7 @@ class SimulacaoIsolamentoQaSystemTest {
 
     @Test
     void shouldForceTrustStoreBootstrapOffWhenSimulationIsEnabled() {
-        try (ConfigurableApplicationContext contexto = new SpringApplicationBuilder(Application.class)
+        try (ConfigurableApplicationContext contexto = new SpringApplicationBuilder(SafiraApplication.class)
                 .web(WebApplicationType.NONE)
                 .profiles("simulacao")
                 .properties(ambiente())
@@ -158,7 +159,7 @@ class SimulacaoIsolamentoQaSystemTest {
 
     @Test
     void shouldFailStartupWhenSimulationAllowlistIssuerIsEmpty() {
-        assertThatThrownBy(() -> new SpringApplicationBuilder(Application.class)
+        assertThatThrownBy(() -> new SpringApplicationBuilder(SafiraApplication.class)
                 .web(WebApplicationType.NONE)
                 .profiles("simulacao")
                 .properties(ambiente())
@@ -170,7 +171,7 @@ class SimulacaoIsolamentoQaSystemTest {
 
     @Test
     void shouldNotTrustSimulatedSignerWhenProfileIsActiveButModeIsOverriddenOff() throws Exception {
-        try (ConfigurableApplicationContext parcial = new SpringApplicationBuilder(Application.class)
+        try (ConfigurableApplicationContext parcial = new SpringApplicationBuilder(SafiraApplication.class)
                 .web(WebApplicationType.NONE)
                 .profiles("simulacao")
                 .properties(ambiente())

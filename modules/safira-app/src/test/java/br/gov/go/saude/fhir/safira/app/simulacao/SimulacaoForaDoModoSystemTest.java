@@ -3,14 +3,17 @@
  * Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
  */
 
-package br.gov.go.saude.fhir.safira.rest.service;
+package br.gov.go.saude.fhir.safira.app.simulacao;
 
+import br.gov.go.saude.fhir.safira.app.SafiraApplication;
 import br.gov.go.saude.fhir.safira.engine.domain.PipelineResult;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
-import br.gov.go.saude.fhir.safira.rest.Application;
+import br.gov.go.saude.fhir.safira.rest.service.AcervoDeTeste;
+import br.gov.go.saude.fhir.safira.rest.service.JadesSigningSystemTest;
+import br.gov.go.saude.fhir.safira.rest.service.SignAndValidateSystemTest;
+import br.gov.go.saude.fhir.safira.rest.service.SigningService;
 import br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,8 +34,6 @@ import org.springframework.web.context.WebApplicationContext;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
@@ -49,7 +50,7 @@ class SimulacaoForaDoModoSystemTest {
     static SigningResult assinaturaSimulada;
 
     @MockitoBean
-    TrustMaterialSource trustMaterialSource;
+    FonteDeConfianca fonteDeConfianca;
 
     @Autowired
     WebApplicationContext webApplicationContext;
@@ -69,7 +70,7 @@ class SimulacaoForaDoModoSystemTest {
         String[] propriedades = SimulacaoPki.ambiente().entrySet().stream()
                 .map(entrada -> entrada.getKey() + "=" + entrada.getValue())
                 .toArray(String[]::new);
-        try (ConfigurableApplicationContext simulacao = new SpringApplicationBuilder(Application.class)
+        try (ConfigurableApplicationContext simulacao = new SpringApplicationBuilder(SafiraApplication.class)
                 .web(WebApplicationType.NONE)
                 .profiles("simulacao")
                 .properties(propriedades)
@@ -83,8 +84,8 @@ class SimulacaoForaDoModoSystemTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        when(trustMaterialSource.current())
-                .thenReturn(Optional.of(TrustMaterial.of(List.of(JadesSigningSystemTest.PKI.caCert))));
+        when(fonteDeConfianca.atual())
+                .thenReturn(AcervoDeTeste.com(JadesSigningSystemTest.PKI.caCert));
     }
 
     @Test

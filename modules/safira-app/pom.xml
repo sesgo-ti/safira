@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: Apache-2.0
+  Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>br.gov.go.saude.fhir</groupId>
+        <artifactId>safira</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>safira-app</artifactId>
+    <packaging>jar</packaging>
+    <name>Safira :: App</name>
+    <description>Aplicação de produção do Safira: API REST sobre o acervo ICP-Brasil (artefato de deploy).</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>br.gov.go.saude.fhir</groupId>
+            <artifactId>safira-rest</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Acervo ICP-Brasil: download do ITI, cache e agendamento (só a aplicação conhece a lib) -->
+        <dependency>
+            <groupId>br.gov.go.saude</groupId>
+            <artifactId>icpbrasil-truststore-autoconfigure</artifactId>
+            <version>${icpbrasil-truststore.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Auxiliares dos testes de sistema do safira-rest e PKI de teste do safira-jades -->
+        <dependency>
+            <groupId>br.gov.go.saude.fhir</groupId>
+            <artifactId>safira-rest</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>br.gov.go.saude.fhir</groupId>
+            <artifactId>safira-jades</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- O pom raiz não herda de spring-boot-starter-parent, então o goal
+                 repackage precisa ser ligado explicitamente para `package` gerar
+                 um JAR executável com `java -jar`. -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
