@@ -40,6 +40,10 @@ import java.util.Set;
  * JWS JSON, payload attached de 32 bytes, protected header fechado da política 0.2.0 e
  * identificação exata do nível local (JAdES-B-B ou JAdES-B-T).
  *
+ * <p>O nível aqui é a forma estrita do IG ({@code header} ausente ou {@code etsiU/sigTst} único) e é
+ * pré-requisito do {@code dss-validation}, que escolhe as âncoras TSA de B-T antes de chamar o DSS;
+ * o nível efetivo da assinatura continua sendo confirmado pelo DSS ({@code getSignatureFormat}).
+ *
  * <p>Escreve {@code certificateChain} ({@code x5c}) e os atributos {@link ValidationKeys#JADES_LEVEL},
  * {@link ValidationKeys#IAT}, {@link ValidationKeys#PAYLOAD} e {@link ValidationKeys#SIGNATURE_TEXT}.
  */
