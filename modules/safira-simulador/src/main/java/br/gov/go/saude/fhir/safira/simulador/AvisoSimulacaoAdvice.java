@@ -16,8 +16,8 @@ import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.http.server.ServletServerHttpResponse;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
-import org.springframework.web.util.UrlPathHelper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,13 +27,20 @@ import java.util.List;
  * simulação com uma issue informativa adicional, para que o resultado nunca seja confundido com uma
  * validação ICP-Brasil real. Registrado só quando {@code safira.simulacao.enabled=true}; o produto
  * ({@code safira-rest}) não conhece a simulação.
+ *
+ * <p>Casa pelo padrão do mapeamento ({@code /validar}), não pela URI: prefixo de servlet ou de
+ * contexto não desliga o aviso. Restrito aos controllers da API do Safira.
  */
-@RestControllerAdvice
+@RestControllerAdvice(basePackages = AvisoSimulacaoAdvice.PACOTE_API)
 public class AvisoSimulacaoAdvice implements ResponseBodyAdvice<Object> {
 
     public static final String TEXTO = "SIMULAÇÃO — sem validade jurídica ICP-Brasil";
 
-    static final String CAMINHO = "/validar";
+    /** Padrão do mapeamento de validação no {@code SignatureController}. */
+    static final String PADRAO = "/validar";
+
+    /** Pacote dos controllers da API do Safira ({@code safira-rest}), referenciado só por nome. */
+    static final String PACOTE_API = "br.gov.go.saude.fhir.safira.rest.api";
 
     // DIVERGENCIA-IG: o CodeSystem não tem código próprio para simulação; a issue reutiliza
     // VALIDATION.SUCCESS (information) para manter o OperationOutcome conforme ao perfil.
@@ -42,8 +49,6 @@ public class AvisoSimulacaoAdvice implements ResponseBodyAdvice<Object> {
             SignatureExceptionCode.VALIDATION_SUCCESS.getCode(), TEXTO,
             "Modo simulação ativo (safira.simulacao.enabled=true): confiança em raízes próprias ("
                     + GeradorPkiSimulada.MARCA + ") no lugar do acervo ICP-Brasil.").issue().getFirst();
-
-    private static final UrlPathHelper CAMINHOS = new UrlPathHelper();
 
     @Override
     public boolean supports(MethodParameter returnType, Class<? extends HttpMessageConverter<?>> converterType) {
@@ -62,7 +67,8 @@ public class AvisoSimulacaoAdvice implements ResponseBodyAdvice<Object> {
 
     private static boolean validacao(ServerHttpRequest request) {
         return request instanceof ServletServerHttpRequest servlet
-                && CAMINHO.equals(CAMINHOS.getPathWithinApplication(servlet.getServletRequest()));
+                && servlet.getServletRequest().getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE)
+                instanceof String padrao && PADRAO.equals(padrao);
     }
 
     private static boolean sucesso(ServerHttpResponse response) {
