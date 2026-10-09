@@ -49,7 +49,11 @@ class VerificadoresDssTest {
     }
 
     private static CommonCertificateVerifier verificador(VerificadoresDss verificadores) {
-        return verificadores.paraOperacao(List.of()).orElseThrow();
+        return verificador(verificadores, List.of());
+    }
+
+    private static CommonCertificateVerifier verificador(VerificadoresDss verificadores, List<X509Certificate> extras) {
+        return verificadores.paraOperacao(verificadores.acervoAtual().orElseThrow(), extras);
     }
 
     private static boolean cadeiaConfiavel(X509Certificate leaf, CommonCertificateVerifier verifier) {
@@ -83,7 +87,7 @@ class VerificadoresDssTest {
 
     @Test
     void shouldReturnEmptyWhenTrustIsUnavailable() {
-        assertThat(verificadores(new AtomicReference<>()).paraOperacao(List.of())).isEmpty();
+        assertThat(verificadores(new AtomicReference<>()).acervoAtual()).isEmpty();
     }
 
     @Test
@@ -98,7 +102,7 @@ class VerificadoresDssTest {
     void shouldAddExtraAnchorsOnlyToThatOperation() {
         VerificadoresDss verificadores = verificadores(new AtomicReference<>(acervo("g1", pki)));
 
-        assertThat(verificadores.paraOperacao(List.of(other.caCert)).orElseThrow().getTrustedCertSources().getCertificates())
+        assertThat(verificador(verificadores, List.of(other.caCert)).getTrustedCertSources().getCertificates())
                 .containsExactlyInAnyOrder(new CertificateToken(pki.caCert), new CertificateToken(other.caCert));
         assertThat(verificador(verificadores).getTrustedCertSources().getCertificates())
                 .containsExactly(new CertificateToken(pki.caCert));
@@ -124,7 +128,7 @@ class VerificadoresDssTest {
             return Optional.of(acervo("g1", pki));
         }, CertificateVerifierFactory.offline(null, null));
 
-        verificadores.paraOperacao(List.of(other.caCert));
+        verificador(verificadores, List.of(other.caCert));
 
         assertThat(chamadas).hasValue(1);
     }

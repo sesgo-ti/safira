@@ -19,9 +19,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * Verificadores do EU DSS sobre o acervo da {@link FonteDeConfianca}: raízes viram a fonte
  * confiável e intermediárias a adjunta; cadeia, revogação e validade ficam com o DSS.
  *
- * <p>Cada operação consulta a fonte uma única vez e recebe um verificador novo, preso àquela
- * geração. As fontes do DSS de uma geração são montadas uma vez, publicadas por troca atômica e
- * nunca alteradas; mudar a geração monta outras, sem afetar verificadores já entregues.
+ * <p>Cada operação captura o acervo da fonte uma única vez ({@link #acervoAtual()}) e recebe
+ * verificadores novos presos àquele snapshot. As fontes do DSS de uma geração são montadas uma
+ * vez, publicadas por troca atômica e nunca alteradas; mudar a geração monta outras, sem afetar verificadores já entregues.
  */
 public class VerificadoresDss {
 
@@ -35,16 +35,6 @@ public class VerificadoresDss {
     public VerificadoresDss(FonteDeConfianca fonte, CertificateVerifierFactory factory) {
         this.fonte = Objects.requireNonNull(fonte, "fonte");
         this.factory = Objects.requireNonNull(factory, "factory");
-    }
-
-    /**
-     * Verificador novo para uma operação; vazio quando o acervo está indisponível (fail-closed).
-     *
-     * @param ancorasExtras âncoras adicionais só desta operação (ex.: trust store TSA da política)
-     */
-    public Optional<CommonCertificateVerifier> paraOperacao(Collection<X509Certificate> ancorasExtras) {
-        Objects.requireNonNull(ancorasExtras, "ancorasExtras");
-        return acervoAtual().map(acervo -> paraOperacao(acervo, ancorasExtras));
     }
 
     /** Acervo vigente da fonte; o chamador o guarda e o reusa durante toda a operação. */
