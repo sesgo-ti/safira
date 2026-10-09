@@ -7,9 +7,11 @@ package br.gov.go.saude.fhir.safira.app.icpbrasil;
 
 import br.gov.go.saude.fhir.safira.engine.config.SafiraEngineAutoConfiguration;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
+import br.gov.go.saude.fhir.safira.jades.adapter.TspSourceFactory;
 import br.gov.go.saude.fhir.safira.steps.config.SafiraStepsAutoConfiguration;
 import br.gov.go.saude.truststore.icpbrasil.config.TrustStoreAutoConfiguration;
 import br.gov.go.saude.truststore.icpbrasil.http.DownloadPolicyException;
+import eu.europa.esig.dss.service.tsp.OnlineTSPSource;
 import eu.europa.esig.dss.spi.client.http.DataLoader;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 import org.junit.jupiter.api.Test;
@@ -27,7 +29,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * A {@link CertificateVerifierFactory} montada pela aplicação usa o {@link DownloadPolicyGuard}: um download
- * do DSS para um endereço interno é recusado antes de qualquer conexão.
+ * do DSS para um endereço interno é recusado antes de qualquer conexão. O carimbo do tempo da aplicação é o
+ * da TSA online (nunca uma fonte em memória de simulação).
  */
 class SafiraAppDownloadGuardTest {
 
@@ -53,6 +56,12 @@ class SafiraAppDownloadGuardTest {
             CommonCertificateVerifier verifier = verifier(context.getBean(CertificateVerifierFactory.class));
             assertRefusedWithoutConnection(dataLoader(verifier.getOcspSource()));
         });
+    }
+
+    @Test
+    void shouldUseOnlineTspSourceWhenFactoryIsWiredByApp() {
+        runner.run(context -> assertThat(context.getBean(TspSourceFactory.class)
+                .create("https://tsa.example.com", 20, "1.2.3.4")).isInstanceOf(OnlineTSPSource.class));
     }
 
     private static CommonCertificateVerifier verifier(CertificateVerifierFactory factory) {

@@ -14,7 +14,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 /**
  * Fronteiras do produto: o núcleo (engine, jades, steps, rest) não conhece a icpbrasil-truststore nem o
- * simulador; as camadas só dependem para baixo (engine e jades ← steps ← rest ← app); só o adaptador
+ * simulador; núcleo e app não usam a PKI simulada do testkit; as camadas só dependem para baixo (engine e jades ← steps ← rest ← app); só o adaptador
  * {@code app.icpbrasil} usa a lib dentro do app. Importa somente classes de produção.
  */
 @AnalyzeClasses(packages = "br.gov.go.saude", importOptions = ImportOption.DoNotIncludeTests.class)
@@ -31,6 +31,11 @@ class ArquiteturaTest {
     @ArchTest
     static final ArchRule nucleoNaoDependeDoSimulador = noClasses().that().resideInAnyPackage(NUCLEO)
             .should().dependOnClassesThat().resideInAPackage("..safira.simulador..");
+
+    @ArchTest
+    static final ArchRule nucleoEAppNaoDependemDoTestkit = noClasses()
+            .that().resideInAnyPackage(NUCLEO).or().resideInAPackage("br.gov.go.saude.fhir.safira.app..")
+            .should().dependOnClassesThat().resideInAPackage("..safira.testkit..");
 
     @ArchTest
     static final ArchRule engineNaoDependeDeCamadasSuperiores = noClasses()
