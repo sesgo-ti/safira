@@ -23,7 +23,8 @@ import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
-import br.gov.go.saude.fhir.safira.steps.trust.IcpBrasilCertificateVerifiers;
+import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
+import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
 import eu.europa.esig.dss.model.x509.revocation.ocsp.OCSP;
@@ -163,7 +164,8 @@ class QaValidacaoAtaquesTest {
                 new JwsStructureStep(),
                 new ContentIntegrityStep(),
                 new SignerCertificateStep(policy, trust),
-                new DssValidationStep(new IcpBrasilCertificateVerifiers(trust, CertificateVerifierFactory.offline(ocsp, null)),
+                new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
+                        CertificateVerifierFactory.offline(ocsp, null)),
                         policy),
                 new TimestampValidationStep(policy),
                 new ValidationOutcomeStep());

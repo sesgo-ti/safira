@@ -20,7 +20,7 @@ import br.gov.go.saude.fhir.safira.steps.timestamp.TimestampTokenException;
 import br.gov.go.saude.fhir.safira.steps.timestamp.TimestampTokenInspector;
 import br.gov.go.saude.fhir.safira.steps.timestamp.TimestampTokenInspector.Inspection;
 import br.gov.go.saude.fhir.safira.steps.timestamp.TsaChainVerification;
-import br.gov.go.saude.fhir.safira.steps.trust.IcpBrasilCertificateVerifiers;
+import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
 import eu.europa.esig.dss.enumerations.Indication;
 import eu.europa.esig.dss.enumerations.SignatureLevel;
 import eu.europa.esig.dss.enumerations.SubIndication;
@@ -51,11 +51,11 @@ import java.util.Optional;
 @StepId("dss-validation")
 public class DssValidationStep implements ValidationStep {
 
-    private final IcpBrasilCertificateVerifiers verifiers;
+    private final VerificadoresDss verifiers;
     private final SafiraPolicyProperties policy;
     private final JadesValidationService validationService = new JadesValidationService();
 
-    public DssValidationStep(IcpBrasilCertificateVerifiers verifiers, SafiraPolicyProperties policy) {
+    public DssValidationStep(VerificadoresDss verifiers, SafiraPolicyProperties policy) {
         this.verifiers = verifiers;
         this.policy = policy;
     }
@@ -84,7 +84,7 @@ public class DssValidationStep implements ValidationStep {
             }
         }
 
-        Optional<CommonCertificateVerifier> verifier = verifiers.current(tsaAnchors);
+        Optional<CommonCertificateVerifier> verifier = verifiers.paraOperacao(tsaAnchors);
         if (verifier.isEmpty()) {
             return fail(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY, "Acervo ICP-Brasil indisponível.", context);
         }

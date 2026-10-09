@@ -15,7 +15,8 @@ import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
-import br.gov.go.saude.fhir.safira.steps.trust.IcpBrasilCertificateVerifiers;
+import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
+import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
 import eu.europa.esig.dss.model.x509.revocation.ocsp.OCSP;
@@ -71,7 +72,7 @@ class DssAndOutcomeStepsTest {
 
     /** DSS offline: respostas OCSP prontas (sem rede) sobre o acervo informado. */
     private static DssValidationStep step(TrustMaterialSource acervo, RevocationSource<OCSP> ocsp) {
-        return new DssValidationStep(new IcpBrasilCertificateVerifiers(acervo,
+        return new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(acervo),
                 CertificateVerifierFactory.offline(ocsp, null)), policy);
     }
 
@@ -146,7 +147,7 @@ class DssAndOutcomeStepsTest {
     void shouldRejectTimestampWhoseTsaIsOutsideTsaTrustStore() {
         SafiraPolicyProperties otherAnchor = TestConfigs.policy(pki,
                 TestConfigs.tsaPolicies(tempDir, TestPki.TSA_POLICY_OID, 1, TestPki.create().caCert));
-        DssValidationStep step = new DssValidationStep(new IcpBrasilCertificateVerifiers(trust,
+        DssValidationStep step = new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
                 CertificateVerifierFactory.offline(good(), null)), otherAnchor);
 
         assertThat(code(step.execute(bt))).isEqualTo(SignatureExceptionCode.TSA_CHAIN_VALIDATION_FAILED);

@@ -20,7 +20,8 @@ import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.signing.CryptoSigningStep;
 import br.gov.go.saude.fhir.safira.steps.signing.SigningKeys;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
-import br.gov.go.saude.fhir.safira.steps.trust.IcpBrasilCertificateVerifiers;
+import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
+import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -100,8 +101,8 @@ class JadesSigningStepsTest {
     }
 
     /** Verificador do DSS offline sobre o acervo de teste, com OCSP GOOD para qualquer certificado. */
-    private static IcpBrasilCertificateVerifiers verifiers(RevocationSource<OCSP> ocsp) {
-        return new IcpBrasilCertificateVerifiers(() -> Optional.of(TrustMaterial.of(List.of(pki.caCert))),
+    private static VerificadoresDss verifiers(RevocationSource<OCSP> ocsp) {
+        return new VerificadoresDss(new FonteDeConfiancaIcpBrasil(() -> Optional.of(TrustMaterial.of(List.of(pki.caCert)))),
                 CertificateVerifierFactory.offline(ocsp, null));
     }
 

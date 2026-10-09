@@ -26,7 +26,8 @@ import br.gov.go.saude.fhir.safira.steps.signing.PkixChainValidationStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesAssembleStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesDataToSignStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesExtensionStep;
-import br.gov.go.saude.fhir.safira.steps.trust.IcpBrasilCertificateVerifiers;
+import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
+import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 
 import java.time.Instant;
@@ -60,8 +61,8 @@ public final class SignedArtifactFixture {
      * @param tsa TSA local para o resultado {@code tsa}; nulo produz JAdES-B-B
      */
     public static SigningResult sign(TestPki pki, SafiraPolicyProperties policy, long iat, TestPki.FakeTsa tsa) {
-        IcpBrasilCertificateVerifiers verifiers = new IcpBrasilCertificateVerifiers(
-                () -> Optional.of(TrustMaterial.of(List.of(pki.caCert))),
+        VerificadoresDss verifiers = new VerificadoresDss(
+                new FonteDeConfiancaIcpBrasil(() -> Optional.of(TrustMaterial.of(List.of(pki.caCert)))),
                 CertificateVerifierFactory.offline(pki.ocspGoodSource(), null));
         try {
             SigningContext context = SigningContext.builder()

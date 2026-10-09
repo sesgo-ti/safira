@@ -23,7 +23,9 @@ import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesDataToSignStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesExtensionStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.TsaTokenVerificationStep;
 import br.gov.go.saude.fhir.safira.steps.trust.DownloadPolicyGuard;
-import br.gov.go.saude.fhir.safira.steps.trust.IcpBrasilCertificateVerifiers;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
+import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
+import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
 import br.gov.go.saude.truststore.icpbrasil.config.TrustStoreConfig;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.ContentIntegrityStep;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.DssValidationStep;
@@ -72,17 +74,24 @@ public class SafiraStepsAutoConfiguration {
                 DownloadPolicyGuard.of(trustStoreConfig.getDownloadPolicy()));
     }
 
-    /** Verificador do DSS sobre o acervo ICP-Brasil; a lib entra só como carregadora de certificados. */
+    /** Porta de confiança sobre o acervo da icpbrasil-truststore; a lib entra só como carregadora. */
     @Bean
     @ConditionalOnMissingBean
-    public IcpBrasilCertificateVerifiers icpBrasilCertificateVerifiers(TrustMaterialSource trustMaterialSource,
-                                                                       CertificateVerifierFactory factory) {
-        return new IcpBrasilCertificateVerifiers(trustMaterialSource, factory);
+    public FonteDeConfianca safiraFonteDeConfianca(TrustMaterialSource trustMaterialSource) {
+        return new FonteDeConfiancaIcpBrasil(trustMaterialSource);
+    }
+
+    /** Verificadores do DSS por operação, com fontes reaproveitadas por geração do acervo. */
+    @Bean
+    @ConditionalOnMissingBean
+    public VerificadoresDss safiraVerificadoresDss(FonteDeConfianca fonteDeConfianca,
+                                                   CertificateVerifierFactory factory) {
+        return new VerificadoresDss(fonteDeConfianca, factory);
     }
 
     @Bean
     public List<Step<?>> safiraAllSteps(TrustMaterialSource trustMaterialSource,
-                                        IcpBrasilCertificateVerifiers certificateVerifiers,
+                                        VerificadoresDss verificadores,
                                         SafiraPolicyProperties policyProperties,
                                         Clock clock) {
         List<Step<?>> steps = new ArrayList<>();
@@ -90,14 +99,14 @@ public class SafiraStepsAutoConfiguration {
         // Assinatura — política 0.2.0 (JAdES-B-B/B-T via EU DSS)
         steps.add(new ContextValidationStep(policyProperties, clock));
         steps.add(new PayloadValidationStep());
-        steps.add(new PkixChainValidationStep(certificateVerifiers));
+        steps.add(new PkixChainValidationStep(verificadores));
         steps.add(new CertificatePolicyStep(policyProperties));
         steps.add(new FramedContentDigestStep());
         steps.add(new JadesDataToSignStep());
         steps.add(new CryptoSigningStep());
         steps.add(new JadesAssembleStep());
         steps.add(new JadesExtensionStep(new JadesExtensionService(), policyProperties));
-        steps.add(new TsaTokenVerificationStep(certificateVerifiers, policyProperties));
+        steps.add(new TsaTokenVerificationStep(verificadores, policyProperties));
         steps.add(new FhirSignatureStep());
 
         // Validação — política 0.2.0 (EU DSS decide cadeia, revogação e carimbo sobre o acervo ICP-Brasil)
@@ -106,7 +115,7 @@ public class SafiraStepsAutoConfiguration {
         steps.add(new JwsStructureStep());
         steps.add(new ContentIntegrityStep());
         steps.add(new SignerCertificateStep(policyProperties, trustMaterialSource));
-        steps.add(new DssValidationStep(certificateVerifiers, policyProperties));
+        steps.add(new DssValidationStep(verificadores, policyProperties));
         steps.add(new TimestampValidationStep(policyProperties));
         steps.add(new ValidationOutcomeStep());
 

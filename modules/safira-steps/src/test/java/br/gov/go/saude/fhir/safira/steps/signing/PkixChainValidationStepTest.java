@@ -10,7 +10,8 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
-import br.gov.go.saude.fhir.safira.steps.trust.IcpBrasilCertificateVerifiers;
+import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
+import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
 import eu.europa.esig.dss.model.x509.revocation.ocsp.OCSP;
@@ -38,7 +39,8 @@ class PkixChainValidationStepTest {
     }
 
     private static PkixChainValidationStep step(TrustMaterialSource trust, RevocationSource<OCSP> ocsp) {
-        return new PkixChainValidationStep(new IcpBrasilCertificateVerifiers(trust, CertificateVerifierFactory.offline(ocsp, null)));
+        return new PkixChainValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
+                CertificateVerifierFactory.offline(ocsp, null)));
     }
 
     private static PkixChainValidationStep step(RevocationSource<OCSP> ocsp) {

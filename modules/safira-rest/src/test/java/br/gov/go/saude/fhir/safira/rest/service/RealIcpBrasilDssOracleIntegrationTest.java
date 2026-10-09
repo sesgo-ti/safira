@@ -10,7 +10,7 @@ import br.gov.go.saude.fhir.safira.jades.JadesSigningService;
 import br.gov.go.saude.fhir.safira.jades.JadesSigningSession;
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
 import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
-import br.gov.go.saude.fhir.safira.steps.trust.IcpBrasilCertificateVerifiers;
+import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
 import eu.europa.esig.dss.enumerations.Indication;
 import eu.europa.esig.dss.enumerations.SignatureLevel;
 import eu.europa.esig.dss.model.x509.CertificateToken;
@@ -65,7 +65,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RealIcpBrasilDssOracleIntegrationTest {
 
     @Autowired
-    IcpBrasilCertificateVerifiers certificateVerifiers;
+    VerificadoresDss certificateVerifiers;
 
     @Test
     void shouldValidateRealChainWithDssUsingOnlineRevocation() throws Exception {
@@ -83,7 +83,7 @@ class RealIcpBrasilDssOracleIntegrationTest {
 
         // Cadeia validada pelo DSS (acervo real, revogação online) — mesma rotina do pkix-chain-validation
         CertificateReports certificateReports = new CertificateValidationService().validate(supplied.getFirst(),
-                supplied.subList(1, supplied.size()), certificateVerifiers.current().orElseThrow());
+                supplied.subList(1, supplied.size()), certificateVerifiers.paraOperacao(List.of()).orElseThrow());
         String leafId = new CertificateToken(supplied.getFirst()).getDSSIdAsString();
         assertThat(certificateReports.getSimpleReport().getCertificateIndication(leafId)).isEqualTo(Indication.PASSED);
         List<X509Certificate> chain = new ArrayList<>(List.of(supplied.getFirst()));
@@ -101,7 +101,8 @@ class RealIcpBrasilDssOracleIntegrationTest {
         String jws = signing.sign(session, rsa.sign());
 
         // Verificador de produção: acervo real como âncoras/adjuntas e OCSP/CRL/AIA online pelo DSS
-        Reports reports = new JadesValidationService().validate(jws, certificateVerifiers.current().orElseThrow());
+        Reports reports = new JadesValidationService().validate(jws,
+                certificateVerifiers.paraOperacao(List.of()).orElseThrow());
         String id = reports.getSimpleReport().getFirstSignatureId();
 
         assertThat(reports.getSimpleReport().getIndication(id)).isEqualTo(Indication.TOTAL_PASSED);

@@ -12,7 +12,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
 import br.gov.go.saude.fhir.safira.jades.CertificateValidationService;
 import br.gov.go.saude.fhir.safira.steps.dss.DssOutcomes;
-import br.gov.go.saude.fhir.safira.steps.trust.IcpBrasilCertificateVerifiers;
+import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
 import eu.europa.esig.dss.diagnostic.CertificateWrapper;
 import eu.europa.esig.dss.enumerations.Indication;
 import eu.europa.esig.dss.enumerations.SubIndication;
@@ -50,10 +50,10 @@ public class PkixChainValidationStep implements SigningStep {
     /** Máximo de certificados aceitos na entrada 4 (folha + ACs); caminhos ICP-Brasil têm 3 a 4 níveis. */
     public static final int MAX_CHAIN_LENGTH = 10;
 
-    private final IcpBrasilCertificateVerifiers verifiers;
+    private final VerificadoresDss verifiers;
     private final CertificateValidationService validationService = new CertificateValidationService();
 
-    public PkixChainValidationStep(IcpBrasilCertificateVerifiers verifiers) {
+    public PkixChainValidationStep(VerificadoresDss verifiers) {
         this.verifiers = verifiers;
     }
 
@@ -85,7 +85,7 @@ public class PkixChainValidationStep implements SigningStep {
             }
         }
 
-        Optional<CommonCertificateVerifier> verifier = verifiers.current();
+        Optional<CommonCertificateVerifier> verifier = verifiers.paraOperacao(List.of());
         if (verifier.isEmpty()) {
             return fail(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY,
                     "Acervo ICP-Brasil indisponível ou expirado: nenhuma âncora de confiança carregada.", context);
