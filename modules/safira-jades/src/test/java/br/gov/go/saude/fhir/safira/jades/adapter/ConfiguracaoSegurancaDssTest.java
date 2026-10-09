@@ -19,12 +19,16 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.SocketTimeoutException;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 /**
  * Trava da configuração de rede/confiança do DSS produzida por {@link CertificateVerifierFactory}:
@@ -101,13 +105,26 @@ class ConfiguracaoSegurancaDssTest {
     }
 
     @Test
-    void shouldRefuseFileFtpAndLdapWhenLoaderComesFromFactory() {
-        for (RestrictedDataLoader loader : loaders()) {
-            assertThatThrownBy(() -> loader.get("file:///etc/hosts")).isInstanceOf(DSSExternalResourceException.class);
-            assertThatThrownBy(() -> loader.get("ftp://127.0.0.1/ca.crl")).isInstanceOf(DSSExternalResourceException.class);
-            assertThatThrownBy(() -> loader.get("ldap://127.0.0.1/cn=ca")).isInstanceOf(DSSExternalResourceException.class);
+    void shouldRefuseFileFtpAndLdapByPolicyWithoutConnectingWhenLoaderComesFromFactory() throws IOException {
+        try (ServerSocket listener = new ServerSocket(0, 50, InetAddress.getLoopbackAddress())) {
+            listener.setSoTimeout(300);
+            int port = listener.getLocalPort();
+            assertTimeoutPreemptively(Duration.ofSeconds(10), () -> refuseNonHttpSchemes(port));
+
+            assertThatThrownBy(listener::accept).isInstanceOf(SocketTimeoutException.class);
         }
         assertThat(guarded).isEmpty();
+    }
+
+    private void refuseNonHttpSchemes(int port) {
+        for (RestrictedDataLoader loader : loaders()) {
+            assertThatThrownBy(() -> loader.get("file:///etc/hosts")).isInstanceOf(DSSExternalResourceException.class)
+                    .hasMessageContaining("Protocolo não admitido");
+            assertThatThrownBy(() -> loader.get("ftp://127.0.0.1:" + port + "/ca.crl"))
+                    .isInstanceOf(DSSExternalResourceException.class).hasMessageContaining("Protocolo não admitido");
+            assertThatThrownBy(() -> loader.get("ldap://127.0.0.1:" + port + "/cn=ca"))
+                    .isInstanceOf(DSSExternalResourceException.class).hasMessageContaining("Protocolo não admitido");
+        }
     }
 
     @Test
