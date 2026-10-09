@@ -41,7 +41,8 @@ public class ContentIntegrityStep implements ValidationStep {
             recomputed = FramedContentDigest.sha256(
                     SignedContentRules.orderedParts(context.getBundleJson(), context.getProvenanceJson()));
         } catch (RuntimeException e) {
-            log.warn("Falha na canonicalização lossless do conteúdo", e);
+            // Não registra a exceção: a mensagem do parser pode ecoar trechos do corpo (dados de saúde)
+            log.warn("Falha na canonicalização lossless do conteúdo ({})", e.getClass().getSimpleName());
             return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_CANONICALIZATION_FAILED,
                     "Falha na canonicalização lossless do conteúdo.", context);
         }

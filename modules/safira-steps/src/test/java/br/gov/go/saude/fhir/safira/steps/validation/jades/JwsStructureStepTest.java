@@ -148,6 +148,14 @@ class JwsStructureStepTest {
     }
 
     @Test
+    void shouldNotEchoBodyFragmentInDiagnosticsWhenJwsIsInvalidJson() {
+        StepResult<ValidationContext> result = run("{\"payload\": SEGREDO_PHI}");
+
+        assertThat(code(result)).isEqualTo(SignatureExceptionCode.FORMAT_JWS_MALFORMED);
+        assertThat(((StepResult.Failure<ValidationContext>) result).diagnostics()).doesNotContain("SEGREDO_PHI");
+    }
+
+    @Test
     void shouldRejectChainLongerThanSigningLimitBeforeDecodingCertificates() {
         String h = header(bb);
         String x5c = LosslessJson.write(LosslessJson.parseObject(h).get("x5c").orElseThrow());
