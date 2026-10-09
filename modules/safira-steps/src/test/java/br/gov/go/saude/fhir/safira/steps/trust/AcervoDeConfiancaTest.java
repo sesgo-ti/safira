@@ -85,4 +85,11 @@ class AcervoDeConfiancaTest {
         assertThat(acervo.geracao()).isEqualTo("g1");
         assertThat(acervo.intermediarias()).isEmpty();
     }
+
+    @Test
+    void shouldShowOnlyGeracaoAndCountsInToString() {
+        AcervoDeConfianca acervo = new AcervoDeConfianca("g1", List.of(raiz), List.of(intermediaria, intermediaria));
+
+        assertThat(acervo.toString()).isEqualTo("AcervoDeConfianca[geracao=g1, raizes=1, intermediarias=2]");
+    }
 }

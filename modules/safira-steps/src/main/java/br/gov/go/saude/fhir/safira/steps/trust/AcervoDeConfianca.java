@@ -12,10 +12,14 @@ import java.util.Objects;
 /**
  * Snapshot imutável de uma geração do acervo de confiança.
  *
- * @param geracao        identificador da geração; muda quando o acervo muda
- * @param raizes         âncoras confiáveis (ao menos uma)
- * @param intermediarias pool NÃO confiável de ACs intermediárias, usado só para montar a
- *                       cadeia; o DSS revalida cada uma até uma raiz confiável
+ * @param geracao        identificador opaco da geração, comparado apenas por {@code equals}, sem
+ *                       ordem ("maior" não significa "mais nova"); o mesmo valor garante as mesmas
+ *                       raízes e intermediárias, e conteúdo diferente exige valor diferente. Os
+ *                       consumidores reaproveitam as fontes do DSS enquanto a geração não muda
+ * @param raizes         únicas âncoras de confiança (ao menos uma); ao virar fontes do DSS vão
+ *                       para a fonte confiável (trusted)
+ * @param intermediarias pool NÃO confiável de ACs intermediárias, usado só para montar a cadeia;
+ *                       vai para a fonte adjunta do DSS, que revalida cada uma até uma raiz
  */
 public record AcervoDeConfianca(String geracao, List<X509Certificate> raizes, List<X509Certificate> intermediarias) {
 
@@ -29,5 +33,12 @@ public record AcervoDeConfianca(String geracao, List<X509Certificate> raizes, Li
         if (raizes.isEmpty()) {
             throw new IllegalArgumentException("Acervo sem raízes");
         }
+    }
+
+    /** Mostra só a geração e as contagens, sem despejar os certificados. */
+    @Override
+    public String toString() {
+        return "AcervoDeConfianca[geracao=" + geracao + ", raizes=" + raizes.size()
+                + ", intermediarias=" + intermediarias.size() + "]";
     }
 }
