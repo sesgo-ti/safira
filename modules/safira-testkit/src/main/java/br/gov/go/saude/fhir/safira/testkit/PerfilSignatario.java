@@ -45,7 +45,15 @@ public record PerfilSignatario(String politica, int keyUsage, String dn, String 
     static PerfilSignatario pessoaFisica(String nome) {
         return new PerfilSignatario("2.16.76.1.2.3.1", KeyUsage.digitalSignature | KeyUsage.nonRepudiation,
                 dnSimulado(nome, PkiIcpSimulada.CPF),
-                SAN_CPF, "01011990" + PkiIcpSimulada.CPF + "000000000000000000", "RSA", 2048, false);
+                SAN_CPF, sanCpf(PkiIcpSimulada.CPF), "RSA", 2048, false);
+    }
+
+    /**
+     * Conteúdo do otherName {@link #SAN_CPF} no formato do DOC-ICP-04: nascimento DDMMAAAA (8), CPF (11),
+     * NIS (11), RG (15) e órgão expedidor/UF (6) — campos não informados com zeros.
+     */
+    public static String sanCpf(String cpf) {
+        return "01011990" + cpf + "0".repeat(32);
     }
 
     private static String dnSimulado(String nome, String documento) {

@@ -12,6 +12,9 @@ import br.gov.go.saude.fhir.safira.steps.certificate.IcpBrasilCertificateProfile
 import br.gov.go.saude.fhir.safira.steps.certificate.ProfileResult;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
 import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
+import org.bouncycastle.asn1.ASN1Sequence;
+import org.bouncycastle.asn1.ASN1String;
+import org.bouncycastle.asn1.ASN1TaggedObject;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -103,6 +106,18 @@ class GeradorPkiSimuladaTest {
         assertThat(folha.getKeyUsage()[1]).isTrue();
         assertThat(folha.getSubjectX500Principal().getName()).contains("SIMULACAO - SEM VALOR LEGAL");
         assertThat(resultado.issuerSha256()).isEqualTo(IcpBrasilCertificateProfile.sha256Hex(ac));
+    }
+
+    @Test
+    void shouldWriteFullDocIcp04CpfOtherNameWhenGenerating() throws Exception {
+        X509Certificate folha = (X509Certificate) p12(resultado.signatario()).getCertificate(GeradorPkiSimulada.ALIAS_SIGNATARIO);
+        byte[] der = (byte[]) folha.getSubjectAlternativeNames().iterator().next().get(1);
+        ASN1Sequence otherName = ASN1Sequence.getInstance(der);
+        ASN1TaggedObject valor = ASN1TaggedObject.getInstance(otherName.getObjectAt(1));
+        String conteudo = ((ASN1String) valor.getBaseObject().toASN1Primitive()).getString();
+
+        assertThat(otherName.getObjectAt(0)).hasToString("2.16.76.1.3.1");
+        assertThat(conteudo).hasSize(51).startsWith("01011990" + GeradorPkiSimulada.CPF_PADRAO);
     }
 
     @Test

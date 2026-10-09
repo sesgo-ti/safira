@@ -176,7 +176,7 @@ public final class GeradorPkiSimulada {
         return PerfilSignatario.a3()
                 .comPolitica(opcoes.politicaOid())
                 .comDn("CN=FULANO SIMULADO:" + opcoes.cpf() + ",SERIALNUMBER=" + opcoes.cpf() + ",O=" + MARCA + ",C=BR")
-                .comSan(PerfilSignatario.SAN_CPF, "01011990" + opcoes.cpf() + "0".repeat(18));
+                .comSan(PerfilSignatario.SAN_CPF, PerfilSignatario.sanCpf(opcoes.cpf()));
     }
 
     private static String yaml(Resultado r) {

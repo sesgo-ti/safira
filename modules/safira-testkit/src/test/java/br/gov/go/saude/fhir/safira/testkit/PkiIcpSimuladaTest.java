@@ -72,7 +72,11 @@ class PkiIcpSimuladaTest {
         X509Certificate signatario = pki.signatario();
 
         assertThat(otherNames(signatario, SAN_CPF)).singleElement()
-                .satisfies(valor -> assertThat(valor.substring(8, 19)).isEqualTo(PkiIcpSimulada.CPF));
+                .satisfies(valor -> {
+                    // DOC-ICP-04: nascimento (8) + CPF (11) + NIS (11) + RG (15) + órgão/UF (6)
+                    assertThat(valor).hasSize(51);
+                    assertThat(valor.substring(8, 19)).isEqualTo(PkiIcpSimulada.CPF);
+                });
         assertThat(rdn(signatario, BCStyle.SERIALNUMBER)).isEqualTo(PkiIcpSimulada.CPF);
         assertThat(signatario.getExtensionValue(Extension.certificatePolicies.getId())).isNotNull();
         assertThat(signatario.getNonCriticalExtensionOIDs()).contains(Extension.certificatePolicies.getId());
