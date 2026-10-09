@@ -132,6 +132,15 @@ public class JadesSigningService {
         return new String(DSSUtils.toByteArray(signed), StandardCharsets.UTF_8);
     }
 
+    /**
+     * Confere, pelo EU DSS, se o valor RS256 foi produzido sobre {@code dataToSign} pela chave do
+     * certificado {@code signer}. O {@link #sign(JadesSigningSession, byte[])} não faz essa conferência.
+     */
+    public boolean isValidSignatureValue(byte[] dataToSign, byte[] signatureValue, X509Certificate signer) {
+        return newService().isValidSignatureValue(new ToBeSigned(dataToSign),
+                new SignatureValue(SignatureAlgorithm.RSA_SHA256, signatureValue), new CertificateToken(signer));
+    }
+
     private static CommonCommitmentType verificationSignature() {
         CommonCommitmentType commitment = new CommonCommitmentType();
         commitment.setOid(VERIFICATION_SIGNATURE_OID);

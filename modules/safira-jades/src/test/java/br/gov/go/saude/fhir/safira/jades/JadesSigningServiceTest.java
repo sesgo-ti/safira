@@ -141,6 +141,35 @@ class JadesSigningServiceTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void shouldAcceptSignatureValueWhenProducedByLeafKey() throws Exception {
+        byte[] data = "dados-a-assinar".getBytes(StandardCharsets.US_ASCII);
+
+        assertThat(service.isValidSignatureValue(data, rs256(data), pki.leafCert)).isTrue();
+    }
+
+    @Test
+    void shouldRejectSignatureValueWhenDataToSignDiffers() throws Exception {
+        byte[] data = "dados-a-assinar".getBytes(StandardCharsets.US_ASCII);
+        byte[] other = "outros-dados".getBytes(StandardCharsets.US_ASCII);
+
+        assertThat(service.isValidSignatureValue(other, rs256(data), pki.leafCert)).isFalse();
+    }
+
+    @Test
+    void shouldRejectSignatureValueWhenSignerCertificateIsAnother() throws Exception {
+        byte[] data = "dados-a-assinar".getBytes(StandardCharsets.US_ASCII);
+
+        assertThat(service.isValidSignatureValue(data, rs256(data), pki.caCert)).isFalse();
+    }
+
+    private static byte[] rs256(byte[] data) throws Exception {
+        Signature signer = Signature.getInstance("SHA256withRSA");
+        signer.initSign(pki.leafKeys.getPrivate());
+        signer.update(data);
+        return signer.sign();
+    }
+
     private static JsonNode decodeProtectedHeader(String jwsJson) throws Exception {
         JsonNode root = MAPPER.readTree(jwsJson);
         String protectedB64 = root.get("signatures").get(0).get("protected").asText();
