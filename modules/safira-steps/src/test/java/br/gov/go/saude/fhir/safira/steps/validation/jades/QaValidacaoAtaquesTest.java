@@ -211,6 +211,7 @@ class QaValidacaoAtaquesTest {
         context = new SignatureBindingStep().execute(context).context();
         context = new JwsStructureStep().execute(context).context();
         context = new SignerCertificateStep(policy, verificadores(trust, pki.fonteOcsp())).execute(SignedArtifactFixture.comAcervo(context, trust)).context();
+        context = new DssValidationStep(verificadores(trust, pki.fonteOcsp()), policy).execute(context).context();
         return new ValidationOutcomeStep().execute(context).context().getOperationOutcome().issue().getFirst().diagnostics();
     }
 

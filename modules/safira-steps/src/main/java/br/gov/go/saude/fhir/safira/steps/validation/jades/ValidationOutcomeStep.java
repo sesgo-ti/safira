@@ -20,12 +20,20 @@ import java.time.Instant;
  * Passo {@code validation-outcome}: seção 8 do caso de uso de validação — {@code OperationOutcome}
  * de sucesso ({@code information}/{@code informational}, {@code VALIDATION.SUCCESS}) que distingue
  * assinatura de pessoa física (A3/A4) de selo de pessoa jurídica (SE-S/SE-H), sem dados sensíveis.
+ *
+ * <p>Falha fechada: sem a evidência {@link ValidationKeys#DSS_APROVADO} do {@code dss-validation}
+ * (pipeline que o omite ou o executa depois) o resultado é {@code VALIDATION.INDETERMINATE}.
  */
 @StepId("validation-outcome")
 public class ValidationOutcomeStep implements ValidationStep {
 
     @Override
     public StepResult<ValidationContext> execute(ValidationContext context) {
+        if (!context.getAttribute(ValidationKeys.DSS_APROVADO, Boolean.class).orElse(false)) {
+            return StepResult.failure(getName(), SignatureExceptionCode.VALIDATION_INDETERMINATE,
+                    "A assinatura não foi decidida pelo EU DSS: o pipeline não executou dss-validation antes deste passo.",
+                    context);
+        }
         SignerIdentity identity = context.getAttribute(ValidationKeys.SIGNER_IDENTITY, SignerIdentity.class).orElseThrow();
         JadesLevel level = context.getAttribute(ValidationKeys.JADES_LEVEL, JadesLevel.class).orElseThrow();
         long iat = context.getAttribute(ValidationKeys.IAT, Long.class).orElseThrow();

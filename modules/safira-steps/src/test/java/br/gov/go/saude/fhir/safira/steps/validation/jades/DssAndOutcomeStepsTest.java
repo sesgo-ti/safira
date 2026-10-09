@@ -262,7 +262,9 @@ class DssAndOutcomeStepsTest {
 
     @Test
     void shouldReturnSuccessOutcomeForNaturalPersonSignature() {
-        OperationOutcome outcome = new ValidationOutcomeStep().execute(bb).context().getOperationOutcome();
+        ValidationContext aprovado = step(good()).execute(bb).context();
+
+        OperationOutcome outcome = new ValidationOutcomeStep().execute(aprovado).context().getOperationOutcome();
 
         var issue = outcome.issue().getFirst();
         assertThat(issue.severity()).isEqualTo("information");
@@ -280,5 +282,20 @@ class DssAndOutcomeStepsTest {
                 .issue().getFirst().diagnostics();
 
         assertThat(diagnostics).contains("revogação decidida pelo EU DSS").doesNotContain("icpbrasil-truststore");
+    }
+
+    @Test
+    void shouldMarkDssApprovalWhenDssAccepts() {
+        ValidationContext aprovado = step(good()).execute(bb).context();
+
+        assertThat(aprovado.getAttribute(ValidationKeys.DSS_APROVADO, Boolean.class)).contains(true);
+    }
+
+    @Test
+    void shouldFailIndeterminateWhenDssValidationDidNotRun() {
+        StepResult<ValidationContext> result = new ValidationOutcomeStep().execute(bb);
+
+        assertThat(code(result)).isEqualTo(SignatureExceptionCode.VALIDATION_INDETERMINATE);
+        assertThat(result.context().getOperationOutcome()).isNull();
     }
 }

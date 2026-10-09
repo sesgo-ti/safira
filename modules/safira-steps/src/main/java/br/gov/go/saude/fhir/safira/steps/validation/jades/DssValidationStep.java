@@ -55,6 +55,8 @@ import java.util.Optional;
  * allowlist; se ainda assim o DSS recusar por {@code PolicyIds}, o código é
  * {@code VALIDATION.POLICY-COMPLIANCE-FAILED} (validar 4.1). As demais regras SES-GO (emissor da
  * allowlist, tipo, chave, keyUsage, identidade, janela do carimbo) ficam nos passos próprios.
+ *
+ * <p>Só no sucesso grava {@link ValidationKeys#DSS_APROVADO}, evidência exigida por {@code validation-outcome}.
  */
 // DIVERGENCIA-IG D7: validade histórica (intervalo I) em B-T decidida pelo DSS com o carimbo como POE
 @StepId("dss-validation")
@@ -138,7 +140,7 @@ public class DssValidationStep implements ValidationStep {
                     "EU DSS classificou a assinatura como " + report.getSignatureFormat(id) + "; esperado " + expected + ".",
                     context);
         }
-        return StepResult.success(getName(), context);
+        return StepResult.success(getName(), context.toBuilder().attribute(ValidationKeys.DSS_APROVADO, true).build());
     }
 
     private StepResult<ValidationContext> fail(SignatureExceptionCode code, String diagnostics, ValidationContext context) {
