@@ -188,6 +188,18 @@ class JadesSigningStepsTest {
     }
 
     @Test
+    void shouldRejectTimestampTokenWhenTsaIssuingCaIsRevoked() throws Exception {
+        RevocationSource<OCSP> caRevoked = EvidenceRevocationSources.ocspPorCertificado(pki.respostasComAcRevogada());
+
+        StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(caRevoked), policy)
+                .execute(comSnapshot(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context()));
+
+        assertThat(((StepResult.Failure<SigningContext>) result).code())
+                .isEqualTo(SignatureExceptionCode.TSA_CERTIFICATE_REVOKED);
+        assertThat(((StepResult.Failure<SigningContext>) result).diagnostics()).contains("/REVOKED_CA_NO_POE");
+    }
+
+    @Test
     void shouldSkipTokenVerificationForIatStrategy() throws Exception {
         StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.fonteOcsp()), policy)
                 .execute(extend(signedContext(TimestampStrategy.IAT, fakeTsa.url())).context());

@@ -1257,6 +1257,16 @@ class QaValidacaoAtaquesTest {
     }
 
     @Test
+    void shouldRejectWhenIssuingCaIsRevoked() {
+        RevocationSource<OCSP> caRevoked = EvidenceRevocationSources.ocspPorCertificado(pki.respostasComAcRevogada());
+
+        Outcome outcome = outcome(legitimateBaselineB(), policy, trust, caRevoked);
+
+        assertThat(outcome.code()).isEqualTo(SignatureExceptionCode.CERT_REVOKED.getCode());
+        assertThat(outcome.diagnostics()).contains("/REVOKED_CA_NO_POE");
+    }
+
+    @Test
     void shouldRejectBaselineBWhenRevocationIsUnavailable() {
         Outcome outcome = outcome(legitimateBaselineB(), policy, trust,
                 EvidenceRevocationSources.ocspPorCertificado(pki.respostasSemRevogacaoDoSignatario()));
