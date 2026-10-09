@@ -5,7 +5,6 @@
 
 package br.gov.go.saude.fhir.safira.simulador;
 
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 import org.springframework.core.io.Resource;
 
 import java.io.IOException;
@@ -26,18 +25,19 @@ final class MaterialSimulado {
     private MaterialSimulado() {
     }
 
-    static TrustMaterial carregar(SafiraSimulacaoProperties propriedades) {
-        List<X509Certificate> todos = conferidos(propriedades);
-        TrustMaterial material = TrustMaterial.of(todos);
-        long raizes = todos.stream().filter(MaterialSimulado::autoassinado).count();
-        if (material.anchors().size() != raizes) {
-            throw new IllegalStateException("safira.simulacao.trust-anchors: nem todas as raízes foram aceitas como âncora.");
-        }
-        return material;
+    /** Porta de confiança com as raízes e ACs configuradas, já conferidas. */
+    static FonteDeConfiancaSimulada carregar(SafiraSimulacaoProperties propriedades) {
+        return new FonteDeConfiancaSimulada(raizes(propriedades), acs(propriedades));
     }
 
     /** Raízes e ACs configuradas, já conferidas (raízes primeiro). */
     static List<X509Certificate> conferidos(SafiraSimulacaoProperties propriedades) {
+        List<X509Certificate> todos = new ArrayList<>(raizes(propriedades));
+        todos.addAll(acs(propriedades));
+        return List.copyOf(todos);
+    }
+
+    private static List<X509Certificate> raizes(SafiraSimulacaoProperties propriedades) {
         if (propriedades.trustAnchors() == null) {
             throw new IllegalStateException("Modo simulação ligado sem safira.simulacao.trust-anchors "
                     + "(SAFIRA_SIMULACAO_TRUST_ANCHORS): informe o bundle PEM com as raízes da PKI simulada.");
@@ -64,6 +64,10 @@ final class MaterialSimulado {
                         + " está fora do período de validade.", e);
             }
         }
+        return raizes;
+    }
+
+    private static List<X509Certificate> acs(SafiraSimulacaoProperties propriedades) {
         List<X509Certificate> acs = propriedades.intermediates() == null ? List.of()
                 : certificados(propriedades.intermediates(), "safira.simulacao.intermediates");
         for (X509Certificate ac : acs) {
@@ -72,9 +76,7 @@ final class MaterialSimulado {
                         + " deve ser AC intermediária (cA=true, não autoassinada); raízes vão em trust-anchors.");
             }
         }
-        List<X509Certificate> todos = new ArrayList<>(raizes);
-        todos.addAll(acs);
-        return List.copyOf(todos);
+        return acs;
     }
 
     private static List<X509Certificate> certificados(Resource recurso, String propriedade) {

@@ -3,17 +3,14 @@
  * Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
  */
 
-package br.gov.go.saude.fhir.safira.app.simulacao;
+package br.gov.go.saude.fhir.safira.simulador.sistema;
 
-import br.gov.go.saude.fhir.safira.app.SafiraApplication;
 import br.gov.go.saude.fhir.safira.engine.domain.PipelineResult;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
-import br.gov.go.saude.fhir.safira.rest.service.AcervoDeTeste;
 import br.gov.go.saude.fhir.safira.rest.service.JadesSigningSystemTest;
 import br.gov.go.saude.fhir.safira.rest.service.SignAndValidateSystemTest;
 import br.gov.go.saude.fhir.safira.rest.service.SigningService;
 import br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada;
-import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,10 +20,10 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -44,7 +41,6 @@ import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
@@ -53,12 +49,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * allowlist aponta para a AC simulada; e ativação parcial/indevida do perfil {@code simulacao}.
  */
 @SpringBootTest
+@Import(ModoIcpBrasilDeTeste.class)
 class SimulacaoIsolamentoQaSystemTest {
 
     static SigningResult assinaturaComRaizNoX5c;
-
-    @MockitoBean
-    FonteDeConfianca fonteDeConfianca;
 
     @Autowired
     WebApplicationContext webApplicationContext;
@@ -102,7 +96,7 @@ class SimulacaoIsolamentoQaSystemTest {
 
     @BeforeAll
     static void assinarEmModoSimulacao() throws Exception {
-        try (ConfigurableApplicationContext simulacao = new SpringApplicationBuilder(SafiraApplication.class)
+        try (ConfigurableApplicationContext simulacao = new SpringApplicationBuilder(SimuladorTestApplication.class)
                 .web(WebApplicationType.NONE)
                 .profiles("simulacao")
                 .properties(ambiente())
@@ -116,8 +110,6 @@ class SimulacaoIsolamentoQaSystemTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        when(fonteDeConfianca.atual())
-                .thenReturn(AcervoDeTeste.com(JadesSigningSystemTest.PKI.caCert));
     }
 
     @Test
@@ -136,22 +128,20 @@ class SimulacaoIsolamentoQaSystemTest {
 
     @Test
     void shouldFailStartupWhenSimulationProfileHasNoAnchors() {
-        assertThatThrownBy(() -> new SpringApplicationBuilder(SafiraApplication.class)
+        assertThatThrownBy(() -> new SpringApplicationBuilder(SimuladorTestApplication.class)
                 .web(WebApplicationType.NONE)
                 .profiles("simulacao")
-                .properties("SAFIRA_TRUSTSTORE_DIR=target/icpbrasil-truststore-simulacao-qa")
                 .run().close())
                 .hasStackTraceContaining("safira.simulacao.trust-anchors");
     }
 
     @Test
     void shouldForceTrustStoreBootstrapOffWhenSimulationIsEnabled() {
-        try (ConfigurableApplicationContext contexto = new SpringApplicationBuilder(SafiraApplication.class)
+        try (ConfigurableApplicationContext contexto = new SpringApplicationBuilder(SimuladorTestApplication.class)
                 .web(WebApplicationType.NONE)
                 .profiles("simulacao")
                 .properties(ambiente())
-                .run("--icpbrasil-truststore.bootstrap.enabled=true", "--icpbrasil-truststore.scheduling.enabled=true",
-                        "--icpbrasil-truststore.filesystem.base-dir=target/icpbrasil-truststore-simulacao-qa-forcado")) {
+                .run("--icpbrasil-truststore.bootstrap.enabled=true", "--icpbrasil-truststore.scheduling.enabled=true")) {
             assertThat(contexto.getEnvironment().getProperty("icpbrasil-truststore.bootstrap.enabled")).isEqualTo("false");
             assertThat(contexto.getEnvironment().getProperty("icpbrasil-truststore.scheduling.enabled")).isEqualTo("false");
         }
@@ -159,24 +149,23 @@ class SimulacaoIsolamentoQaSystemTest {
 
     @Test
     void shouldFailStartupWhenSimulationAllowlistIssuerIsEmpty() {
-        assertThatThrownBy(() -> new SpringApplicationBuilder(SafiraApplication.class)
+        assertThatThrownBy(() -> new SpringApplicationBuilder(SimuladorTestApplication.class)
                 .web(WebApplicationType.NONE)
                 .profiles("simulacao")
                 .properties(ambiente())
-                .run("--SAFIRA_SIMULACAO_ISSUER_SHA256=",
-                        "--icpbrasil-truststore.filesystem.base-dir=target/icpbrasil-truststore-simulacao-qa-allowlist")
+                .run("--SAFIRA_SIMULACAO_ISSUER_SHA256=")
                 .close())
                 .hasStackTraceContaining("issuer-sha256");
     }
 
     @Test
     void shouldNotTrustSimulatedSignerWhenProfileIsActiveButModeIsOverriddenOff() throws Exception {
-        try (ConfigurableApplicationContext parcial = new SpringApplicationBuilder(SafiraApplication.class)
+        try (ConfigurableApplicationContext parcial = new SpringApplicationBuilder(SimuladorTestApplication.class,
+                ModoIcpBrasilDeTeste.class)
                 .web(WebApplicationType.NONE)
                 .profiles("simulacao")
                 .properties(ambiente())
-                .run("--safira.simulacao.enabled=false",
-                        "--icpbrasil-truststore.filesystem.base-dir=target/icpbrasil-truststore-simulacao-qa-vazio")) {
+                .run("--safira.simulacao.enabled=false")) {
             PipelineResult<?> result = parcial.getBean(SigningService.class).sign(SimulacaoPki.signingBody(
                     SimulacaoPki.PKI.signatario(), GeradorPkiSimulada.ALIAS_SIGNATARIO, Instant.now().getEpochSecond()));
 

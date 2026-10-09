@@ -3,7 +3,7 @@
  * Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
  */
 
-package br.gov.go.saude.fhir.safira.app.simulacao;
+package br.gov.go.saude.fhir.safira.simulador.sistema;
 
 import br.gov.go.saude.fhir.safira.rest.service.JadesSigningSystemTest;
 import br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada.Opcoes;
@@ -43,7 +43,6 @@ final class SimulacaoPki {
         ambiente.put("SAFIRA_SIMULACAO_INTERMEDIATES", PKI.ac().toUri().toString());
         ambiente.put("SAFIRA_SIMULACAO_CRLS", PKI.lcrRaiz().toUri() + "," + PKI.lcrAc().toUri());
         ambiente.put("SAFIRA_SIMULACAO_ISSUER_SHA256", PKI.issuerSha256());
-        ambiente.put("SAFIRA_TRUSTSTORE_DIR", "target/icpbrasil-truststore-simulacao");
         return ambiente;
     }
 

@@ -9,7 +9,7 @@ import br.gov.go.saude.fhir.safira.jades.CertificateValidationService;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada.Opcoes;
 import br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada.Resultado;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import com.sun.net.httpserver.HttpServer;
 import eu.europa.esig.dss.enumerations.Indication;
 import eu.europa.esig.dss.model.x509.CertificateToken;
@@ -96,7 +96,7 @@ class SimulacaoAtaquesQaTest {
                         "safira.simulacao.crls[0]=" + pki.lcrAc().toUri())
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context).doesNotHaveBean(TrustMaterialSource.class);
+                    assertThat(context).doesNotHaveBean(FonteDeConfianca.class);
                     assertThat(context).doesNotHaveBean(CertificateVerifierFactory.class);
                 });
     }
@@ -107,7 +107,7 @@ class SimulacaoAtaquesQaTest {
                         "safira.simulacao.trust-anchors=" + pki.raiz().toUri(),
                         "safira.simulacao.crls[0]=" + pki.lcrAc().toUri())
                 .run(context -> {
-                    assertThat(context).doesNotHaveBean(TrustMaterialSource.class);
+                    assertThat(context).doesNotHaveBean(FonteDeConfianca.class);
                     assertThat(context).doesNotHaveBean(CertificateVerifierFactory.class);
                 });
     }
@@ -117,7 +117,7 @@ class SimulacaoAtaquesQaTest {
     void shouldStayDisabledWhenEnabledIsTruthyButNotTrue(String valor) {
         runner.withPropertyValues("safira.simulacao.enabled=" + valor,
                         "safira.simulacao.trust-anchors=" + pki.raiz().toUri())
-                .run(context -> assertThat(context).doesNotHaveBean(TrustMaterialSource.class));
+                .run(context -> assertThat(context).doesNotHaveBean(FonteDeConfianca.class));
     }
 
     // ---------------------------------------------------------------- âncoras hostis

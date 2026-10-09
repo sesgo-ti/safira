@@ -3,17 +3,14 @@
  * Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
  */
 
-package br.gov.go.saude.fhir.safira.app.simulacao;
+package br.gov.go.saude.fhir.safira.simulador.sistema;
 
-import br.gov.go.saude.fhir.safira.app.SafiraApplication;
 import br.gov.go.saude.fhir.safira.engine.domain.PipelineResult;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
-import br.gov.go.saude.fhir.safira.rest.service.AcervoDeTeste;
 import br.gov.go.saude.fhir.safira.rest.service.JadesSigningSystemTest;
 import br.gov.go.saude.fhir.safira.rest.service.SignAndValidateSystemTest;
 import br.gov.go.saude.fhir.safira.rest.service.SigningService;
 import br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada;
-import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,10 +20,10 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -36,21 +33,18 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
  * Segurança do modo simulação: a assinatura produzida com a PKI simulada é recusada por um Safira
- * em modo normal, cujo acervo (aqui, a raiz da PKI de teste no lugar das raízes ICP-Brasil) não
- * contém a raiz simulada — mesmo com a allowlist apontando para a AC simulada.
+ * em modo normal, cujo acervo ({@link ModoIcpBrasilDeTeste}: outra raiz no lugar das raízes
+ * ICP-Brasil) não contém a raiz simulada — mesmo com a allowlist apontando para a AC simulada.
  */
 @SpringBootTest
+@Import(ModoIcpBrasilDeTeste.class)
 class SimulacaoForaDoModoSystemTest {
 
     static SigningResult assinaturaSimulada;
-
-    @MockitoBean
-    FonteDeConfianca fonteDeConfianca;
 
     @Autowired
     WebApplicationContext webApplicationContext;
@@ -70,7 +64,7 @@ class SimulacaoForaDoModoSystemTest {
         String[] propriedades = SimulacaoPki.ambiente().entrySet().stream()
                 .map(entrada -> entrada.getKey() + "=" + entrada.getValue())
                 .toArray(String[]::new);
-        try (ConfigurableApplicationContext simulacao = new SpringApplicationBuilder(SafiraApplication.class)
+        try (ConfigurableApplicationContext simulacao = new SpringApplicationBuilder(SimuladorTestApplication.class)
                 .web(WebApplicationType.NONE)
                 .profiles("simulacao")
                 .properties(propriedades)
@@ -84,8 +78,6 @@ class SimulacaoForaDoModoSystemTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        when(fonteDeConfianca.atual())
-                .thenReturn(AcervoDeTeste.com(JadesSigningSystemTest.PKI.caCert));
     }
 
     @Test

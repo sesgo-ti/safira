@@ -3,19 +3,11 @@
 
 # -----------------------------------------------------------------------------
 # Perfil "simulacao" — PKI própria no lugar do acervo ICP-Brasil (SEM VALOR LEGAL).
-# Uso: java -jar safira-app.jar --spring.profiles.active=simulacao, com as
-# variáveis SAFIRA_SIMULACAO_* abaixo (ou um application-simulacao.yml gerado pelo
-# GeradorPkiSimulada via --spring.config.additional-location). Ver README.
+# Ativado com --spring.profiles.active=simulacao numa aplicação que inclua o
+# safira-rest e o safira-simulador, com as variáveis SAFIRA_SIMULACAO_* abaixo (ou
+# um application-simulacao.yml gerado pelo GeradorPkiSimulada via
+# --spring.config.additional-location). Ver README.
 # -----------------------------------------------------------------------------
-
-# Sem download do acervo do ITI: a confiança vem só das raízes simuladas.
-icpbrasil-truststore:
-  bootstrap:
-    enabled: false
-  scheduling:
-    enabled: false
-  filesystem:
-    base-dir: ${SAFIRA_TRUSTSTORE_DIR:${java.io.tmpdir}/safira-simulacao/icpbrasil-truststore}
 
 safira:
   simulacao:
@@ -24,7 +16,8 @@ safira:
     trust-anchors: ${SAFIRA_SIMULACAO_TRUST_ANCHORS:}
     # Bundle PEM com as ACs intermediárias (opcional)
     intermediates: ${SAFIRA_SIMULACAO_INTERMEDIATES:}
-    # LCRs locais separadas por vírgula (opcional; sem elas a revogação é buscada online)
+    # LCRs locais separadas por vírgula (opcional; sem elas a revogação não é obtida,
+    # pois o modo simulação não acessa a rede)
     crls: ${SAFIRA_SIMULACAO_CRLS:}
 
   policy:

@@ -6,12 +6,12 @@
 package br.gov.go.saude.fhir.safira.simulador;
 
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
+import br.gov.go.saude.fhir.safira.jades.adapter.DestinationGuard;
 import br.gov.go.saude.fhir.safira.steps.config.SafiraStepsAutoConfiguration;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
-import br.gov.go.saude.truststore.icpbrasil.config.TrustStoreAutoConfiguration;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -23,21 +23,18 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
-
 import org.springframework.util.StringUtils;
 
-import java.security.cert.TrustAnchor;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * Modo simulação: substitui o acervo ICP-Brasil pelas raízes de {@code safira.simulacao.*}, sem
- * misturá-los. Os steps não mudam; só a fonte de confiança (e, com LCRs locais, a de revogação).
- * Roda antes da auto-configuração da icpbrasil-truststore e dos steps, cujos beans são
- * {@code @ConditionalOnMissingBean}.
+ * Modo simulação: implementa a porta {@link FonteDeConfianca} com as raízes de
+ * {@code safira.simulacao.*}, no lugar do acervo ICP-Brasil e sem misturá-los. Os steps não mudam;
+ * só a fonte de confiança (e, com LCRs locais, a de revogação). Sem rede: o {@link DestinationGuard}
+ * padrão recusa todo destino. Roda antes dos steps, cujos beans são {@code @ConditionalOnMissingBean}.
  */
-@AutoConfiguration(before = {TrustStoreAutoConfiguration.class, SafiraStepsAutoConfiguration.class})
+@AutoConfiguration(before = SafiraStepsAutoConfiguration.class)
 @ConditionalOnProperty(prefix = "safira.simulacao", name = "enabled", havingValue = "true")
 @EnableConfigurationProperties(SafiraSimulacaoProperties.class)
 public class SafiraSimulacaoAutoConfiguration {
@@ -45,10 +42,10 @@ public class SafiraSimulacaoAutoConfiguration {
     private static final Logger log = LoggerFactory.getLogger(SafiraSimulacaoAutoConfiguration.class);
 
     @Bean
-    public TrustMaterialSource simulacaoTrustMaterialSource(SafiraSimulacaoProperties propriedades) {
-        TrustMaterial material = MaterialSimulado.carregar(propriedades);
-        String raizes = material.anchors().stream()
-                .map(TrustAnchor::getTrustedCert)
+    public FonteDeConfianca simulacaoFonteDeConfianca(SafiraSimulacaoProperties propriedades) {
+        FonteDeConfianca fonte = MaterialSimulado.carregar(propriedades);
+        AcervoDeConfianca acervo = fonte.atual().orElseThrow();
+        String raizes = acervo.raizes().stream()
                 .map(raiz -> raiz.getSubjectX500Principal().getName())
                 .collect(Collectors.joining("; "));
         log.warn("""
@@ -59,9 +56,17 @@ public class SafiraSimulacaoAutoConfiguration {
                 *  As assinaturas NÃO têm validade jurídica ICP-Brasil.                 *
                 *  Nunca use este modo em produção.                                     *
                 ************************************************************************
-                Raízes simuladas: {}""", raizes);
-        Optional<TrustMaterial> atual = Optional.of(material);
-        return () -> atual;
+                Raízes simuladas: {} (geração {})""", raizes, acervo.geracao());
+        return fonte;
+    }
+
+    /** Sem rede no modo simulação: a revogação vem só das LCRs locais. */
+    @Bean
+    @ConditionalOnMissingBean
+    public DestinationGuard simulacaoDestinationGuard() {
+        return (host, address) -> {
+            throw new IllegalStateException("Modo simulação sem rede: destino recusado (" + host + ").");
+        };
     }
 
     /** Marca o sucesso de {@code /validar} como simulação (sem validade jurídica ICP-Brasil). */
@@ -89,8 +94,8 @@ public class SafiraSimulacaoAutoConfiguration {
     }
 
     /**
-     * Com {@code safira.simulacao.crls}, a revogação vem só das LCRs locais (sem rede); sem elas,
-     * vale a fábrica online padrão de {@link SafiraStepsAutoConfiguration}.
+     * Com {@code safira.simulacao.crls}, a revogação vem só das LCRs locais; sem elas, vale a fábrica
+     * padrão de {@link SafiraStepsAutoConfiguration}, presa ao {@link DestinationGuard} sem rede.
      */
     @Configuration(proxyBeanMethods = false)
     @Conditional(LcrsSimuladas.Configuradas.class)
