@@ -21,6 +21,7 @@ import java.io.InputStream;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class StrictValidationPoliciesTest {
 
@@ -84,12 +85,10 @@ class StrictValidationPoliciesTest {
     }
 
     @Test
-    void shouldFailClosedWhenAcceptedPoliciesAreEmpty() {
-        TestPki pki = TestPki.create();
-        String id = new CertificateToken(pki.leafCert).getDSSIdAsString();
-
-        SimpleCertificateReport report = validate(pki, StrictValidationPolicies.comPoliticasAceitas(List.of()));
-
-        assertThat(report.getCertificateSubIndication(id)).isEqualTo(SubIndication.CHAIN_CONSTRAINTS_FAILURE);
+    void shouldRejectEmptyAcceptedPoliciesWhenNoValidOidRemains() {
+        assertThatThrownBy(() -> StrictValidationPolicies.comPoliticasAceitas(List.of()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> StrictValidationPolicies.comPoliticasAceitas(List.of("*", " ")))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

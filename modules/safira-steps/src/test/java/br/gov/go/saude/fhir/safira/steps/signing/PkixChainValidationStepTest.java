@@ -156,4 +156,13 @@ class PkixChainValidationStepTest {
         assertThat(code(step(trust, TestPki.ocspSource(a1::ocspRevokedFor)).execute(context(List.of(b64(a1.leafCert))))))
                 .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
     }
+
+    @Test
+    void shouldFailClosedWhenAllowlistIsEmpty() throws Exception {
+        PkixChainValidationStep step = new PkixChainValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(acervo),
+                CertificateVerifierFactory.offline(pki.ocspGoodSource(), null)), new SafiraPolicyProperties(List.of(), null, null));
+
+        assertThat(code(step.execute(context(List.of(b64(pki.leafCert))))))
+                .isEqualTo(SignatureExceptionCode.CONFIG_INVALID_PARAMETER);
+    }
 }

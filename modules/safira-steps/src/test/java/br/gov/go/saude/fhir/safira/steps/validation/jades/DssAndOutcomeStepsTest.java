@@ -116,6 +116,15 @@ class DssAndOutcomeStepsTest {
     }
 
     @Test
+    void shouldFailClosedWhenAllowlistIsEmpty() {
+        SafiraPolicyProperties semAllowlist = new SafiraPolicyProperties(List.of(), policy.tsaPolicies(), policy.temporalPolicy());
+        DssValidationStep step = new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
+                CertificateVerifierFactory.offline(good(), null)), semAllowlist);
+
+        assertThat(code(step.execute(bb))).isEqualTo(SignatureExceptionCode.CONFIG_INVALID_PARAMETER);
+    }
+
+    @Test
     void shouldMapMissingRevocationToRevocationCodeWhenNoSourceAnswers() {
         assertThat(code(step(null).execute(bb))).isEqualTo(SignatureExceptionCode.REVOCATION_STATUS_UNKNOWN);
     }

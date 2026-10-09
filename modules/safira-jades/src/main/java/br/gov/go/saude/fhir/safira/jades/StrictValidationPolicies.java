@@ -46,16 +46,23 @@ public final class StrictValidationPolicies {
     }
 
     /**
-     * Política versionada que só aceita certificado do signatário com algum dos OIDs informados;
-     * lista vazia (ou só com valores inválidos) recusa qualquer certificado.
+     * Política versionada que só aceita certificado do signatário com algum dos OIDs informados.
+     *
+     * @throws IllegalArgumentException se nenhum OID válido restar (o curinga {@code *} e valores
+     *                                  que não são OID são descartados): {@code PolicyIds} sem
+     *                                  valores deixaria passar folha sem {@code certificatePolicies}
      */
     public static StrictValidationPolicies comPoliticasAceitas(Collection<String> oids) {
         Objects.requireNonNull(oids, "oids não pode ser nulo");
-        return new StrictValidationPolicies(load(oids.stream()
+        List<String> accepted = oids.stream()
                 .filter(Objects::nonNull)
                 .filter(oid -> oid.matches(OID))
                 .distinct()
-                .toList()));
+                .toList();
+        if (accepted.isEmpty()) {
+            throw new IllegalArgumentException("Nenhum OID de política de certificado aceito: " + oids);
+        }
+        return new StrictValidationPolicies(load(accepted));
     }
 
     /** Documento XML da política, pronto para {@code validate}/{@code validateDocument}. */

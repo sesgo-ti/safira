@@ -11,11 +11,10 @@ import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationStep;
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
-import br.gov.go.saude.fhir.safira.jades.StrictValidationPolicies;
 import br.gov.go.saude.fhir.safira.steps.dss.DssOutcomes;
+import br.gov.go.saude.fhir.safira.steps.dss.PoliticaDeValidacaoDss;
 import br.gov.go.saude.fhir.safira.steps.policy.PolicyViolation;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
-import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TsaPolicy;
 import br.gov.go.saude.fhir.safira.steps.policy.TsaTrustStores;
 import br.gov.go.saude.fhir.safira.steps.timestamp.TimestampTokenException;
@@ -47,10 +46,12 @@ import java.util.Optional;
  * (certificado revogado agora → {@code REVOKED_NO_POE} → {@code CERT.REVOKED}); em B-T o carimbo
  * é a POE e revogação posterior a ele não invalida a assinatura.
  *
- * <p>Política de validação: {@link StrictValidationPolicies} (versionada, derivada da padrão do
- * DSS 6.5) com a lista explícita dos OIDs da allowlist. As demais regras SES-GO (emissor da
- * allowlist, tipo, chave, keyUsage, identidade, janela do carimbo) ficam nos passos próprios; a
- * recusa por {@code PolicyIds} vira {@code VALIDATION.POLICY-COMPLIANCE-FAILED} (validar 4.1).
+ * <p>Política de validação: a versionada ({@link PoliticaDeValidacaoDss}, derivada da padrão do
+ * DSS 6.5) com a lista explícita dos OIDs da allowlist. Aqui o {@code PolicyIds} é defesa em
+ * profundidade: o {@code signer-certificate} roda antes no pipeline e já recusa a folha fora da
+ * allowlist; se ainda assim o DSS recusar por {@code PolicyIds}, o código é
+ * {@code VALIDATION.POLICY-COMPLIANCE-FAILED} (validar 4.1). As demais regras SES-GO (emissor da
+ * allowlist, tipo, chave, keyUsage, identidade, janela do carimbo) ficam nos passos próprios.
  */
 // DIVERGENCIA-IG D7: validade histórica (intervalo I) em B-T decidida pelo DSS com o carimbo como POE
 @StepId("dss-validation")
@@ -58,13 +59,12 @@ public class DssValidationStep implements ValidationStep {
 
     private final VerificadoresDss verifiers;
     private final SafiraPolicyProperties policy;
-    private final JadesValidationService validationService;
+    private final Optional<JadesValidationService> validationService;
 
     public DssValidationStep(VerificadoresDss verifiers, SafiraPolicyProperties policy) {
         this.verifiers = verifiers;
         this.policy = policy;
-        this.validationService = new JadesValidationService(StrictValidationPolicies.comPoliticasAceitas(
-                policy.acceptedCertificatePolicies().stream().map(AcceptedCertificatePolicy::oid).toList()));
+        this.validationService = PoliticaDeValidacaoDss.da(policy).map(JadesValidationService::new);
     }
 
     @Override
@@ -95,8 +95,12 @@ public class DssValidationStep implements ValidationStep {
         if (acervo.isEmpty()) {
             return fail(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY, "Acervo ICP-Brasil indisponível.", context);
         }
+        if (validationService.isEmpty()) {
+            return fail(SignatureExceptionCode.CONFIG_INVALID_PARAMETER,
+                    "safira.policy.accepted-certificate-policies não tem OID de política válido.", context);
+        }
         CommonCertificateVerifier verifier = verifiers.paraOperacao(acervo.get(), tsaAnchors);
-        Reports reports = validationService.validate(jws, verifier);
+        Reports reports = validationService.get().validate(jws, verifier);
         SimpleReport report = reports.getSimpleReport();
         String id = report.getFirstSignatureId();
 
@@ -114,6 +118,7 @@ public class DssValidationStep implements ValidationStep {
             SignatureExceptionCode code = DssOutcomes.code(indication, sub,
                     reports.getDiagnosticData().getSignatureById(id).getCertificateChain(),
                     reports.getDiagnosticData().getValidationDate(), errors);
+            // defesa em profundidade: o perfil (signer-certificate) já recusou a folha fora da allowlist
             if (code == SignatureExceptionCode.CERT_NOT_ICP_BRASIL && DssOutcomes.policyIdsRejected(errors)) {
                 code = SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED;
             }
