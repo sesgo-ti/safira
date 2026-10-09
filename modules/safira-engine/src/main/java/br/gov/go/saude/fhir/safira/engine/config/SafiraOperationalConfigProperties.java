@@ -29,28 +29,16 @@ public record SafiraOperationalConfigProperties(
     // -------------------------------------------------------------------------
 
     /**
-     * @param ocspCacheTtl  Tempo de vida (segundos) para respostas OCSP em cache. Padrão: 3600. Intervalo: [300, 86400].
-     * @param crlCacheTtl   Tempo de vida (segundos) para listas CRL em cache. Padrão: 3600. Intervalo: [300, 86400].
      * @param ocspTimeout   Timeout (segundos) para consultas OCSP. Padrão: 20. Intervalo: [5, 120].
      * @param crlTimeout    Timeout (segundos) para download de CRL. Padrão: 20. Intervalo: [5, 120].
      * @param tsaTimeout    Timeout (segundos) para comunicação com o serviço TSA. Padrão: 20. Intervalo: [5, 120].
-     * @param maxRetries    Número máximo de tentativas em caso de falha de rede. Padrão: 3. Intervalo: [1, 5].
-     * @param retryInterval Intervalo (segundos) entre tentativas de retry. Padrão: 2. Intervalo: [1, 10].
      * @param tsaUrl        URL do serviço TSA (RFC 3161). Obrigatória quando a estratégia de timestamp é TSA. Deve iniciar com https://.
-     * @param tsaUsername   (Opcional) Usuário para autenticação HTTP Basic no serviço TSA.
-     * @param tsaPassword   (Opcional) Senha para autenticação HTTP Basic no serviço TSA.
      */
     public record VerificationProps(
-            @DefaultValue("3600") Integer ocspCacheTtl,
-            @DefaultValue("3600") Integer crlCacheTtl,
             @DefaultValue("20")   Integer ocspTimeout,
             @DefaultValue("20")   Integer crlTimeout,
             @DefaultValue("20")   Integer tsaTimeout,
-            @DefaultValue("3")    Integer maxRetries,
-            @DefaultValue("2")    Integer retryInterval,
-            String tsaUrl,
-            String tsaUsername,
-            String tsaPassword
+            String tsaUrl
     ) {}
 
     // -------------------------------------------------------------------------
@@ -60,11 +48,9 @@ public record SafiraOperationalConfigProperties(
     /**
      * @param maxEntriesBundle        Número máximo de entradas no Bundle. Padrão: 1000. Intervalo: [100, 10000].
      * @param maxBundleSize           Tamanho máximo do Bundle em bytes. Padrão: 52428800 (50 MB). Intervalo: [1048576, 209715200].
-     * @param timoutVerificationBundle Timeout (segundos) para verificação do Bundle. Padrão: 10. Intervalo: [5, 300].
      */
     public record SecurityLimitsProps(
             @DefaultValue("1000")        Integer maxEntriesBundle,
-            @DefaultValue("52428800")    Integer maxBundleSize,
-            @DefaultValue("10")          Integer timoutVerificationBundle
+            @DefaultValue("52428800")    Integer maxBundleSize
     ) {}
 }

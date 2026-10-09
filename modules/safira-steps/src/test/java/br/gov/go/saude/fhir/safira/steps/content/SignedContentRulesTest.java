@@ -23,7 +23,7 @@ class SignedContentRulesTest {
 
     static final String U1 = "urn:uuid:3fa85f64-5717-4562-b3fc-2c963f66afa6";
     static final String U2 = "urn:uuid:9b2b8c1e-2f4a-4d5b-8c6d-7e8f9a0b1c2d";
-    private static final SecurityLimitsProps LIMITS = new SecurityLimitsProps(100, 1048576, 10);
+    private static final SecurityLimitsProps LIMITS = new SecurityLimitsProps(100, 1048576);
 
     static String bundle(String... entries) {
         return "{\"resourceType\":\"Bundle\",\"type\":\"collection\",\"entry\":[" + String.join(",", entries) + "]}";

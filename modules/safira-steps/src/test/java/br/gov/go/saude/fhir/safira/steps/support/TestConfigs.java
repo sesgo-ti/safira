@@ -32,8 +32,8 @@ public final class TestConfigs {
 
     public static SafiraOperationalConfigProperties operational(String tsaUrl) {
         return new SafiraOperationalConfigProperties(
-                new VerificationProps(3600, 3600, 20, 20, 20, 3, 2, tsaUrl, null, null),
-                new SecurityLimitsProps(1000, 52428800, 10));
+                new VerificationProps(20, 20, 20, tsaUrl),
+                new SecurityLimitsProps(1000, 52428800));
     }
 
     public static SafiraOperationalConfigProperties operational() {
