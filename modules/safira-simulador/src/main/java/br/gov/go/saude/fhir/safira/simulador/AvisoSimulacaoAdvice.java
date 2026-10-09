@@ -76,8 +76,8 @@ public class AvisoSimulacaoAdvice implements ResponseBodyAdvice<Object> {
                 && servlet.getServletResponse().getStatus() == HttpStatus.OK.value();
     }
 
-    /** Acrescenta a issue de simulação ao final das issues existentes. */
-    static OperationOutcome marcar(OperationOutcome outcome) {
+    /** Acrescenta a issue de simulação ao final das issues existentes (também usado pela CLI). */
+    public static OperationOutcome marcar(OperationOutcome outcome) {
         List<OperationOutcome.Issue> issues = new ArrayList<>(outcome.issue());
         issues.add(ISSUE);
         return new OperationOutcome(outcome.resourceType(), outcome.id(), List.copyOf(issues));

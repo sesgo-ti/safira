@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
+
+# -----------------------------------------------------------------------------
+# Modo simulacao: PKI simulada persistida do safira-simulador (SEM VALOR LEGAL), sem rede.
+# Gerada na primeira execução em --pki-dir (padrão: o mesmo diretório do simulador) e
+# reutilizada nas seguintes. Allowlist e política TSA vêm da própria PKI.
+# -----------------------------------------------------------------------------
+safira:
+  simulador:
+    diretorio: ${SAFIRA_SIMULADOR_DIRETORIO:${user.home}/.safira-simulador/pki}
+
+  operational:
+    verification:
+      # Nunca contatada: o carimbo vem da TSA simulada em memória (o pipeline exige HTTPS).
+      tsa-url: "https://tsa.simulacao.invalid"
