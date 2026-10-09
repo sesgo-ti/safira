@@ -107,11 +107,10 @@ class ContentAndSignerStepsTest {
     }
 
     @Test
-    void shouldRejectRootOutsideTrustStore() {
+    void shouldNotDecideRootTrustAtSignerStep() {
         TrustMaterialSource other = () -> Optional.of(TrustMaterial.of(List.of(TestPki.create().caCert)));
 
-        assertThat(code(signer(policy, other, structured)))
-                .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
+        assertThat(signer(policy, other, structured).isSuccess()).isTrue();
     }
 
     @Test

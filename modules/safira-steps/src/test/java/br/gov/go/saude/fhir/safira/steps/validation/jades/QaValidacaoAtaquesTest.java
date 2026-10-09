@@ -1098,7 +1098,7 @@ class QaValidacaoAtaquesTest {
                 TestPki.CERT_END, "2.16.76.1.2.3.1", KeyUsage.digitalSignature, false);
 
         assertThat(validate(signedBy(keys, List.of(leaf, rogueRoot), now() - 5)))
-                .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL.getCode());
+                .isEqualTo(SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED.getCode());
     }
 
     @Test
@@ -1117,7 +1117,7 @@ class QaValidacaoAtaquesTest {
         TestPki other = TestPki.create();
 
         assertThat(validate(signedBy(other.leafKeys, other.chain(), now() - 5), policy, trust, other.ocspGoodSource()))
-                .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL.getCode());
+                .isEqualTo(SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED.getCode());
     }
 
     @Test

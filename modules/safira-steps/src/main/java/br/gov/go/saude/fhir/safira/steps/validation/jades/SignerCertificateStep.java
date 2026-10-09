@@ -15,7 +15,6 @@ import br.gov.go.saude.fhir.safira.steps.certificate.IcpBrasilCertificateProfile
 import br.gov.go.saude.fhir.safira.steps.certificate.ProfileResult;
 import br.gov.go.saude.fhir.safira.steps.certificate.SignerIdentity;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
-import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPublicKey;
@@ -25,11 +24,11 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Passo {@code signer-certificate}: seções 4.1 e 4.2 do caso de uso de validação — raiz de
- * {@code x5c} idêntica a uma âncora do acervo, política/tipo/chave/identidade do certificado
+ * Passo {@code signer-certificate}: seções 4.1 e 4.2 do caso de uso de validação — política/tipo/chave/identidade do certificado
  * folha, correspondência com {@code Signature.who} e coerência de {@code Signature.when},
  * {@code iat}, timestamp de referência e validade da folha. Escreve
- * {@link ValidationKeys#SIGNER_IDENTITY}.
+ * {@link ValidationKeys#SIGNER_IDENTITY}. A confiança na raiz de {@code x5c} não é decidida
+ * aqui: é do {@code dss-validation}.
  */
 @StepId("signer-certificate")
 public class SignerCertificateStep implements ValidationStep {
@@ -42,18 +41,10 @@ public class SignerCertificateStep implements ValidationStep {
 
     @Override
     public StepResult<ValidationContext> execute(ValidationContext context) {
-        Optional<AcervoDeConfianca> acervo = context.getAttribute(ValidationKeys.ACERVO, AcervoDeConfianca.class);
-        if (acervo.isEmpty()) {
-            return fail(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY, "Acervo ICP-Brasil indisponível.", context);
-        }
         List<X509Certificate> chain = context.getCertificateChain().orElse(List.of());
         if (chain.size() < 2) {
             return fail(SignatureExceptionCode.CERT_CHAIN_INCOMPLETE,
                     "x5c deve conter a cadeia completa até a raiz ICP-Brasil.", context);
-        }
-        if (!isTrustedAnchor(chain.getLast(), acervo.get())) {
-            return fail(SignatureExceptionCode.CERT_NOT_ICP_BRASIL,
-                    "A última posição de x5c não corresponde (SHA-256 do DER) a uma âncora do acervo ICP-Brasil.", context);
         }
         X509Certificate leaf = chain.getFirst();
         ProfileResult profile = IcpBrasilCertificateProfile.evaluate(leaf, chain.get(1),
@@ -86,12 +77,6 @@ public class SignerCertificateStep implements ValidationStep {
                     "iat está fora do período de validade do certificado do signatário.", context);
         }
         return StepResult.success(getName(), context.toBuilder().attribute(ValidationKeys.SIGNER_IDENTITY, identity).build());
-    }
-
-    private static boolean isTrustedAnchor(X509Certificate root, AcervoDeConfianca acervo) {
-        String rootSha256 = IcpBrasilCertificateProfile.sha256Hex(root);
-        return acervo.raizes().stream()
-                .anyMatch(anchor -> IcpBrasilCertificateProfile.sha256Hex(anchor).equals(rootSha256));
     }
 
     /** Códigos da validação (4.1) para as recusas do perfil, definidos com os da criação. */
