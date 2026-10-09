@@ -369,6 +369,7 @@ class QaAssinaturaAtaquesTest {
         MvcResult result = sign(body);
 
         assertThat(result.getResponse().getStatus()).isEqualTo(422);
+        assertThat(code(result)).isEqualTo("CERT.CHAIN-VALIDATION-FAILED");
     }
 
     @Test
