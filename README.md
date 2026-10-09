@@ -290,6 +290,51 @@ java -jar $J assinar --bundle $EX/bundle.json --provenance $EX/provenance.json -
 
 No modo `icpbrasil` sem acervo (ex.: `-Dicpbrasil-truststore.bootstrap.enabled=false`, sem rede) e com a allowlist por `--config`, `validar` devolve `CONFIG.TRUST-STORE-EMPTY` e sai com 4. O stderr do modo simulação traz o aviso `AVISO: SIMULAÇÃO — sem validade jurídica ICP-Brasil (PKI simulada em <dir>)` e o log da PKI (caminhos, nunca a senha).
 
+### Servidor local
+
+`safira servidor iniciar|parar|status` sobe a **API REST** do Safira em segundo plano, na máquina do desenvolvedor, nos dois modos: `icpbrasil` roda o `SafiraApplication` (acervo ICP-Brasil real; a 1ª partida baixa o acervo do ITI e a readiness só responde depois) e `simulacao` roda o `SimuladorApplication` (PKI simulada persistida, offline, pronto em poucos segundos). O processo filho é a mesma `java` e o mesmo JAR da CLI, com o modo imposto como em `assinar`/`validar` (exclusão das auto-configurações do outro modo e uma única `FonteDeConfianca`). **Não é implantação de produção** (o modo `icpbrasil` avisa no stderr); para produção use o `safira-app-*-exec.jar`.
+
+```bash
+safira servidor iniciar [--modo icpbrasil|simulacao] [--porta P] [--pki-dir DIR] [--config extra.yml] \
+    [--timeout S] [--ociosidade 30m] [--estado-dir DIR]
+safira servidor status  [--modo icpbrasil|simulacao] [--estado-dir DIR]
+safira servidor parar   [--modo icpbrasil|simulacao] [--timeout S] [--estado-dir DIR]
+safira simulador pki    [--pki-dir DIR]
+```
+
+- **Endereço e porta:** sempre `127.0.0.1` (sem autenticação; para expor, use o JAR do app ou do simulador). Porta: `--porta`, senão `SAFIRA_PORT`, senão `8080` (`icpbrasil`) ou `8081` (`simulacao`), para que os dois modos rodem juntos. Porta ocupada → saída 3 com a mensagem `A porta P já está em uso em 127.0.0.1`.
+- **Estado:** `<estado-dir>/<modo>/` (padrão `SAFIRA_SERVIDOR_DIR` ou `~/.safira/servidor`), diretório `0700` com `servidor.properties` (PID, porta, modo, início do processo, log), `servidor.log` (stdout+stderr do servidor, recriado a cada início) e `operacao.lock`, todos `0600`. Um servidor por modo e diretório: `iniciar` com um servidor vivo sai com 3 (`já está em execução`); duas operações simultâneas no mesmo diretório também (trava). O PID só vale se o processo vivo tiver o mesmo instante de início (PID reutilizado = órfão). Estado órfão (processo morto) é removido sem erro por `iniciar`, `status` e `parar`, com um aviso no stderr.
+- **iniciar:** espera `GET /actuator/health/readiness` = 200 por até `--timeout` segundos (padrão 60 em `simulacao`, 300 em `icpbrasil`). Se o servidor morrer na partida, sai com 3 e mostra o fim do log; se não ficar pronto a tempo, o processo é encerrado, o estado removido e a saída é 4 (inconclusivo). Sucesso: saída 0 e o JSON de status (`UP`) no stdout. No Unix, o filho roda sob `nohup` e sobrevive ao fechamento do terminal.
+- **status:** JSON `{"modo","estado","pid","porta","url","inicio","log"}` com `estado` `UP` (readiness 200), `DOWN` (processo vivo, readiness não responde) ou `PARADO`; sem `--modo`, `{"servidores":[...]}` com os dois modos. Saída 0 sempre que o estado é determinado.
+- **parar:** SIGTERM (`ProcessHandle.destroy`, desligamento gracioso do Spring) e, após `--timeout` (padrão 30 s), encerramento forçado; remove o estado. Sem servidor, saída 0 (idempotente).
+- **Ociosidade:** `--ociosidade` ou `SAFIRA_IDLE_TIMEOUT` (`90s`, `30m`, `2h` ou ISO-8601 `PT30M`; padrão: desligada) encerra o servidor depois desse tempo sem requisições; as sondas em `/actuator/**` (inclusive `status`) não contam. O estado que fica é limpo como órfão no próximo comando.
+- **Modo `icpbrasil`:** acervo em `SAFIRA_TRUSTSTORE_DIR` (padrão `~/.safira/icpbrasil-truststore`, o mesmo da CLI); allowlist institucional e `tsa-url` por `--config`. Configuração: `application.yml` do `safira-app` (no modo `simulacao`, mais o `application-simulador.yml`) e `--config`.
+- **`safira simulador pki`:** gera a PKI simulada na primeira vez (ou reutiliza) e imprime em JSON os caminhos (`raiz`, `ac`, `signatario`, `revogado`, `senha` — o **caminho** do arquivo, nunca a senha), os aliases, a allowlist (`politicaOid`, `issuerSha256`) e a validade do signatário.
+
+Conferido à mão com o JAR (diretórios temporários; `pid`, instantes e caminhos variam):
+
+```bash
+J=$(ls modules/safira-cli/target/safira-cli-*-exec.jar); export SAFIRA_SERVIDOR_DIR=/tmp/safira-estado
+java -jar $J servidor iniciar --modo simulacao --pki-dir /tmp/safira-sim
+# stderr: AVISO: SIMULAÇÃO — sem validade jurídica ICP-Brasil; servidor local, não é implantação de produção.
+# {"modo":"simulacao","estado":"UP","pid":94293,"porta":8081,"url":"http://127.0.0.1:8081","inicio":"...","log":"/tmp/safira-estado/simulacao/servidor.log"}   (saída 0, ~3 s)
+
+java -jar $J servidor status
+# {"servidores":[{"modo":"icpbrasil","estado":"PARADO"},{"modo":"simulacao","estado":"UP","pid":94293,"porta":8081,...}]}   (saída 0)
+
+java -jar $J servidor iniciar --modo simulacao --pki-dir /tmp/safira-sim --porta 18182
+# stderr: Erro: O servidor simulacao já está em execução (PID 94293, porta 8081). Use 'safira servidor parar --modo simulacao'.   (saída 3)
+
+# corpo de /assinar com o signatario.p12, a senha.txt e a cadeia de GET /simulacao/pki (cadeiaSignatario)
+curl -s -o resp.json -w '%{http_code}\n' -H 'Content-Type: application/json' --data-binary @assinar.json http://127.0.0.1:8081/assinar
+# 200; jq -c keys resp.json → ["provenance","signature"]
+
+java -jar $J servidor parar --modo simulacao
+# {"modo":"simulacao","estado":"PARADO","pid":94293}   (saída 0; o log registra "Graceful shutdown complete")
+java -jar $J servidor status --modo simulacao
+# {"modo":"simulacao","estado":"PARADO"}   (saída 0)
+```
+
 ## Build e testes
 
 ```bash
