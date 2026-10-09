@@ -72,6 +72,8 @@ class PkiIcpSimuladaTest {
                 .satisfies(valor -> assertThat(valor.substring(8, 19)).isEqualTo(PkiIcpSimulada.CPF));
         assertThat(rdn(signatario, BCStyle.SERIALNUMBER)).isEqualTo(PkiIcpSimulada.CPF);
         assertThat(signatario.getExtensionValue(Extension.certificatePolicies.getId())).isNotNull();
+        assertThat(signatario.getNonCriticalExtensionOIDs()).contains(Extension.certificatePolicies.getId());
+        assertThat(pki.revogado().getNonCriticalExtensionOIDs()).contains(Extension.certificatePolicies.getId());
         assertThat(politicas(signatario)).containsExactly(POLITICA_A3);
         assertThat(((RSAPublicKey) signatario.getPublicKey()).getModulus().bitLength()).isEqualTo(2048);
         assertThat(signatario.getKeyUsage()[0]).isTrue();

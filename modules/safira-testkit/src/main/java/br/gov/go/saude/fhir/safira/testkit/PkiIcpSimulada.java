@@ -24,6 +24,7 @@ import eu.europa.esig.dss.pki.x509.revocation.crl.PKICRLSource;
 import eu.europa.esig.dss.pki.x509.revocation.ocsp.PKIOCSPSource;
 import eu.europa.esig.dss.pki.x509.tsp.PKITSPSource;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.DERUTF8String;
 import org.bouncycastle.asn1.x509.AccessDescription;
 import org.bouncycastle.asn1.x509.AuthorityInformationAccess;
@@ -49,6 +50,7 @@ import java.util.Date;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Function;
 
 /**
  * PKI ICP-like SIMULADA — SEM VALOR LEGAL — para testes e para o simulador.
@@ -226,6 +228,19 @@ public final class PkiIcpSimulada {
         return respostaOcsp(certificado, new CertEntityRevocation(dataRevogacao, RevocationReason.UNSPECIFIED));
     }
 
+    /**
+     * Respostas OCSP por certificado com o signatário {@code REVOKED} e os demais (AC, TSA) {@code GOOD}:
+     * isola a revogação na folha (uso com {@code EvidenceRevocationSources.ocspPorCertificado}).
+     */
+    public Function<X509Certificate, byte[]> respostasComSignatarioRevogado() {
+        return certificado -> certificado.equals(signatario()) ? ocspRevogado(certificado) : ocspBom(certificado);
+    }
+
+    /** Respostas OCSP por certificado sem resposta para o signatário e {@code GOOD} para os demais. */
+    public Function<X509Certificate, byte[]> respostasSemRevogacaoDoSignatario() {
+        return certificado -> certificado.equals(signatario()) ? null : ocspBom(certificado);
+    }
+
     /** LCR (DER) da AC, que lista o certificado revogado. */
     public byte[] lcr() {
         return new LcrSimulada(repositorio, proximaAtualizacao).lcrDer(ac);
@@ -298,6 +313,12 @@ public final class PkiIcpSimulada {
     private void reemitirComIdentidade(JAXBCertEntity entidade, PerfilSignatario perfil) {
         try {
             List<Extension> extensoes = new ArrayList<>();
+            byte[] politicas = certificado(entidade).getExtensionValue(Extension.certificatePolicies.getId());
+            if (politicas != null) {
+                // o DSS marca certificatePolicies crítica; nos certificados ICP-Brasil ela não é
+                extensoes.add(new Extension(Extension.certificatePolicies, false,
+                        ASN1OctetString.getInstance(politicas).getOctets()));
+            }
             if (perfil.sanOid() != null) {
                 extensoes.add(Reemissao.sanOtherName(perfil.sanOid(), perfil.sanValor()));
             }

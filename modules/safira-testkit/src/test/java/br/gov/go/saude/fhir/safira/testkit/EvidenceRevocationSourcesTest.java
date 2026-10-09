@@ -30,6 +30,25 @@ class EvidenceRevocationSourcesTest {
     }
 
     @Test
+    void shouldRevokeOnlyTheSignerWhenUsingSignerRevokedResponses() {
+        RevocationSource<OCSP> fonte = EvidenceRevocationSources.ocspPorCertificado(PKI.respostasComSignatarioRevogado());
+
+        assertThat(fonte.getRevocationToken(new CertificateToken(PKI.signatario()), new CertificateToken(PKI.ac()))
+                .getStatus()).isEqualTo(CertificateStatus.REVOKED);
+        assertThat(fonte.getRevocationToken(new CertificateToken(PKI.ac()), new CertificateToken(PKI.raiz()))
+                .getStatus()).isEqualTo(CertificateStatus.GOOD);
+    }
+
+    @Test
+    void shouldOmitOnlyTheSignerWhenUsingResponsesWithoutSignerRevocation() {
+        RevocationSource<OCSP> fonte = EvidenceRevocationSources.ocspPorCertificado(PKI.respostasSemRevogacaoDoSignatario());
+
+        assertThat(fonte.getRevocationToken(new CertificateToken(PKI.signatario()), new CertificateToken(PKI.ac()))).isNull();
+        assertThat(fonte.getRevocationToken(new CertificateToken(PKI.ac()), new CertificateToken(PKI.raiz()))
+                .getStatus()).isEqualTo(CertificateStatus.GOOD);
+    }
+
+    @Test
     void shouldBuildSourcesFromDerEvidence() {
         assertThat(EvidenceRevocationSources.ocspFromEvidence(List.of(PKI.ocspBom(PKI.signatario())))
                 .getRevocationToken(new CertificateToken(PKI.signatario()), new CertificateToken(PKI.ac()))
