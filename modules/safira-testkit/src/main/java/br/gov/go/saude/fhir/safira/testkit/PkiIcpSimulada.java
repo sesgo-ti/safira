@@ -25,8 +25,11 @@ import eu.europa.esig.dss.pki.x509.revocation.ocsp.PKIOCSPSource;
 import eu.europa.esig.dss.pki.x509.tsp.PKITSPSource;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.DERUTF8String;
+import org.bouncycastle.asn1.x509.AccessDescription;
+import org.bouncycastle.asn1.x509.AuthorityInformationAccess;
 import org.bouncycastle.asn1.x509.ExtendedKeyUsage;
 import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.asn1.x509.KeyPurposeId;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 
@@ -245,9 +248,31 @@ public final class PkiIcpSimulada {
         }
     }
 
-    /** Sobe o stub HTTP RFC 3161 da TSA simulada em {@code 127.0.0.1}. */
+    /** Sobe o stub HTTP da TSA simulada ({@code /tsa} e {@code /ocsp}) em {@code 127.0.0.1}. */
     public TsaHttpLocal iniciarTsaHttp() {
-        return new TsaHttpLocal(new TsaSimulada(tsa, POLITICA_TSA, null, null));
+        return new TsaHttpLocal(this);
+    }
+
+    /** Certificado da TSA reemitido com AIA OCSP para {@code urlOcsp} (mesma chave). */
+    X509Certificate tsaComOcsp(String urlOcsp) {
+        try {
+            Extension aia = new Extension(Extension.authorityInfoAccess, false, new AuthorityInformationAccess(
+                    AccessDescription.id_ad_ocsp,
+                    new GeneralName(GeneralName.uniformResourceIdentifier, urlOcsp)).getEncoded());
+            return Reemissao.reemitir(tsa(), ac.getPrivateKey(), null, List.of(aia));
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    TsaSimulada tsaServida(X509Certificate certificado) {
+        return new TsaSimulada(tsa, List.of(certificado, ac(), raiz()), POLITICA_TSA, null, null);
+    }
+
+    /** Resposta OCSP {@code GOOD}, assinada pela AC, a uma requisição recebida (eco do CertID e do nonce). */
+    byte[] ocspBomPara(byte[] requisicaoDer) {
+        return new OcspSimulado(repositorio, true, null, proximaAtualizacao)
+                .respostaDer(requisicaoDer, tsa.getCertificateToken(), ac.getCertificateToken());
     }
 
     private byte[] respostaOcsp(X509Certificate certificado, CertEntityRevocation status) {

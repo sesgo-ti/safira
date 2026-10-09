@@ -11,6 +11,10 @@ import eu.europa.esig.dss.pki.jaxb.model.JAXBCertEntity;
 import eu.europa.esig.dss.pki.jaxb.model.JAXBCertEntityRepository;
 import eu.europa.esig.dss.pki.model.CertEntityRevocation;
 import eu.europa.esig.dss.pki.x509.revocation.ocsp.PKIOCSPSource;
+import org.bouncycastle.asn1.ocsp.OCSPObjectIdentifiers;
+import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.asn1.x509.Extensions;
+import org.bouncycastle.cert.ocsp.BasicOCSPRespBuilder;
 import org.bouncycastle.cert.ocsp.OCSPReq;
 
 import java.io.IOException;
@@ -49,6 +53,25 @@ final class OcspSimulado extends PKIOCSPSource {
         }
         JAXBCertEntity entidade = repositorio.getByCertificateToken(certificateToken);
         return entidade == null ? null : repositorio.getRevocation(entidade);
+    }
+
+    @Override
+    protected void addRevocationStatusToOCSPResponse(BasicOCSPRespBuilder builder, OCSPReq ocspReq,
+                                                     CertEntityRevocation certEntityRevocation) {
+        super.addRevocationStatusToOCSPResponse(builder, ocspReq, certEntityRevocation);
+        Extension nonce = ocspReq.getExtension(OCSPObjectIdentifiers.id_pkix_ocsp_nonce);
+        if (nonce != null) {
+            builder.setResponseExtensions(new Extensions(nonce));
+        }
+    }
+
+    /** Resposta (DER) a uma requisição OCSP recebida sobre {@code certificado}, emitido por {@code emissor}. */
+    byte[] respostaDer(byte[] requisicaoDer, CertificateToken certificado, CertificateToken emissor) {
+        try {
+            return buildOCSPResponse(certificado, emissor, new OCSPReq(requisicaoDer)).getEncoded();
+        } catch (IOException e) {
+            throw new PKIException("Falha ao responder a requisição OCSP simulada", e);
+        }
     }
 
     /** Resposta OCSP completa (DER de {@code OCSPResponse}). */

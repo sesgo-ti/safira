@@ -6,7 +6,7 @@
 package br.gov.go.saude.fhir.safira.rest.service;
 
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
-import br.gov.go.saude.fhir.safira.jades.fixture.EvidenceRevocationSources;
+import br.gov.go.saude.fhir.safira.testkit.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
 import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import com.fasterxml.jackson.databind.JsonNode;

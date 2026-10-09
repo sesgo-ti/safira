@@ -9,6 +9,7 @@ import eu.europa.esig.dss.enumerations.CertificateStatus;
 import eu.europa.esig.dss.enumerations.DigestAlgorithm;
 import eu.europa.esig.dss.model.TimestampBinary;
 import eu.europa.esig.dss.model.x509.CertificateToken;
+import eu.europa.esig.dss.spi.CertificateExtensionsUtils;
 import eu.europa.esig.dss.spi.x509.revocation.crl.CRLToken;
 import eu.europa.esig.dss.spi.x509.revocation.ocsp.OCSPToken;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
@@ -24,10 +25,15 @@ import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.asn1.x509.GeneralNames;
 import org.bouncycastle.asn1.x509.KeyUsage;
+import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.cert.ocsp.CertificateID;
+import org.bouncycastle.cert.ocsp.OCSPReq;
+import org.bouncycastle.cert.ocsp.OCSPReqBuilder;
 import org.bouncycastle.cert.ocsp.OCSPResp;
 import org.bouncycastle.cert.ocsp.RevokedStatus;
 import org.bouncycastle.cert.ocsp.BasicOCSPResp;
 import org.bouncycastle.cms.CMSSignedData;
+import org.bouncycastle.operator.bc.BcDigestCalculatorProvider;
 import org.bouncycastle.tsp.TimeStampRequestGenerator;
 import org.bouncycastle.tsp.TSPAlgorithms;
 import org.bouncycastle.tsp.TimeStampResponse;
@@ -166,6 +172,24 @@ class PkiIcpSimuladaTest {
             assertThat(resposta.getTimeStampToken().getTimeStampInfo().getNonce()).isEqualTo(BigInteger.TEN);
             assertThat(resposta.getTimeStampToken().getTimeStampInfo().getPolicy().getId())
                     .isEqualTo(PkiIcpSimulada.POLITICA_TSA);
+            assertThat(resposta.getTimeStampToken().getSID().getSerialNumber())
+                    .isEqualTo(tsa.certificado().getSerialNumber());
+            assertThat(tsa.certificado().getPublicKey()).isEqualTo(pki.tsa().getPublicKey());
+            tsa.certificado().verify(pki.ac().getPublicKey());
+
+            String ocspUrl = tsa.url().replace("/tsa", "/ocsp");
+            assertThat(CertificateExtensionsUtils.getOCSPAccessUrls(new CertificateToken(tsa.certificado())))
+                    .containsExactly(ocspUrl);
+            OCSPReq consulta = new OCSPReqBuilder().addRequest(new CertificateID(
+                    new BcDigestCalculatorProvider().get(CertificateID.HASH_SHA1),
+                    new X509CertificateHolder(pki.ac().getEncoded()), tsa.certificado().getSerialNumber())).build();
+            HttpURLConnection ocsp = (HttpURLConnection) URI.create(ocspUrl).toURL().openConnection();
+            ocsp.setDoOutput(true);
+            ocsp.setRequestProperty("Content-Type", "application/ocsp-request");
+            try (OutputStream saida = ocsp.getOutputStream()) {
+                saida.write(consulta.getEncoded());
+            }
+            assertThat(status(ocsp.getInputStream().readAllBytes())).isNull();
         }
     }
 

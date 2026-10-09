@@ -13,7 +13,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
-import br.gov.go.saude.fhir.safira.jades.fixture.EvidenceRevocationSources;
+import br.gov.go.saude.fhir.safira.testkit.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
 import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;

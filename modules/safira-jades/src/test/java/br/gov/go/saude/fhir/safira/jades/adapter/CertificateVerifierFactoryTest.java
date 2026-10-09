@@ -5,7 +5,7 @@
 
 package br.gov.go.saude.fhir.safira.jades.adapter;
 
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.service.crl.OnlineCRLSource;
 import eu.europa.esig.dss.service.ocsp.OnlineOCSPSource;
@@ -19,17 +19,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class CertificateVerifierFactoryTest {
 
-    private static TestPki pki;
-    private static TestPki other;
+    private static PkiIcpSimulada pki;
+    private static PkiIcpSimulada other;
 
     @BeforeAll
     static void setUp() {
-        pki = TestPki.create();
-        other = TestPki.create();
+        pki = PkiIcpSimulada.criar();
+        other = PkiIcpSimulada.criar();
     }
 
     private static CertificateVerifierFactory.Acervo acervo() {
-        return CertificateVerifierFactory.acervo(List.of(pki.caCert), List.of(pki.tsaCert));
+        return CertificateVerifierFactory.acervo(List.of(pki.raiz()), List.of(pki.tsa()));
     }
 
     @Test
@@ -37,7 +37,7 @@ class CertificateVerifierFactoryTest {
         CommonCertificateVerifier verifier = CertificateVerifierFactory.offline(null, null).create(acervo(), List.of());
 
         assertThat(verifier.getTrustedCertSources().getCertificates())
-                .containsExactly(new CertificateToken(pki.caCert));
+                .containsExactly(new CertificateToken(pki.raiz()));
     }
 
     @Test
@@ -45,27 +45,27 @@ class CertificateVerifierFactoryTest {
         CommonCertificateVerifier verifier = CertificateVerifierFactory.offline(null, null).create(acervo(), List.of());
 
         assertThat(verifier.getAdjunctCertSources().getCertificates())
-                .containsExactly(new CertificateToken(pki.tsaCert));
-        assertThat(verifier.getTrustedCertSources().isTrusted(new CertificateToken(pki.tsaCert))).isFalse();
+                .containsExactly(new CertificateToken(pki.tsa()));
+        assertThat(verifier.getTrustedCertSources().isTrusted(new CertificateToken(pki.tsa()))).isFalse();
     }
 
     @Test
     void shouldAddExtraAnchorsAsTrustedWhenGivenPerCall() {
         CommonCertificateVerifier verifier = CertificateVerifierFactory.offline(null, null)
-                .create(acervo(), List.of(other.caCert));
+                .create(acervo(), List.of(other.raiz()));
 
         assertThat(verifier.getTrustedCertSources().getCertificates())
-                .containsExactlyInAnyOrder(new CertificateToken(pki.caCert), new CertificateToken(other.caCert));
+                .containsExactlyInAnyOrder(new CertificateToken(pki.raiz()), new CertificateToken(other.raiz()));
     }
 
     @Test
     void shouldNotLeakExtraAnchorsToLaterVerifiersWhenAcervoIsReused() {
         CertificateVerifierFactory factory = CertificateVerifierFactory.offline(null, null);
         CertificateVerifierFactory.Acervo shared = acervo();
-        factory.create(shared, List.of(other.caCert));
+        factory.create(shared, List.of(other.raiz()));
 
         assertThat(factory.create(shared, List.of()).getTrustedCertSources().getCertificates())
-                .containsExactly(new CertificateToken(pki.caCert));
+                .containsExactly(new CertificateToken(pki.raiz()));
     }
 
     @Test

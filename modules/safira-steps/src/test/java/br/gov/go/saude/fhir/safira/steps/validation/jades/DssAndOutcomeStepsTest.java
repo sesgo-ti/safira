@@ -10,7 +10,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.OperationOutcome;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
-import br.gov.go.saude.fhir.safira.jades.fixture.EvidenceRevocationSources;
+import br.gov.go.saude.fhir.safira.testkit.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
 import br.gov.go.saude.fhir.safira.steps.certificate.CertificateType;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;

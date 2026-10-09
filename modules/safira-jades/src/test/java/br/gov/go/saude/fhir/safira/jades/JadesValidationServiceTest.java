@@ -5,7 +5,8 @@
 
 package br.gov.go.saude.fhir.safira.jades;
 
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import com.sun.net.httpserver.HttpServer;
 import eu.europa.esig.dss.model.Policy;
 import org.junit.jupiter.api.AfterEach;
@@ -16,6 +17,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.Signature;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -23,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class JadesValidationServiceTest {
 
-    private static final long REFERENCE_TIMESTAMP = 1755000000L;
+    private static final long REFERENCE_TIMESTAMP = Instant.now().getEpochSecond();
 
     private HttpServer server;
     private final AtomicInteger requests = new AtomicInteger();
@@ -48,7 +50,7 @@ class JadesValidationServiceTest {
 
     @Test
     void shouldNotRequestSignaturePolicyUriWhenValidatingSignature() throws Exception {
-        TestPki pki = TestPki.create();
+        PkiIcpSimulada pki = PkiIcpSimulada.criar();
         String policyUri = "http://127.0.0.1:" + server.getAddress().getPort() + "/politica";
         Policy policy = new Policy();
         policy.setId("https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0");
@@ -57,15 +59,16 @@ class JadesValidationServiceTest {
         byte[] payload = MessageDigest.getInstance("SHA-256")
                 .digest("conteudo".getBytes(StandardCharsets.UTF_8));
         JadesSigningSession session = signing.newSession(new JadesSigningService.Request(
-                pki.chain(), payload, REFERENCE_TIMESTAMP, policy.getId()));
+                pki.cadeia(), payload, REFERENCE_TIMESTAMP, policy.getId()));
         session.parameters().bLevel().setSignaturePolicy(policy);
         Signature signer = Signature.getInstance("SHA256withRSA");
-        signer.initSign(pki.leafKeys.getPrivate());
+        signer.initSign(pki.chavesSignatario().getPrivate());
         signer.update(signing.dataToSign(session));
         String jws = signing.sign(session, signer.sign());
 
         new JadesValidationService().validate(jws,
-                TestPki.verifier(List.of(pki.caCert), pki.ocspGoodSource(), null));
+                CertificateVerifierFactory.offline(pki.fonteOcsp(), null)
+                        .create(CertificateVerifierFactory.acervo(List.of(pki.raiz()), List.of(pki.ac())), List.of()));
 
         assertThat(requests.get()).isZero();
     }

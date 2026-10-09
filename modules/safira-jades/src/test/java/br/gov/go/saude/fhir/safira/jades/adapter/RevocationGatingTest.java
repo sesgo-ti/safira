@@ -9,7 +9,8 @@ import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
 import br.gov.go.saude.fhir.safira.jades.JadesSigningService;
 import br.gov.go.saude.fhir.safira.jades.JadesSigningSession;
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
+import br.gov.go.saude.fhir.safira.testkit.TsaHttpLocal;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -30,23 +31,23 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class RevocationGatingTest {
 
-    private static TestPki pki;
-    private static TestPki.FakeTsa tsa;
+    private static PkiIcpSimulada pki;
+    private static TsaHttpLocal tsa;
     private static String bt;
 
     @BeforeAll
     static void sign() throws Exception {
-        pki = TestPki.create();
-        tsa = pki.startFakeTsa();
+        pki = PkiIcpSimulada.criar();
+        tsa = pki.iniciarTsaHttp();
         JadesSigningService signing = new JadesSigningService();
-        JadesSigningSession session = signing.newSession(new JadesSigningService.Request(pki.chain(),
+        JadesSigningSession session = signing.newSession(new JadesSigningService.Request(pki.cadeia(),
                 MessageDigest.getInstance("SHA-256").digest("x".getBytes(StandardCharsets.UTF_8)),
                 Instant.now().getEpochSecond(), "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0"));
         Signature signer = Signature.getInstance("SHA256withRSA");
-        signer.initSign(pki.leafKeys.getPrivate());
+        signer.initSign(pki.chavesSignatario().getPrivate());
         signer.update(signing.dataToSign(session));
         bt = new JadesExtensionService().extendToBaselineT(signing.sign(session, signer.sign()),
-                TspSources.online(tsa.url(), 10, TestPki.TSA_POLICY_OID));
+                TspSources.online(tsa.url(), 10, PkiIcpSimulada.POLITICA_TSA));
     }
 
     @AfterAll
@@ -54,12 +55,12 @@ class RevocationGatingTest {
         tsa.close();
     }
 
-    private static List<InetAddress> validate(TestPki trusted) {
+    private static List<InetAddress> validate(PkiIcpSimulada trusted) {
         List<InetAddress> contacted = new CopyOnWriteArrayList<>();
         CertificateVerifierFactory factory = CertificateVerifierFactory.online(5, 5,
                 (host, address) -> contacted.add(address));
         new JadesValidationService().validate(bt,
-                factory.create(CertificateVerifierFactory.acervo(List.of(trusted.caCert), List.of()), List.of()));
+                factory.create(CertificateVerifierFactory.acervo(List.of(trusted.raiz()), List.of(trusted.ac())), List.of()));
         return contacted;
     }
 
@@ -70,6 +71,6 @@ class RevocationGatingTest {
 
     @Test
     void shouldNotOpenAnyConnectionWhenChainIsUntrusted() {
-        assertThat(validate(TestPki.create())).isEmpty();
+        assertThat(validate(PkiIcpSimulada.criar())).isEmpty();
     }
 }

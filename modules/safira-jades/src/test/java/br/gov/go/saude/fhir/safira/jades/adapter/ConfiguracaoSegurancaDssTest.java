@@ -5,7 +5,7 @@
 
 package br.gov.go.saude.fhir.safira.jades.adapter;
 
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import eu.europa.esig.dss.service.http.proxy.ProxyConfig;
@@ -99,9 +99,9 @@ class ConfiguracaoSegurancaDssTest {
     }
 
     private static CommonCertificateVerifier verifier() {
-        TestPki pki = TestPki.create();
+        PkiIcpSimulada pki = PkiIcpSimulada.criar();
         return CertificateVerifierFactory.online(7, 9, (host, address) -> { })
-                .create(CertificateVerifierFactory.acervo(List.of(pki.caCert), List.of()), List.of());
+                .create(CertificateVerifierFactory.acervo(List.of(pki.raiz()), List.of(pki.ac())), List.of());
     }
 
     @Test

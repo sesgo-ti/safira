@@ -5,8 +5,9 @@
 
 package br.gov.go.saude.fhir.safira.jades;
 
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki.LeafProfile;
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
+import br.gov.go.saude.fhir.safira.testkit.PerfilSignatario;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import eu.europa.esig.dss.enumerations.Indication;
 import eu.europa.esig.dss.enumerations.Level;
 import eu.europa.esig.dss.enumerations.SubIndication;
@@ -32,9 +33,10 @@ class StrictValidationPoliciesTest {
         }
     }
 
-    private static SimpleCertificateReport validate(TestPki pki, StrictValidationPolicies policies) {
+    private static SimpleCertificateReport validate(PkiIcpSimulada pki, StrictValidationPolicies policies) {
         return new CertificateValidationService(policies)
-                .validate(pki.leafCert, List.of(), TestPki.verifier(List.of(pki.caCert), pki.ocspGoodSource(), null))
+                .validate(pki.signatario(), List.of(), CertificateVerifierFactory.offline(pki.fonteOcsp(), null)
+                        .create(CertificateVerifierFactory.acervo(List.of(pki.raiz()), List.of(pki.ac())), List.of()))
                 .getSimpleReport();
     }
 
@@ -65,8 +67,8 @@ class StrictValidationPoliciesTest {
 
     @Test
     void shouldRejectLeafOutsideAcceptedPoliciesWhenValidatingCertificate() {
-        TestPki pki = TestPki.create(LeafProfile.a3().withPolicyOid("2.16.76.1.2.1.1"));
-        String id = new CertificateToken(pki.leafCert).getDSSIdAsString();
+        PkiIcpSimulada pki = PkiIcpSimulada.criar(PerfilSignatario.a3().comPolitica("2.16.76.1.2.1.1"));
+        String id = new CertificateToken(pki.signatario()).getDSSIdAsString();
 
         SimpleCertificateReport report = validate(pki, StrictValidationPolicies.comPoliticasAceitas(List.of("2.16.76.1.2.3.1")));
 
@@ -76,8 +78,8 @@ class StrictValidationPoliciesTest {
 
     @Test
     void shouldAcceptLeafInsideAcceptedPoliciesWhenValidatingCertificate() {
-        TestPki pki = TestPki.create();
-        String id = new CertificateToken(pki.leafCert).getDSSIdAsString();
+        PkiIcpSimulada pki = PkiIcpSimulada.criar();
+        String id = new CertificateToken(pki.signatario()).getDSSIdAsString();
 
         SimpleCertificateReport report = validate(pki, StrictValidationPolicies.comPoliticasAceitas(List.of("2.16.76.1.2.3.1")));
 

@@ -5,9 +5,11 @@
 
 package br.gov.go.saude.fhir.safira.jades;
 
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.jades.adapter.TspSources;
-import br.gov.go.saude.fhir.safira.jades.fixture.EvidenceRevocationSources;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.EvidenceRevocationSources;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
+import br.gov.go.saude.fhir.safira.testkit.TsaHttpLocal;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import eu.europa.esig.dss.enumerations.Indication;
@@ -36,21 +38,21 @@ class JadesExtensionServiceTest {
     private static final String POLICY_URI = "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0";
     private static final String TSA_POLICY = "1.2.3.4.5.6";
 
-    private static TestPki pki;
-    private static TestPki.FakeTsa tsa;
+    private static PkiIcpSimulada pki;
+    private static TsaHttpLocal tsa;
     private static String bb;
     private static String bt;
 
     @BeforeAll
     static void extendOnce() throws Exception {
-        pki = TestPki.create();
-        tsa = pki.startFakeTsa();
+        pki = PkiIcpSimulada.criar();
+        tsa = pki.iniciarTsaHttp();
         JadesSigningService signing = new JadesSigningService();
-        JadesSigningSession session = signing.newSession(new JadesSigningService.Request(pki.chain(),
+        JadesSigningSession session = signing.newSession(new JadesSigningService.Request(pki.cadeia(),
                 MessageDigest.getInstance("SHA-256").digest("x".getBytes(StandardCharsets.UTF_8)),
                 Instant.now().getEpochSecond(), POLICY_URI));
         Signature signer = Signature.getInstance("SHA256withRSA");
-        signer.initSign(pki.leafKeys.getPrivate());
+        signer.initSign(pki.chavesSignatario().getPrivate());
         signer.update(signing.dataToSign(session));
         bb = signing.sign(session, signer.sign());
 
@@ -106,9 +108,11 @@ class JadesExtensionServiceTest {
 
     @Test
     void shouldBeClassifiedAsJadesBaselineTByDss() {
-        var verifier = TestPki.verifier(List.of(pki.caCert),
-                EvidenceRevocationSources.ocspFromEvidence(List.of(pki.ocspGoodFor(pki.leafCert), pki.ocspGoodFor(tsa.tsaCert()))),
-                EvidenceRevocationSources.crlFromEvidence(List.of(pki.crl())));
+        var verifier = CertificateVerifierFactory.offline(
+                        EvidenceRevocationSources.ocspFromEvidence(List.of(pki.ocspBom(pki.signatario()),
+                                pki.ocspBom(pki.ac()), pki.ocspBom(tsa.certificado()))),
+                        EvidenceRevocationSources.crlFromEvidence(List.of(pki.lcr())))
+                .create(CertificateVerifierFactory.acervo(List.of(pki.raiz()), List.of(pki.ac())), List.of());
 
         Reports reports = new JadesValidationService().validate(bt, verifier);
         String id = reports.getSimpleReport().getFirstSignatureId();

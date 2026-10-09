@@ -28,7 +28,9 @@ import org.bouncycastle.tsp.TimeStampTokenGenerator;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.security.cert.X509Certificate;
 import java.util.Date;
+import java.util.List;
 
 /**
  * {@link PKITSPSource} da TSA simulada. Acrescenta ao original a accuracy opcional do TSTInfo e a
@@ -41,7 +43,15 @@ final class TsaSimulada extends PKITSPSource {
     private final Integer accuracySegundos;
 
     TsaSimulada(CertEntity tsa, String politica, Date genTime, Integer accuracySegundos) {
+        this(tsa, tsa.getCertificateChain().stream().map(CertificateToken::getCertificate).toList(),
+                politica, genTime, accuracySegundos);
+    }
+
+    /** @param cadeia certificado servido (mesma chave da entidade) seguido da cadeia do emissor */
+    TsaSimulada(CertEntity tsa, List<X509Certificate> cadeia, String politica, Date genTime, Integer accuracySegundos) {
         super(tsa);
+        setCertificate(cadeia.getFirst());
+        setCertificateChain(cadeia);
         this.tsa = tsa;
         this.politica = politica;
         this.accuracySegundos = accuracySegundos;
