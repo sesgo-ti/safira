@@ -117,8 +117,14 @@ public final class PkiIcpSimulada {
         this.proximaAtualizacao = proximaAtualizacao;
     }
 
-    /** Certificado e chave privada de uma entidade da PKI. */
+    /** Certificado e chave privada de uma entidade da PKI ({@link #toString()} omite a chave). */
     public record Entidade(X509Certificate certificado, PrivateKey chave) {
+
+        @Override
+        public String toString() {
+            return "Entidade[" + certificado.getSubjectX500Principal().getName() + ", serial="
+                    + certificado.getSerialNumber().toString(16) + ", chave=<omitida>]";
+        }
     }
 
     /**
@@ -128,6 +134,13 @@ public final class PkiIcpSimulada {
      */
     public record Material(Entidade raiz, Entidade ac, Entidade signatario, Entidade revogado, Entidade tsa,
                            Date revogadoEm) {
+
+        /** Só identificação dos certificados: nunca as chaves privadas. */
+        @Override
+        public String toString() {
+            return "Material[raiz=" + raiz + ", ac=" + ac + ", signatario=" + signatario + ", revogado=" + revogado
+                    + ", tsa=" + tsa + ", revogadoEm=" + revogadoEm.toInstant() + "]";
+        }
     }
 
     public static PkiIcpSimulada criar() {

@@ -286,6 +286,16 @@ class PkiIcpSimuladaTest {
     }
 
     @Test
+    void shouldNotPrintPrivateKeysInMaterialToString() {
+        PkiIcpSimulada.Material material = pki.material();
+
+        assertThat(material.toString()).doesNotContainIgnoringCase("private")
+                .contains(pki.signatario().getSubjectX500Principal().getName());
+        assertThat(material.signatario().toString()).doesNotContainIgnoringCase("private")
+                .contains(pki.signatario().getSerialNumber().toString(16));
+    }
+
+    @Test
     void shouldRenewSignerKeepingKeyAndIssuer() throws Exception {
         PkiIcpSimulada curta = PkiIcpSimulada.criar(PerfilSignatario.a3().comValidade(Period.ofDays(10)));
         X509Certificate antigo = curta.signatario();
