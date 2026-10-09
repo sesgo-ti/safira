@@ -121,12 +121,12 @@ As demais propriedades da biblioteca (rede, revogação, política de download, 
 
 Assina e valida pelo **mesmo pipeline** da política 0.2.0 (os steps não mudam) com uma PKI própria no lugar do acervo ICP-Brasil — para QA e para ferramentas externas (ex.: [hubsaude-cli](https://github.com/sesgo-ti/hubsaude-cli)) que não têm certificado ICP-Brasil.
 
-> **Assinaturas simuladas não têm validade jurídica ICP-Brasil.** O simulador é uma aplicação própria (`safira-simulador`, `SimuladorApplication`) sobre o `safira-rest`, sem a icpbrasil-truststore: o `safira-app` (produção) e o `safira-rest` não dependem dele. Só a fonte de confiança muda (`FonteDeConfiancaSimulada`, geração = SHA-256 do conteúdo), com revogação e carimbo do tempo sem rede (`DestinationGuard` que recusa todo destino). O startup registra um aviso `WARN`, o sucesso de `POST /validar` ganha a issue "SIMULAÇÃO — sem validade jurídica ICP-Brasil" e uma assinatura simulada é recusada (`CERT.NOT-ICP-BRASIL`) por qualquer Safira em modo normal.
+> **Assinaturas simuladas não têm validade jurídica ICP-Brasil.** O simulador é uma aplicação própria (`safira-simulador`, `SimuladorApplication`) sobre o `safira-rest`, sem a icpbrasil-truststore: o `safira-app` (produção) e o `safira-rest` não dependem dele. Só a fonte de confiança muda (`FonteDeConfiancaSimulada`, geração = SHA-256 do conteúdo), com revogação e carimbo do tempo sem rede: fontes locais ou em memória, a TSA online nunca é usada e as fontes online de revogação do DSS ficam presas a um `DestinationGuard` que recusa todo destino. O startup registra um aviso `WARN`, o sucesso de `POST /validar` ganha a issue "SIMULAÇÃO — sem validade jurídica ICP-Brasil" e uma assinatura simulada é recusada (`CERT.NOT-ICP-BRASIL`) por qualquer Safira em modo normal.
 
 A PKI simulada vem do `safira-testkit` (PKI factory do EU DSS): raiz e AC marcadas `SIMULACAO - SEM VALOR LEGAL`, signatário A3-like (CPF no `otherName`), signatário revogado e TSA. Há dois modos:
 
 - **PKI gerada na partida** (padrão, sem âncoras configuradas): a PKI é criada a cada partida e gravada em `safira.simulador.diretorio` (`SAFIRA_SIMULADOR_DIRETORIO`; vazio = diretório temporário novo). Revogação (OCSP e LCR) e carimbo do tempo vêm das fontes em memória da PKI — a estratégia `tsa` (JAdES-B-T) funciona sem TSA externa. A PKI é efêmera: assinaturas de uma partida não validam na seguinte (persistência numa próxima etapa).
-- **PKI em arquivos** (âncoras configuradas): raízes, ACs e LCRs locais pelas propriedades abaixo, por exemplo com o `application-simulacao.yml` do gerador avulso. Só `iat` (sem TSA em memória).
+- **PKI em arquivos** (âncoras configuradas): raízes, ACs e LCRs locais pelas propriedades abaixo, por exemplo com o `application-simulacao.yml` do gerador avulso. Só `iat`: sem TSA em memória, a estratégia `tsa` é recusada com `TSA.UNAVAILABLE`, sem acessar a `tsa-url`.
 
 | Propriedade | Variável | |
 |---|---|---|

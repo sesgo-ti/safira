@@ -14,6 +14,7 @@ import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
 import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
+import eu.europa.esig.dss.spi.exception.DSSExternalResourceException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -34,10 +35,15 @@ import java.util.stream.Collectors;
 /**
  * Modo simulação: implementa a porta {@link FonteDeConfianca} com as raízes de
  * {@code safira.simulacao.*}, no lugar do acervo ICP-Brasil e sem misturá-los. Os steps não mudam;
- * só a fonte de confiança e, sem rede, as de revogação e carimbo: LCRs locais (âncoras em arquivo) ou
- * OCSP, LCR e TSA em memória da PKI gerada na partida ({@link PkiGeradaNaPartida}). O
- * {@link DestinationGuard} padrão recusa todo destino. Roda antes dos steps, cujos beans são
- * {@code @ConditionalOnMissingBean}.
+ * só trocam as fontes de confiança, revogação e carimbo:
+ * <ul>
+ *   <li>revogação: LCRs locais (PKI em arquivos) ou OCSP e LCR em memória da PKI gerada na partida
+ *       ({@link PkiGeradaNaPartida}); sem nenhuma delas, as fontes online do DSS presas ao
+ *       {@link DestinationGuard} padrão, que recusa todo destino;</li>
+ *   <li>carimbo do tempo: TSA em memória da PKI gerada na partida; com PKI em arquivos, indisponível
+ *       ({@code TSA.UNAVAILABLE}). A TSA online nunca é usada.</li>
+ * </ul>
+ * Roda antes dos steps, cujos beans são {@code @ConditionalOnMissingBean}.
  */
 @AutoConfiguration(before = SafiraStepsAutoConfiguration.class)
 @ConditionalOnProperty(prefix = "safira.simulacao", name = "enabled", havingValue = "true")
@@ -71,6 +77,23 @@ public class SafiraSimulacaoAutoConfiguration {
     public DestinationGuard simulacaoDestinationGuard() {
         return (host, address) -> {
             throw new IllegalStateException("Modo simulação sem rede: destino recusado (" + host + ").");
+        };
+    }
+
+    /**
+     * Carimbo do tempo sem rede: com a PKI gerada na partida, a TSA em memória do testkit; sem ela (PKI
+     * em arquivos), toda requisição de carimbo falha como TSA indisponível ({@code TSA.UNAVAILABLE}). A
+     * {@code tsa-url} configurada nunca é contatada.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public TspSourceFactory simulacaoTspSourceFactory(ObjectProvider<Resultado> pkiGerada) {
+        Resultado pki = pkiGerada.getIfAvailable();
+        if (pki != null) {
+            return (tsaUrl, timeoutSeconds, policyOid) -> pki.pki().fonteTsp();
+        }
+        return (tsaUrl, timeoutSeconds, policyOid) -> {
+            throw new DSSExternalResourceException("Modo simulação sem rede: sem TSA em memória (PKI em arquivos).");
         };
     }
 
@@ -115,8 +138,7 @@ public class SafiraSimulacaoAutoConfiguration {
     }
 
     /**
-     * PKI gerada na partida: revogação (OCSP e LCR) e carimbo do tempo pelas fontes em memória do
-     * testkit — a TSA configurada em {@code tsa-url} nunca é contatada.
+     * PKI gerada na partida: revogação (OCSP e LCR) pelas fontes em memória do testkit.
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnBean(Resultado.class)
@@ -128,10 +150,5 @@ public class SafiraSimulacaoAutoConfiguration {
             return CertificateVerifierFactory.offline(pki.pki().fonteOcsp(), pki.pki().fonteLcr());
         }
 
-        @Bean
-        @ConditionalOnMissingBean
-        TspSourceFactory simulacaoCarimboEmMemoria(Resultado pki) {
-            return (tsaUrl, timeoutSeconds, policyOid) -> pki.pki().fonteTsp();
-        }
     }
 }
