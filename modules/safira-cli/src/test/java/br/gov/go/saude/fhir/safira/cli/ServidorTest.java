@@ -15,8 +15,13 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
+import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
 import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -28,11 +33,13 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 /**
@@ -74,6 +81,10 @@ class ServidorTest {
         List<String> argumentos = new ArrayList<>(List.of("servidor", "iniciar", "--modo", "simulacao",
                 "--estado-dir", estado.toString(), "--pki-dir", pki.toString(), "--porta", String.valueOf(porta)));
         argumentos.addAll(List.of(extras));
+        if (!argumentos.contains("--ociosidade")) {
+            // rede de segurança: um filho que escape da limpeza termina sozinho
+            argumentos.addAll(List.of("--ociosidade", "5m"));
+        }
         Resultado resultado = Cli.executar(argumentos.toArray(String[]::new));
         Matcher pid = Pattern.compile("\"pid\":(\\d+)|PID (\\d+)").matcher(resultado.out() + resultado.err());
         if (pid.find()) {
@@ -101,6 +112,13 @@ class ServidorTest {
         assertThat(json.get("url").asText()).isEqualTo("http://127.0.0.1:" + porta);
         assertThat(ProcessHandle.of(json.get("pid").asLong()).map(ProcessHandle::isAlive)).contains(true);
         assertThat(prontidao()).isEqualTo(200);
+        Optional<InetAddress> externo = enderecoNaoLoopback();
+        if (externo.isPresent()) {
+            try (Socket socket = new Socket()) {
+                assertThatThrownBy(() -> socket.connect(new InetSocketAddress(externo.get(), porta), 2000))
+                        .isInstanceOf(IOException.class);
+            }
+        }
         assertThat(resultado.err()).contains("SIMULAÇÃO");
         assertThat(Files.getPosixFilePermissions(estado.resolve("simulacao")))
                 .isEqualTo(PosixFilePermissions.fromString("rwx------"));
@@ -110,6 +128,21 @@ class ServidorTest {
                 .isEqualTo(PosixFilePermissions.fromString("rw-------"));
         assertThat(Files.getPosixFilePermissions(estado.resolve("simulacao").resolve("servidor.log")))
                 .isEqualTo(PosixFilePermissions.fromString("rw-------"));
+    }
+
+    @Test
+    void shouldKeepActuatorOnLoopbackServerWhenConfigSetsManagementPort() throws Exception {
+        int gerencia = portaLivre();
+        Path config = Cli.escrever(diretorio.resolve("extra.yml"), "management:\n  server:\n    port: " + gerencia + "\n");
+
+        Resultado resultado = iniciar("--config", config.toString());
+
+        assertThat(resultado.saida()).isZero();
+        assertThat(prontidao()).isEqualTo(200);
+        try (Socket socket = new Socket()) {
+            assertThatThrownBy(() -> socket.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), gerencia), 2000))
+                    .isInstanceOf(IOException.class);
+        }
     }
 
     @Test
@@ -269,6 +302,23 @@ class ServidorTest {
         try (HttpClient cliente = HttpClient.newHttpClient()) {
             return cliente.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + porta
                     + "/actuator/health/readiness")).build(), HttpResponse.BodyHandlers.discarding()).statusCode();
+        }
+    }
+
+    /** Um endereço IPv4 da máquina fora do loopback (ausente em máquinas sem interface de rede ativa). */
+    private static Optional<InetAddress> enderecoNaoLoopback() throws SocketException {
+        return NetworkInterface.networkInterfaces().filter(ServidorTest::ativa)
+                .flatMap(NetworkInterface::inetAddresses)
+                .filter(endereco -> endereco instanceof Inet4Address && !endereco.isLoopbackAddress()
+                        && !endereco.isLinkLocalAddress())
+                .findFirst();
+    }
+
+    private static boolean ativa(NetworkInterface interfaceDeRede) {
+        try {
+            return interfaceDeRede.isUp() && !interfaceDeRede.isLoopback();
+        } catch (SocketException e) {
+            return false;
         }
     }
 

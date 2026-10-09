@@ -44,10 +44,15 @@ final class MonitorDeOciosidade implements Filter {
     @Override
     public void doFilter(ServletRequest requisicao, ServletResponse resposta, FilterChain cadeia)
             throws IOException, ServletException {
-        if (!(requisicao instanceof HttpServletRequest http) || !http.getRequestURI().startsWith("/actuator")) {
+        if (!(requisicao instanceof HttpServletRequest http) || contaComoUso(http.getRequestURI())) {
             ultimoUso.set(System.nanoTime());
         }
         cadeia.doFilter(requisicao, resposta);
+    }
+
+    /** Toda requisição conta como uso, exceto {@code /actuator} e {@code /actuator/**}. */
+    static boolean contaComoUso(String caminho) {
+        return !"/actuator".equals(caminho) && !caminho.startsWith("/actuator/");
     }
 
     /** Verifica periodicamente (thread daemon) e encerra a aplicação e a JVM ao passar do limite. */

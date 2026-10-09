@@ -62,12 +62,14 @@ class ServidorOpcoesTest {
         List<String> simulacao = ExecucaoDoServidor.argumentos(Modo.SIMULACAO, 8081, diretorio, null);
         List<String> icpbrasil = ExecucaoDoServidor.argumentos(Modo.ICPBRASIL, 8080, null, null);
 
-        assertThat(simulacao).contains("--server.address=127.0.0.1", "--server.port=8081",
+        assertThat(simulacao).contains("--server.address=127.0.0.1", "--management.server.port=",
+                "--server.port=8081",
                 "--safira.simulacao.enabled=true", "--safira.simulador.diretorio=" + diretorio.toAbsolutePath());
         assertThat(simulacao).anyMatch(argumento -> argumento.startsWith("--spring.autoconfigure.exclude=")
                 && argumento.contains(TrustStoreAutoConfiguration.class.getName())
                 && argumento.contains(SafiraIcpBrasilAutoConfiguration.class.getName()));
-        assertThat(icpbrasil).contains("--server.address=127.0.0.1", "--server.port=8080",
+        assertThat(icpbrasil).contains("--server.address=127.0.0.1", "--management.server.port=",
+                "--server.port=8080",
                 "--safira.simulacao.enabled=false",
                 "--spring.autoconfigure.exclude=" + SafiraSimulacaoAutoConfiguration.class.getName());
         assertThat(icpbrasil).anyMatch(argumento -> argumento.startsWith("--icpbrasil-truststore.filesystem.base-dir="));

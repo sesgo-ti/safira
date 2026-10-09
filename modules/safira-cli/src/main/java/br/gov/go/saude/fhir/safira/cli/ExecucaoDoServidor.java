@@ -43,6 +43,11 @@ final class ExecucaoDoServidor {
     static List<String> argumentos(Modo modo, int porta, Path pkiDir, Path config) {
         List<String> argumentos = new ArrayList<>(List.of(
                 "--server.address=" + LOOPBACK,
+                // Actuator sempre no mesmo conector (loopback): anula um management.server.port vindo de
+                // --config ou do ambiente. Impor management.server.address=127.0.0.1 não serve: o Spring Boot
+                // recusa a partida quando há endereço sem porta própria (o mesmo vale, falhando fechado, para um
+                // management.server.address do usuário).
+                "--management.server.port=",
                 "--server.port=" + porta,
                 "--safira.simulacao.enabled=" + modo.simulacao(),
                 "--spring.autoconfigure.exclude=" + String.join(",", modo.excluidas()),
