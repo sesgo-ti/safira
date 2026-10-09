@@ -19,6 +19,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationStep;
 import br.gov.go.saude.fhir.safira.steps.content.Base64Strict;
 import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
+import br.gov.go.saude.fhir.safira.steps.signing.PkixChainValidationStep;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -173,6 +174,11 @@ public class JwsStructureStep implements ValidationStep {
         List<JsonValue> items = header.array("x5c").map(JsonArray::items).orElse(List.of());
         if (items.isEmpty()) {
             return fail(SignatureExceptionCode.CERT_CHAIN_INCOMPLETE, "'x5c' deve ser um array não vazio.", context);
+        }
+        // Mesmo teto da assinatura, aplicado antes de decodificar qualquer certificado
+        if (items.size() > PkixChainValidationStep.MAX_CHAIN_LENGTH) {
+            return fail(SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED,
+                    "'x5c' excede o limite de " + PkixChainValidationStep.MAX_CHAIN_LENGTH + " certificados.", context);
         }
         Set<String> seen = new HashSet<>();
         for (int i = 0; i < items.size(); i++) {

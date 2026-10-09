@@ -11,6 +11,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.json.JsonValue.JsonObject;
 import br.gov.go.saude.fhir.safira.engine.domain.json.LosslessJson;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.steps.signing.PkixChainValidationStep;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
 import org.junit.jupiter.api.AfterAll;
@@ -144,6 +145,16 @@ class JwsStructureStepTest {
 
         assertThat(code(run(withHeader(bb, h.replace(thumbprint, URL.encodeToString(new byte[32]))))))
                 .isEqualTo(SignatureExceptionCode.FORMAT_JWS_MALFORMED);
+    }
+
+    @Test
+    void shouldRejectChainLongerThanSigningLimitBeforeDecodingCertificates() {
+        String h = header(bb);
+        String x5c = LosslessJson.write(LosslessJson.parseObject(h).get("x5c").orElseThrow());
+        String lixo = "[" + "\"AAAA\",".repeat(PkixChainValidationStep.MAX_CHAIN_LENGTH) + "\"AAAA\"]";
+
+        assertThat(code(run(withHeader(bb, h.replace(x5c, lixo)))))
+                .isEqualTo(SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED);
     }
 
     @Test
