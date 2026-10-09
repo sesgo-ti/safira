@@ -5,8 +5,7 @@
 
 package br.gov.go.saude.fhir.safira.rest.service;
 
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,7 +24,6 @@ import org.springframework.web.context.WebApplicationContext;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,7 +40,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class SignAndValidateSystemTest {
 
     @MockitoBean
-    TrustMaterialSource trustMaterialSource;
+    FonteDeConfianca fonteDeConfianca;
 
     @Autowired
     WebApplicationContext webApplicationContext;
@@ -59,7 +57,7 @@ class SignAndValidateSystemTest {
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
         var pki = JadesSigningSystemTest.PKI;
-        when(trustMaterialSource.current()).thenReturn(Optional.of(TrustMaterial.of(List.of(pki.caCert))));
+        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(pki.caCert));
         OfflineRevocationConfig.reset();
     }
 
@@ -158,7 +156,7 @@ class SignAndValidateSystemTest {
     @Test
     void shouldReturn422WhenTrustStoreIsNotLoaded() throws Exception {
         JsonNode signed = signed();
-        doReturn(Optional.empty()).when(trustMaterialSource).current();
+        doReturn(Optional.empty()).when(fonteDeConfianca).atual();
 
         assertThat(validateAndGetCode(validationBody(signed.get("signature").toString(),
                 JadesSigningSystemTest.example("bundle.json"), signed.get("provenance").toString()), 422))

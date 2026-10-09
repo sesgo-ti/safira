@@ -5,8 +5,7 @@
 
 package br.gov.go.saude.fhir.safira.rest.service;
 
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,7 +24,6 @@ import org.springframework.web.context.WebApplicationContext;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,7 +37,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class AcervoIndisponivelSystemTest {
 
     @MockitoBean
-    TrustMaterialSource trustMaterialSource;
+    FonteDeConfianca fonteDeConfianca;
 
     @Autowired
     WebApplicationContext webApplicationContext;
@@ -55,7 +53,7 @@ class AcervoIndisponivelSystemTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        when(trustMaterialSource.current()).thenReturn(Optional.empty());
+        when(fonteDeConfianca.atual()).thenReturn(Optional.empty());
         OfflineRevocationConfig.reset();
     }
 
@@ -82,11 +80,11 @@ class AcervoIndisponivelSystemTest {
 
     @Test
     void shouldReturn422TrustStoreEmptyWhenValidatingWithoutCatalog() throws Exception {
-        when(trustMaterialSource.current())
-                .thenReturn(Optional.of(TrustMaterial.of(List.of(JadesSigningSystemTest.PKI.caCert))));
+        when(fonteDeConfianca.atual())
+                .thenReturn(AcervoDeTeste.com(JadesSigningSystemTest.PKI.caCert));
         JsonNode signed = json(enviar("/assinar", JadesSigningSystemTest.signingBody(
                 JadesSigningSystemTest.POLICY_URI, Instant.now().getEpochSecond())));
-        when(trustMaterialSource.current()).thenReturn(Optional.empty());
+        when(fonteDeConfianca.atual()).thenReturn(Optional.empty());
 
         MvcResult result = enviar("/validar", SignAndValidateSystemTest.validationBody(
                 signed.get("signature").toString(), JadesSigningSystemTest.example("bundle.json"),

@@ -8,8 +8,7 @@ package br.gov.go.saude.fhir.safira.rest.service;
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
 import br.gov.go.saude.fhir.safira.jades.fixture.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import eu.europa.esig.dss.enumerations.Indication;
@@ -35,7 +34,6 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
@@ -57,7 +55,7 @@ class JadesSigningSystemTest {
     static final TestPki PKI = TestPki.create();
 
     @MockitoBean
-    TrustMaterialSource trustMaterialSource;
+    FonteDeConfianca fonteDeConfianca;
 
     @Autowired
     WebApplicationContext webApplicationContext;
@@ -75,7 +73,7 @@ class JadesSigningSystemTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        when(trustMaterialSource.current()).thenReturn(Optional.of(TrustMaterial.of(List.of(PKI.caCert))));
+        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(PKI.caCert));
         OfflineRevocationConfig.reset();
     }
 

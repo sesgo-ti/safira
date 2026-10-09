@@ -15,8 +15,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
 import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
 import br.gov.go.saude.fhir.safira.jades.adapter.TspSources;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,7 +32,6 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
@@ -50,7 +48,7 @@ class ValidationServiceIntegrationTest {
     static final TestPki.FakeTsa TSA = JadesSigningSystemTest.PKI.startFakeTsa();
 
     @MockitoBean
-    TrustMaterialSource trustMaterialSource;
+    FonteDeConfianca fonteDeConfianca;
 
     @Autowired
     SigningService signingService;
@@ -80,7 +78,7 @@ class ValidationServiceIntegrationTest {
     @BeforeEach
     void setUp() {
         TestPki pki = JadesSigningSystemTest.PKI;
-        when(trustMaterialSource.current()).thenReturn(Optional.of(TrustMaterial.of(List.of(pki.caCert))));
+        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(pki.caCert));
         OfflineRevocationConfig.reset();
     }
 

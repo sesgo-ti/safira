@@ -8,8 +8,7 @@ package br.gov.go.saude.fhir.safira.rest.service;
 import br.gov.go.saude.fhir.safira.engine.domain.PipelineResult;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,7 +20,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.security.cert.X509Certificate;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,7 +31,7 @@ import static org.mockito.Mockito.when;
 class SigningServiceIntegrationTest {
 
     @MockitoBean
-    TrustMaterialSource trustMaterialSource;
+    FonteDeConfianca fonteDeConfianca;
 
     @Autowired
     SigningService signingService;
@@ -57,7 +55,7 @@ class SigningServiceIntegrationTest {
     }
 
     private void acervo(X509Certificate root) {
-        when(trustMaterialSource.current()).thenReturn(Optional.of(TrustMaterial.of(List.of(root))));
+        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(root));
     }
 
     @Test
@@ -86,7 +84,7 @@ class SigningServiceIntegrationTest {
 
     @Test
     void shouldReturnTrustStoreEmptyWhenCatalogIsNotLoaded() throws Exception {
-        when(trustMaterialSource.current()).thenReturn(Optional.empty());
+        when(fonteDeConfianca.atual()).thenReturn(Optional.empty());
 
         assertThat(code(signingService.sign(body()))).isEqualTo("CONFIG.TRUST-STORE-EMPTY");
     }

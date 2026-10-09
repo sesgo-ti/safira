@@ -10,8 +10,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.CryptoMaterial;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
 import br.gov.go.saude.fhir.safira.rest.request.SigningRequestParser;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.bouncycastle.asn1.ASN1EncodableVector;
@@ -72,7 +71,6 @@ import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -95,7 +93,7 @@ class QaAssinaturaAtaquesTest {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     @MockitoBean
-    TrustMaterialSource trustMaterialSource;
+    FonteDeConfianca fonteDeConfianca;
 
     @Autowired
     WebApplicationContext webApplicationContext;
@@ -116,7 +114,7 @@ class QaAssinaturaAtaquesTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        when(trustMaterialSource.current()).thenReturn(Optional.of(TrustMaterial.of(List.of(PKI.caCert))));
+        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(PKI.caCert));
         OfflineRevocationConfig.responder = PKI::ocspGoodFor;
     }
 
