@@ -90,8 +90,7 @@ public class TsaTokenVerificationStep implements SigningStep {
             return rules;
         }
         List<X509Certificate> anchors = TsaTrustStores.load(tsaPolicy.get().trustStore().reference());
-        Optional<AcervoDeConfianca> acervo = context.getAttribute(SigningKeys.ACERVO, AcervoDeConfianca.class)
-                .or(verifiers::acervoAtual);
+        Optional<AcervoDeConfianca> acervo = context.getAttribute(SigningKeys.ACERVO, AcervoDeConfianca.class);
         if (acervo.isEmpty()) {
             return Optional.of(new PolicyViolation(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY,
                     "Acervo ICP-Brasil indisponível."));

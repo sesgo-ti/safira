@@ -102,6 +102,12 @@ class JadesSigningStepsTest {
         assertThat(((StepResult.Failure<SigningContext>) result).code()).isEqualTo(SignatureExceptionCode.TSA_UNAVAILABLE);
     }
 
+    /** Contexto com o snapshot que {@code pkix-chain-validation} guardaria para o acervo de teste. */
+    private static SigningContext comSnapshot(SigningContext context) {
+        return context.toBuilder().attribute(SigningKeys.ACERVO,
+                SignedArtifactFixture.acervo(() -> Optional.of(TrustMaterial.of(List.of(pki.caCert))))).build();
+    }
+
     /** Verificador do DSS offline sobre o acervo de teste, com OCSP GOOD para qualquer certificado. */
     private static VerificadoresDss verifiers(RevocationSource<OCSP> ocsp) {
         return new VerificadoresDss(new FonteDeConfiancaIcpBrasil(() -> Optional.of(TrustMaterial.of(List.of(pki.caCert)))),
@@ -111,9 +117,20 @@ class JadesSigningStepsTest {
     @Test
     void shouldAcceptTimestampTokenAnchoredInTsaTrustStore() throws Exception {
         StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.ocspGoodSource()), policy)
-                .execute(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context());
+                .execute(comSnapshot(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context()));
 
         assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void shouldFailWhenAcervoSnapshotIsMissing() throws Exception {
+        SigningContext semSnapshot = extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context();
+
+        StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.ocspGoodSource()), policy)
+                .execute(semSnapshot);
+
+        assertThat(((StepResult.Failure<SigningContext>) result).code())
+                .isEqualTo(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY);
     }
 
     @Test
@@ -134,7 +151,7 @@ class JadesSigningStepsTest {
                 TestConfigs.tsaPolicies(tempDir, TestPki.TSA_POLICY_OID, 1, TestPki.create().caCert));
 
         StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.ocspGoodSource()), otherAnchor)
-                .execute(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context());
+                .execute(comSnapshot(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context()));
 
         assertThat(((StepResult.Failure<SigningContext>) result).code())
                 .isEqualTo(SignatureExceptionCode.TSA_CHAIN_VALIDATION_FAILED);
@@ -147,7 +164,7 @@ class JadesSigningStepsTest {
                 : pki.ocspGoodFor(certificate));
 
         StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(tsaRevoked), policy)
-                .execute(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context());
+                .execute(comSnapshot(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context()));
 
         assertThat(((StepResult.Failure<SigningContext>) result).code())
                 .isEqualTo(SignatureExceptionCode.TSA_CERTIFICATE_REVOKED);
