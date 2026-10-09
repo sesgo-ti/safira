@@ -208,6 +208,45 @@ class RepositorioPkiSimuladaTest {
         assertThat(RepositorioPkiSimulada.abrir(diretorio()).situacao()).isEqualTo(Situacao.REUTILIZADA);
     }
 
+    @Test
+    void shouldNotLeavePartialDirectoryWhenGenerationIsAborted() {
+        assertThatThrownBy(() -> RepositorioPkiSimulada.abrir(diretorio(), GeradorPkiSimulada.VALIDADE_FOLHA,
+                Instant.now(), RepositorioPkiSimuladaTest::abortar))
+                .hasMessageContaining("abortada");
+
+        assertThat(diretorio()).doesNotExist();
+        assertThat(RepositorioPkiSimulada.abrir(diretorio()).situacao()).isEqualTo(Situacao.GERADA);
+        assertThat(temporario.resolve("pki.tmp")).doesNotExist();
+    }
+
+    @Test
+    void shouldKeepPreviousSignerWhenRenewalIsAborted() throws Exception {
+        PkiPersistida curta = RepositorioPkiSimulada.abrir(diretorio(), Period.ofDays(10));
+
+        assertThatThrownBy(() -> RepositorioPkiSimulada.abrir(diretorio(), GeradorPkiSimulada.VALIDADE_FOLHA,
+                Instant.now(), RepositorioPkiSimuladaTest::abortar))
+                .hasMessageContaining("abortada");
+
+        assertThat(folha(curta.signatario(), GeradorPkiSimulada.ALIAS_SIGNATARIO)).isEqualTo(curta.pki().signatario());
+        assertThat(RepositorioPkiSimulada.abrir(diretorio()).situacao()).isEqualTo(Situacao.FOLHA_RENOVADA);
+    }
+
+    @Test
+    void shouldCreateDirectoriesWithOwnerOnlyPermissions() throws Exception {
+        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        Path aninhado = temporario.resolve("a").resolve("b").resolve("pki");
+
+        RepositorioPkiSimulada.abrir(aninhado);
+
+        for (Path pasta : List.of(temporario.resolve("a"), temporario.resolve("a").resolve("b"), aninhado)) {
+            assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(pasta))).isEqualTo("rwx------");
+        }
+    }
+
+    private static void abortar(Path caminho) {
+        throw new IllegalStateException("partida abortada ao gravar " + caminho);
+    }
+
     private static X509Certificate folha(Path p12, String alias) throws Exception {
         String senha = Files.readString(p12.resolveSibling("senha.txt")).strip();
         KeyStore keyStore = KeyStore.getInstance("PKCS12");

@@ -12,6 +12,9 @@ import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada.Entidade;
 import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada.Material;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -21,7 +24,9 @@ import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.GeneralSecurityException;
@@ -36,6 +41,7 @@ import java.time.Period;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -77,6 +83,8 @@ public final class RepositorioPkiSimulada {
     private static final String ALIAS_TSA = "tsa";
     private static final List<String> OBRIGATORIOS = List.of(MANIFESTO, SENHA, AUTORIDADES, RAIZ, AC, SIGNATARIO, REVOGADO);
 
+    private static final Logger log = LoggerFactory.getLogger(RepositorioPkiSimulada.class);
+
     private RepositorioPkiSimulada() {
     }
 
@@ -87,8 +95,18 @@ public final class RepositorioPkiSimulada {
 
     /** Como {@link #abrir(Path)}, com a validade do signatário de uma PKI nova. */
     static PkiPersistida abrir(Path diretorio, Period validadeFolha) {
+        return abrir(diretorio, validadeFolha, Instant.now(), caminho -> {
+        });
+    }
+
+    /**
+     * Como {@link #abrir(Path)}: {@code agora} é o instante das conferências de vigência e renovação e
+     * {@code antesDePublicar} recebe o que está para ser publicado (diretório ou PKCS#12 temporário).
+     */
+    static PkiPersistida abrir(Path diretorio, Period validadeFolha, Instant agora, Consumer<Path> antesDePublicar) {
         Path dir = diretorio.toAbsolutePath().normalize();
-        return travado(dir, () -> vazio(dir) ? gerar(dir, validadeFolha) : carregar(dir));
+        return travado(dir, () -> vazio(dir) ? gerar(dir, validadeFolha, antesDePublicar)
+                : carregar(dir, agora, antesDePublicar));
     }
 
     /** Trava ao lado do diretório (fora dele, para não contar como conteúdo nem sumir na geração). */
@@ -100,7 +118,7 @@ public final class RepositorioPkiSimulada {
     private static PkiPersistida travado(Path dir, Supplier<PkiPersistida> acao) {
         Path trava = arquivoTrava(dir);
         try {
-            Files.createDirectories(trava.getParent());
+            criarDiretorioPrivado(trava.getParent());
             try (FileChannel canal = FileChannel.open(trava, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
                 FileLock exclusiva;
                 try {
@@ -133,30 +151,35 @@ public final class RepositorioPkiSimulada {
         }
     }
 
-    private static PkiPersistida gerar(Path dir, Period validadeFolha) {
+    /**
+     * Gera em {@code <dir>.tmp} (0700) e publica com um rename atômico: partida abortada não deixa o
+     * diretório parcial (a sobra {@code .tmp} é descartada na próxima geração).
+     */
+    private static PkiPersistida gerar(Path dir, Period validadeFolha, Consumer<Path> antesDePublicar) {
+        Path temporario = dir.resolveSibling(dir.getFileName() + ".tmp");
         try {
-            Files.createDirectories(dir);
-            if (posix(dir)) {
-                Files.setPosixFilePermissions(dir, PosixFilePermissions.fromString("rwx------"));
-            }
+            apagar(temporario);
+            criarDiretorioPrivado(temporario);
             Opcoes opcoes = Opcoes.padrao();
             PkiIcpSimulada pki = PkiIcpSimulada.criar(GeradorPkiSimulada.perfil(opcoes).comValidade(validadeFolha));
-            Files.writeString(dir.resolve(RAIZ), GeradorPkiSimulada.pem(pki.raiz()));
-            Files.writeString(dir.resolve(AC), GeradorPkiSimulada.pem(pki.ac()));
-            gravarSignatario(dir, pki, opcoes.senha());
-            GeradorPkiSimulada.p12(dir.resolve(REVOGADO), GeradorPkiSimulada.ALIAS_REVOGADO, pki.chavesRevogado(),
-                    opcoes.senha(), pki.revogado(), pki.ac(), pki.raiz());
-            gravarAutoridades(dir.resolve(AUTORIDADES), pki, opcoes.senha());
-            try (OutputStream out = GeradorPkiSimulada.arquivoPrivado(dir.resolve(SENHA))) {
+            Files.writeString(temporario.resolve(RAIZ), GeradorPkiSimulada.pem(pki.raiz()));
+            Files.writeString(temporario.resolve(AC), GeradorPkiSimulada.pem(pki.ac()));
+            gravarSignatario(temporario.resolve(SIGNATARIO), pki, opcoes.senha());
+            GeradorPkiSimulada.p12(temporario.resolve(REVOGADO), GeradorPkiSimulada.ALIAS_REVOGADO,
+                    pki.chavesRevogado(), opcoes.senha(), pki.revogado(), pki.ac(), pki.raiz());
+            gravarAutoridades(temporario.resolve(AUTORIDADES), pki, opcoes.senha());
+            try (OutputStream out = GeradorPkiSimulada.arquivoPrivado(temporario.resolve(SENHA))) {
                 out.write(opcoes.senha().getBytes(StandardCharsets.UTF_8));
             }
             Properties manifesto = new Properties();
             manifesto.setProperty("formato", FORMATO);
             manifesto.setProperty("politica-oid", opcoes.politicaOid());
             manifesto.setProperty("revogado-em", Long.toString(pki.revogadoEm().getTime()));
-            try (OutputStream out = Files.newOutputStream(dir.resolve(MANIFESTO))) {
+            try (OutputStream out = Files.newOutputStream(temporario.resolve(MANIFESTO))) {
                 manifesto.store(out, "PKI simulada do Safira (" + GeradorPkiSimulada.MARCA + ")");
             }
+            antesDePublicar.accept(temporario);
+            publicar(temporario, dir);
             // A partir daqui vale o mesmo caminho do reinício: OCSP/LCR com validade curta e renovada.
             return montar(dir, PkiIcpSimulada.restaurar(pki.material(), VALIDADE_REVOGACAO), opcoes.politicaOid(),
                     Situacao.GERADA);
@@ -164,10 +187,33 @@ public final class RepositorioPkiSimulada {
             throw new UncheckedIOException("Falha ao gravar a PKI simulada em " + dir, e);
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Falha ao gerar a PKI simulada em " + dir, e);
+        } finally {
+            apagarSemFalhar(temporario);
         }
     }
 
-    private static PkiPersistida carregar(Path dir) {
+    /**
+     * Troca o diretório (vazio ou inexistente) pelo temporário com um rename atômico. Quando o rename
+     * não cabe (ex.: o diretório é um ponto de montagem, ou outro sistema de arquivos), move arquivo a
+     * arquivo com o manifesto por último: não é atômico, mas uma interrupção deixa o diretório sem
+     * manifesto, que a próxima partida recusa como "incompleta".
+     */
+    private static void publicar(Path temporario, Path dir) throws IOException {
+        try {
+            Files.deleteIfExists(dir);
+            Files.move(temporario, dir, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException e) {
+            criarDiretorioPrivado(dir);
+            try (Stream<Path> arquivos = Files.list(temporario)) {
+                for (Path arquivo : arquivos.filter(caminho -> !caminho.endsWith(MANIFESTO)).toList()) {
+                    Files.move(arquivo, dir.resolve(arquivo.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+            Files.move(temporario.resolve(MANIFESTO), dir.resolve(MANIFESTO), StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private static PkiPersistida carregar(Path dir, Instant agora, Consumer<Path> antesDePublicar) {
         List<String> faltando = OBRIGATORIOS.stream().filter(nome -> !Files.isRegularFile(dir.resolve(nome))).toList();
         if (!faltando.isEmpty()) {
             throw invalida(dir, "incompleta: faltam " + String.join(", ", faltando), null);
@@ -206,14 +252,21 @@ public final class RepositorioPkiSimulada {
 
         PkiIcpSimulada pki = PkiIcpSimulada.restaurar(material, VALIDADE_REVOGACAO);
         Situacao situacao = Situacao.REUTILIZADA;
-        if (pki.signatario().getNotAfter().toInstant().isBefore(Instant.now().plus(ANTECEDENCIA_RENOVACAO))) {
+        if (pki.signatario().getNotAfter().toInstant().isBefore(agora.plus(ANTECEDENCIA_RENOVACAO))) {
             pki.renovarSignatario(GeradorPkiSimulada.VALIDADE_FOLHA);
+            // Grava ao lado (0600) e troca com rename atômico: interrupção mantém o signatario.p12 anterior.
+            Path temporario = dir.resolve(SIGNATARIO + ".tmp");
             try {
-                gravarSignatario(dir, pki, new String(senha));
+                gravarSignatario(temporario, pki, new String(senha));
+                antesDePublicar.accept(temporario);
+                Files.move(temporario, dir.resolve(SIGNATARIO), StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
                 throw new UncheckedIOException("Falha ao regravar " + dir.resolve(SIGNATARIO), e);
             } catch (GeneralSecurityException e) {
                 throw new IllegalStateException("Falha ao regravar " + dir.resolve(SIGNATARIO), e);
+            } finally {
+                apagarSemFalhar(temporario);
             }
             situacao = Situacao.FOLHA_RENOVADA;
         }
@@ -233,9 +286,9 @@ public final class RepositorioPkiSimulada {
                 IcpBrasilCertificateProfile.sha256Hex(pki.ac()), pki, situacao);
     }
 
-    private static void gravarSignatario(Path dir, PkiIcpSimulada pki, String senha)
+    private static void gravarSignatario(Path destino, PkiIcpSimulada pki, String senha)
             throws IOException, GeneralSecurityException {
-        GeradorPkiSimulada.p12(dir.resolve(SIGNATARIO), GeradorPkiSimulada.ALIAS_SIGNATARIO, pki.chavesSignatario(),
+        GeradorPkiSimulada.p12(destino, GeradorPkiSimulada.ALIAS_SIGNATARIO, pki.chavesSignatario(),
                 senha, pki.signatario(), pki.ac(), pki.raiz());
     }
 
@@ -303,6 +356,36 @@ public final class RepositorioPkiSimulada {
         return new IllegalStateException("PKI simulada em " + dir + " " + motivo + ". Restaure o diretório ou "
                 + "aponte safira.simulador.diretorio (SAFIRA_SIMULADOR_DIRETORIO) para um diretório vazio — uma PKI "
                 + "nova invalida as assinaturas feitas com a anterior.", causa);
+    }
+
+    /** Cria o diretório (e os pais que faltarem) com 0700; sem POSIX, avisa que fica sem restrição. */
+    private static void criarDiretorioPrivado(Path dir) throws IOException {
+        if (posix(dir)) {
+            Files.createDirectories(dir, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
+        } else {
+            log.warn("Sistema de arquivos sem permissões POSIX: o material privado da PKI simulada em {} "
+                    + "(PKCS#12 e senha.txt) fica sem restrição de acesso.", dir);
+            Files.createDirectories(dir);
+        }
+    }
+
+    private static void apagar(Path caminho) throws IOException {
+        if (Files.isDirectory(caminho, LinkOption.NOFOLLOW_LINKS)) {
+            try (Stream<Path> conteudo = Files.list(caminho)) {
+                for (Path filho : conteudo.toList()) {
+                    apagar(filho);
+                }
+            }
+        }
+        Files.deleteIfExists(caminho);
+    }
+
+    private static void apagarSemFalhar(Path caminho) {
+        try {
+            apagar(caminho);
+        } catch (IOException e) {
+            log.warn("Não foi possível apagar o temporário {} da PKI simulada.", caminho, e);
+        }
     }
 
     private static boolean posix(Path dir) {
