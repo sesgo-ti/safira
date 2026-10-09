@@ -22,7 +22,6 @@ class CodigosDeSaidaTest {
 
     @ParameterizedTest
     @CsvSource({
-            "VALIDATION.SUCCESS, VALIDACAO, 0",
             "FORMAT.JSON-MALFORMED, ASSINATURA, 3",
             "FORMAT.BUNDLE-MALFORMED, VALIDACAO, 3",
             "POLICY.URI-INVALID, ASSINATURA, 3",
@@ -74,9 +73,61 @@ class CodigosDeSaidaTest {
         OperationOutcome sucessoMarcado = juntar(outcome("information", "VALIDATION.SUCCESS"),
                 outcome("information", "VALIDATION.SUCCESS"));
         OperationOutcome falha = juntar(outcome("information", "VALIDATION.SUCCESS"), outcome("error", "CERT.REVOKED"));
+        OperationOutcome duasFalhas = juntar(outcome("error", "CERT.REVOKED"), outcome("error", "REVOCATION.STATUS-UNKNOWN"));
 
         assertThat(CodigosDeSaida.de(sucessoMarcado, Operacao.VALIDACAO)).isEqualTo(CodigosDeSaida.SUCESSO);
         assertThat(CodigosDeSaida.de(falha, Operacao.VALIDACAO)).isEqualTo(CodigosDeSaida.REPROVADA);
+        assertThat(CodigosDeSaida.de(duasFalhas, Operacao.VALIDACAO)).isEqualTo(CodigosDeSaida.REPROVADA);
+    }
+
+    @Test
+    void shouldExitWithSuccessOnlyWithValidationSuccessCode() {
+        assertThat(CodigosDeSaida.de(outcome("information", "VALIDATION.SUCCESS"), Operacao.VALIDACAO))
+                .isEqualTo(CodigosDeSaida.SUCESSO);
+    }
+
+    @ParameterizedTest
+    @EnumSource(Operacao.class)
+    void shouldNotExitWithSuccessWhenOutcomeHasNoIssues(Operacao operacao) {
+        assertThat(CodigosDeSaida.de(new OperationOutcome("OperationOutcome", null, List.of()), operacao))
+                .isEqualTo(CodigosDeSaida.INCONCLUSIVO);
+        assertThat(CodigosDeSaida.de(new OperationOutcome("OperationOutcome", null, null), operacao))
+                .isEqualTo(CodigosDeSaida.INCONCLUSIVO);
+    }
+
+    @ParameterizedTest
+    @EnumSource(Operacao.class)
+    void shouldNotExitWithSuccessWhenOutcomeHasOnlyWarnings(Operacao operacao) {
+        OperationOutcome avisos = juntar(outcome("warning", "CERT.NEAR-EXPIRY"), outcome("information", "CACHE.STALE-BUT-VALID"));
+
+        assertThat(CodigosDeSaida.de(avisos, operacao)).isEqualTo(CodigosDeSaida.INCONCLUSIVO);
+    }
+
+    @ParameterizedTest
+    @EnumSource(Operacao.class)
+    void shouldNotExitWithSuccessWhenIssueHasNoCoding(Operacao operacao) {
+        OperationOutcome.Issue semCoding = new OperationOutcome.Issue("information", "informational", null, null, null);
+        OperationOutcome.Issue erroSemCoding = new OperationOutcome.Issue("error", "processing", null, null, null);
+
+        assertThat(CodigosDeSaida.de(new OperationOutcome("OperationOutcome", null, List.of(semCoding)), operacao))
+                .isEqualTo(CodigosDeSaida.INCONCLUSIVO);
+        assertThat(CodigosDeSaida.de(new OperationOutcome("OperationOutcome", null, List.of(erroSemCoding)), operacao))
+                .isEqualTo(CodigosDeSaida.INCONCLUSIVO);
+    }
+
+    @Test
+    void shouldPreferErrorOverSuccessCodeWhenBothPresent() {
+        OperationOutcome ambos = juntar(outcome("information", "VALIDATION.SUCCESS"), outcome("error", "CERT.REVOKED"));
+        OperationOutcome sucessoComoErro = outcome("error", "VALIDATION.SUCCESS");
+
+        assertThat(CodigosDeSaida.de(ambos, Operacao.VALIDACAO)).isEqualTo(CodigosDeSaida.REPROVADA);
+        assertThat(CodigosDeSaida.de(sucessoComoErro, Operacao.VALIDACAO)).isEqualTo(CodigosDeSaida.INCONCLUSIVO);
+    }
+
+    @Test
+    void shouldNotExitWithSuccessForSigningOutcome() {
+        assertThat(CodigosDeSaida.de(outcome("information", "VALIDATION.SUCCESS"), Operacao.ASSINATURA))
+                .isEqualTo(CodigosDeSaida.INCONCLUSIVO);
     }
 
     @Test

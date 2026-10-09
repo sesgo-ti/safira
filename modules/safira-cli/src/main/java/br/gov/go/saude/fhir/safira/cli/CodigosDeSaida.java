@@ -8,6 +8,7 @@ package br.gov.go.saude.fhir.safira.cli;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.Coding;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.OperationOutcome;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -35,8 +36,11 @@ public final class CodigosDeSaida {
     /** Operação que produziu o {@code OperationOutcome}. */
     public enum Operacao { ASSINATURA, VALIDACAO }
 
+    private static final String SUCESSO_DA_VALIDACAO = "VALIDATION.SUCCESS";
+
+    /** Inclui {@code VALIDATION.SUCCESS} numa issue de erro: contraditório, logo inconclusivo. */
     private static final Set<String> INCONCLUSIVOS = Set.of(
-            "VALIDATION.INDETERMINATE", "VALIDATION.TRY-LATER", "CONFIG.TRUST-STORE-EMPTY",
+            SUCESSO_DA_VALIDACAO, "VALIDATION.INDETERMINATE", "VALIDATION.TRY-LATER", "CONFIG.TRUST-STORE-EMPTY",
             "TSA.UNAVAILABLE", "TSA.INVALID-RESPONSE", "SYSTEM.TIMEOUT", "SECURITY.HASH-VALIDATION-FAILED");
 
     private static final Set<String> DE_USO = Set.of("CRYPTO.KEY-INACCESSIBLE", "CRYPTO.PIN-INVALID");
@@ -48,26 +52,37 @@ public final class CodigosDeSaida {
     private CodigosDeSaida() {
     }
 
-    /** Saída para o {@code OperationOutcome}: a primeira issue {@code error}/{@code fatal} decide; sem ela, sucesso. */
+    /**
+     * Saída para o {@code OperationOutcome}, com evidência positiva: a primeira issue
+     * {@code error}/{@code fatal} decide (o erro prevalece sobre {@code VALIDATION.SUCCESS}); sem ela,
+     * só a validação com uma issue {@code VALIDATION.SUCCESS} sai com 0. Qualquer outro caso (sem issues,
+     * só avisos, sem coding, ou {@code OperationOutcome} da assinatura, que nunca é o resultado de
+     * sucesso) é inconclusivo, nunca 0.
+     */
     public static int de(OperationOutcome outcome, Operacao operacao) {
-        return outcome.issue().stream()
-                .filter(issue -> "error".equals(issue.severity()) || "fatal".equals(issue.severity()))
-                .findFirst()
-                .map(issue -> codigo(issue).map(codigo -> paraCodigo(codigo, operacao)).orElse(INCONCLUSIVO))
-                .orElse(SUCESSO);
+        List<OperationOutcome.Issue> issues = outcome.issue() == null ? List.of() : outcome.issue();
+        Optional<OperationOutcome.Issue> erro = issues.stream()
+                .filter(issue -> issue != null && ("error".equals(issue.severity()) || "fatal".equals(issue.severity())))
+                .findFirst();
+        if (erro.isPresent()) {
+            return codigo(erro.get()).map(codigo -> paraCodigo(codigo, operacao)).orElse(INCONCLUSIVO);
+        }
+        boolean validada = operacao == Operacao.VALIDACAO && issues.stream()
+                .filter(issue -> issue != null)
+                .anyMatch(issue -> codigo(issue).filter(SUCESSO_DA_VALIDACAO::equals).isPresent());
+        return validada ? SUCESSO : INCONCLUSIVO;
     }
 
     private static Optional<String> codigo(OperationOutcome.Issue issue) {
         if (issue.details() == null || issue.details().coding() == null) {
             return Optional.empty();
         }
-        return issue.details().coding().stream().map(Coding::code).filter(codigo -> codigo != null).findFirst();
+        return issue.details().coding().stream().filter(coding -> coding != null)
+                .map(Coding::code).filter(codigo -> codigo != null).findFirst();
     }
 
+    /** Saída para o código de uma issue {@code error}/{@code fatal}. */
     static int paraCodigo(String codigo, Operacao operacao) {
-        if ("VALIDATION.SUCCESS".equals(codigo)) {
-            return SUCESSO;
-        }
         if (INCONCLUSIVOS.contains(codigo)) {
             return INCONCLUSIVO;
         }
