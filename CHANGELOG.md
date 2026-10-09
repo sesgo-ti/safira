@@ -24,7 +24,7 @@ e o projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ### Alterado
 
-- EU DSS atualizado de 6.4 para 6.5 (corrige DSS-3876, concorrência na validação JAdES); BouncyCastle segue alinhado em 1.86 (`bcprov`, `bcpkix`, `bcutil`).
+- EU DSS atualizado de 6.4 para 6.5 (corrige DSS-3876, concorrência na validação JAdES); BouncyCastle segue alinhado em 1.86 (`bcprov`, `bcpkix`, `bcutil`), override deliberado sobre a 1.85 do DSS 6.5 (DSS-3957). Com a DSS-3954, as datas de fim de validade dos algoritmos seguem a TS 119 312 v2.1.1, o que pode mudar o resultado da validação de assinaturas com algoritmos próximos do fim de validade.
 - **Incompatível:** `POST /assinar` e `POST /validar` recebem o corpo JSON cru; `/assinar` devolve `{"signature", "provenance"}` e `/validar` exige `signature`, `bundle` e `provenance`.
 - **Incompatível:** a URI de política passa a ser `…/assinatura/politica/0.2.0`; URIs `…/ImplementationGuide/br.go.ses.seguranca|x.y.z` retornam `POLICY.URI-INVALID`.
 - Dependência de acervo, PKIX e revogação migrada para `br.gov.go.saude:icpbrasil-truststore-autoconfigure:0.0.2` (propriedades `icpbrasil-truststore.*`). Na 0.0.2 o acervo descarta raízes fora da lista fixada (v5, v6, v7, v10, v11, v12), um certificado só é considerado revogado a partir da data de revogação e o BouncyCastle não é mais registrado na JVM; o safira usa instâncias próprias do provider.

@@ -56,7 +56,8 @@
 
         <spring-boot.version>4.0.7</spring-boot.version>
 
-        <!-- 1.84+: corrige CVE-2025-14813 (crítica), CVE-2026-5588 e CVE-2026-0636 -->
+        <!-- 1.84+: corrige CVE-2025-14813 (crítica), CVE-2026-5588 e CVE-2026-0636.
+             1.86 é override deliberado sobre a 1.85 usada pelo DSS 6.5 (DSS-3957), alinhado à icpbrasil-truststore 0.0.2 -->
         <bouncycastle.version>1.86</bouncycastle.version>
         <dss.version>6.5</dss.version>
         <icpbrasil-truststore.version>0.0.2</icpbrasil-truststore.version>
