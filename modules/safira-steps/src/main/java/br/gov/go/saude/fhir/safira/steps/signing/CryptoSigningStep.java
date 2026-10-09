@@ -12,6 +12,14 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
+import br.gov.go.saude.fhir.safira.jades.JadesSigningService;
+import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
+import eu.europa.esig.dss.model.SignatureValue;
+import eu.europa.esig.dss.model.ToBeSigned;
+import eu.europa.esig.dss.token.DSSPrivateKeyEntry;
+import eu.europa.esig.dss.token.KSPrivateKeyEntry;
+import eu.europa.esig.dss.token.KeyStoreSignatureTokenConnection;
+import eu.europa.esig.dss.token.Pkcs12SignatureToken;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.openssl.PEMEncryptedKeyPair;
@@ -23,30 +31,37 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
+import java.security.KeyStore.PasswordProtection;
 import java.security.MessageDigest;
 import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.PublicKey;
-import java.security.Signature;
+import java.security.SecureRandom;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAKey;
 import java.security.interfaces.RSAPrivateCrtKey;
 import java.security.interfaces.RSAPublicKey;
+import java.util.Arrays;
 import java.util.Base64;
-import java.util.Enumeration;
 
 /**
  * Step: cria a assinatura digital (passo 10 da especificação).
  *
- * <p>Carrega a chave privada do {@link CryptoMaterial} e executa RSASSA-PKCS1-v1_5 com SHA-256
- * ({@code RS256}, único algoritmo da política 0.2.0 — C18) sobre os bytes do signing input,
- * codificando o resultado em Base64Url. Chave não RSA resulta em {@code CERT.UNSUPPORTED-ALGORITHM};
- * chave que não corresponde ao certificado do signatário ({@code chain[0]}) resulta em
- * {@code CRYPTO.KEY-INACCESSIBLE}. PKCS#12 sem alias usa a entrada cujo certificado corresponde ao signatário.
+ * <p>A chave é carregada e usada por um {@code SignatureTokenConnection} do EU DSS: PKCS#12 por
+ * {@link Pkcs12SignatureToken}; PEM (lido com BouncyCastle) por {@link KeyStoreSignatureTokenConnection}
+ * sobre um PKCS#12 efêmero em memória. O valor RS256 ({@code RSASSA-PKCS1-v1_5} com SHA-256, único
+ * algoritmo da política 0.2.0 — C18) é produzido sobre o signing input e codificado em Base64Url.
+ *
+ * <p>O DSS não confere a chave com o certificado nem verifica o valor produzido; por isso o step mantém:
+ * chave não RSA → {@code CERT.UNSUPPORTED-ALGORITHM}; chave que não corresponde a {@code chain[0]} →
+ * {@code CRYPTO.KEY-INACCESSIBLE} (VULN-A1); valor que o certificado não verifica (pelo
+ * {@code JAdESService} do DSS) → {@code CRYPTO.SIGNATURE-CREATION-FAILED}. PKCS#12 sem alias usa a
+ * entrada cujo certificado tem a chave pública do signatário.
  *
  * <p><b>Tipos de material suportados:</b> PEM e PKCS#12. PKCS#11 (smartcard/token) e remoto
  * são rejeitados na leitura da requisição.
@@ -58,9 +73,22 @@ public class CryptoSigningStep implements SigningStep {
 
     public static final String SIGNATURE_KEY = "signature";
 
+    private static final String PEM_ALIAS = "signatario";
 
     // Instância própria: o provider não é registrado na JVM (a icpbrasil-truststore 0.0.2 também não o registra).
     private static final Provider BOUNCY_CASTLE = new BouncyCastleProvider();
+
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    private final JadesSigningService signingService;
+
+    public CryptoSigningStep() {
+        this(new JadesSigningService());
+    }
+
+    public CryptoSigningStep(JadesSigningService signingService) {
+        this.signingService = signingService;
+    }
 
     @Override
     public StepResult<SigningContext> execute(SigningContext context) {
@@ -83,49 +111,42 @@ public class CryptoSigningStep implements SigningStep {
                                 + "Verifique se o step pkix-chain-validation foi executado."));
         PublicKey signerPublicKey = signerCertificate.getPublicKey();
 
-        PrivateKey privateKey;
-        try {
-            privateKey = loadPrivateKey(material, signerPublicKey);
-        } catch (KeyLoadingException e) {
-            return StepResult.failure(getName(), e.code, e.getMessage(), context);
-        } catch (Exception e) {
-            log.warn("Falha ao carregar a chave privada do material criptográfico", e);
-            throw new StepException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
-                    "Não foi possível carregar a chave privada do material criptográfico fornecido.", e);
-        }
+        try (KeyStoreSignatureTokenConnection token = openToken(material, signerCertificate)) {
+            KSPrivateKeyEntry entry = selectEntry(token, material, signerPublicKey);
+            PrivateKey privateKey = entry.getPrivateKey();
 
-        if (!"RSA".equals(privateKey.getAlgorithm())) {
-            return StepResult.failure(getName(), SignatureExceptionCode.CERT_UNSUPPORTED_ALGORITHM,
-                    "A política 0.2.0 admite somente RS256 (RSASSA-PKCS1-v1_5 com SHA-256); chave fornecida: "
-                            + privateKey.getAlgorithm(), context);
-        }
+            if (!"RSA".equals(privateKey.getAlgorithm())) {
+                return StepResult.failure(getName(), SignatureExceptionCode.CERT_UNSUPPORTED_ALGORITHM,
+                        "A política 0.2.0 admite somente RS256 (RSASSA-PKCS1-v1_5 com SHA-256); chave fornecida: "
+                                + privateKey.getAlgorithm(), context);
+            }
+            if (!matches(privateKey, signerPublicKey)) {
+                return StepResult.failure(getName(), SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
+                        "A chave privada fornecida não corresponde à chave pública do certificado do signatário.", context);
+            }
 
-        if (!matches(privateKey, signerPublicKey)) {
-            return StepResult.failure(getName(), SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
-                    "A chave privada fornecida não corresponde à chave pública do certificado do signatário.", context);
-        }
-
-        try {
-            Signature sig = Signature.getInstance("SHA256withRSA");
-            sig.initSign(privateKey);
-            sig.update(signingInputBytes);
-            byte[] signatureBytes = sig.sign();
+            byte[] signatureBytes = sign(token, entry, signingInputBytes);
 
             // Defesa em profundidade: nunca emitir assinatura que a chave pública do certificado não verifica.
-            Signature verifier = Signature.getInstance("SHA256withRSA");
-            verifier.initVerify(signerPublicKey);
-            verifier.update(signingInputBytes);
-            if (!verifier.verify(signatureBytes)) {
+            if (!signingService.isValidSignatureValue(signingInputBytes, signatureBytes, signerCertificate)) {
                 return StepResult.failure(getName(), SignatureExceptionCode.CRYPTO_SIGNATURE_CREATION_FAILED,
                         "A assinatura produzida não é verificável com a chave pública do certificado do signatário.",
                         context);
             }
             String signatureB64Url = Base64.getUrlEncoder().withoutPadding().encodeToString(signatureBytes);
 
-            SigningContext updated = context.toBuilder()
+            return StepResult.success(getName(), context.toBuilder()
                     .attribute(SIGNATURE_KEY, signatureB64Url)
-                    .build();
-            return StepResult.success(getName(), updated);
+                    .build());
+        } catch (KeyLoadingException e) {
+            return StepResult.failure(getName(), e.code, e.getMessage(), context);
+        }
+    }
+
+    private byte[] sign(KeyStoreSignatureTokenConnection token, DSSPrivateKeyEntry entry, byte[] signingInputBytes) {
+        try {
+            SignatureValue value = token.sign(new ToBeSigned(signingInputBytes), SignatureAlgorithm.RSA_SHA256, entry);
+            return value.getValue();
         } catch (Exception e) {
             log.error("Falha na operação de assinatura RS256", e);
             throw new StepException(SignatureExceptionCode.CRYPTO_SIGNATURE_CREATION_FAILED,
@@ -133,11 +154,48 @@ public class CryptoSigningStep implements SigningStep {
         }
     }
 
-    private PrivateKey loadPrivateKey(CryptoMaterial material, PublicKey signerPublicKey) throws Exception {
-        return switch (material) {
-            case CryptoMaterial.PemMaterial pem -> loadPemPrivateKey(pem);
-            case CryptoMaterial.Pkcs12Material p12 -> loadPkcs12PrivateKey(p12, signerPublicKey);
-        };
+    private KeyStoreSignatureTokenConnection openToken(CryptoMaterial material, X509Certificate signer)
+            throws KeyLoadingException {
+        try {
+            return switch (material) {
+                case CryptoMaterial.PemMaterial pem -> openPemToken(pem, signer);
+                case CryptoMaterial.Pkcs12Material p12 -> openPkcs12Token(p12);
+            };
+        } catch (KeyLoadingException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Falha ao carregar a chave privada do material criptográfico", e);
+            throw new StepException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
+                    "Não foi possível carregar a chave privada do material criptográfico fornecido.", e);
+        }
+    }
+
+    private KSPrivateKeyEntry selectEntry(KeyStoreSignatureTokenConnection token, CryptoMaterial material,
+                                          PublicKey signerPublicKey) throws KeyLoadingException {
+        try {
+            String alias = material instanceof CryptoMaterial.Pkcs12Material p12 ? p12.alias() : PEM_ALIAS;
+            if (alias != null && !alias.isEmpty()) {
+                if (token.getKey(alias) instanceof KSPrivateKeyEntry entry) {
+                    return entry;
+                }
+                throw new KeyLoadingException(SignatureExceptionCode.DEVICE_CERTIFICATE_NOT_FOUND,
+                        "O alias '" + alias + "' não foi encontrado no PKCS#12 ou não possui chave privada associada.");
+            }
+            for (DSSPrivateKeyEntry candidate : token.getKeys()) {
+                if (candidate instanceof KSPrivateKeyEntry entry && MessageDigest.isEqual(
+                        entry.getCertificate().getPublicKey().getEncoded(), signerPublicKey.getEncoded())) {
+                    return entry;
+                }
+            }
+            throw new KeyLoadingException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
+                    "Nenhuma chave privada do PKCS#12 corresponde ao certificado do signatário.");
+        } catch (KeyLoadingException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Falha ao ler a chave privada do material criptográfico", e);
+            throw new KeyLoadingException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
+                    "Não foi possível ler a chave privada do material criptográfico fornecido.");
+        }
     }
 
     /** Chave privada RSA pertence ao par da chave pública do certificado (mesmo módulo). */
@@ -147,6 +205,50 @@ public class CryptoSigningStep implements SigningStep {
         }
         return privateKey instanceof RSAKey key && publicKey instanceof RSAPublicKey rsa
                 && key.getModulus().equals(rsa.getModulus());
+    }
+
+    private KeyStoreSignatureTokenConnection openPkcs12Token(CryptoMaterial.Pkcs12Material p12) throws KeyLoadingException {
+        byte[] p12Bytes;
+        try {
+            p12Bytes = Base64.getDecoder().decode(p12.contentBase64());
+        } catch (IllegalArgumentException e) {
+            throw new KeyLoadingException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
+                    "O conteúdo PKCS#12 não está codificado em Base64 válido.");
+        }
+
+        char[] password = p12.password() != null ? p12.password().toCharArray() : new char[0];
+        try {
+            // PasswordProtection clona a senha; o token destrói a cópia no close().
+            return new Pkcs12SignatureToken(p12Bytes, new PasswordProtection(password));
+        } catch (Exception e) {
+            throw new KeyLoadingException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
+                    "Não foi possível abrir o PKCS#12 com a senha fornecida.");
+        } finally {
+            Arrays.fill(password, '\0');
+        }
+    }
+
+    /** Única cola: chave PEM lida pelo BouncyCastle num PKCS#12 efêmero em memória (entrada única com {@code chain[0]}). */
+    private KeyStoreSignatureTokenConnection openPemToken(CryptoMaterial.PemMaterial pem, X509Certificate signer)
+            throws Exception {
+        PrivateKey privateKey = loadPemPrivateKey(pem);
+        char[] ephemeral = Base64.getEncoder().encodeToString(randomBytes(24)).toCharArray();
+        try {
+            KeyStore keyStore = KeyStore.getInstance("PKCS12");
+            keyStore.load(null, null);
+            keyStore.setKeyEntry(PEM_ALIAS, privateKey, ephemeral, new Certificate[]{signer});
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            keyStore.store(out, ephemeral);
+            return new KeyStoreSignatureTokenConnection(out.toByteArray(), "PKCS12", new PasswordProtection(ephemeral));
+        } finally {
+            Arrays.fill(ephemeral, '\0');
+        }
+    }
+
+    private static byte[] randomBytes(int length) {
+        byte[] bytes = new byte[length];
+        RANDOM.nextBytes(bytes);
+        return bytes;
     }
 
     private PrivateKey loadPemPrivateKey(CryptoMaterial.PemMaterial pem) throws Exception {
@@ -177,9 +279,14 @@ public class CryptoSigningStep implements SigningStep {
                     throw new KeyLoadingException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
                             "A chave PEM está criptografada mas a senha não foi fornecida.");
                 }
-                PEMKeyPair decrypted = encrypted.decryptKeyPair(
-                        new JcePEMDecryptorProviderBuilder().setProvider(BOUNCY_CASTLE).build(pem.password().toCharArray()));
-                return converter.getKeyPair(decrypted).getPrivate();
+                char[] password = pem.password().toCharArray();
+                try {
+                    PEMKeyPair decrypted = encrypted.decryptKeyPair(
+                            new JcePEMDecryptorProviderBuilder().setProvider(BOUNCY_CASTLE).build(password));
+                    return converter.getKeyPair(decrypted).getPrivate();
+                } finally {
+                    Arrays.fill(password, '\0');
+                }
             } else if (object instanceof PEMKeyPair keyPair) {
                 return converter.getKeyPair(keyPair).getPrivate();
             } else if (object instanceof PrivateKeyInfo info) {
@@ -189,60 +296,6 @@ public class CryptoSigningStep implements SigningStep {
             throw new KeyLoadingException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
                     "O conteúdo PEM não contém uma chave privada reconhecível.");
         }
-    }
-
-    private PrivateKey loadPkcs12PrivateKey(CryptoMaterial.Pkcs12Material p12, PublicKey signerPublicKey) throws Exception {
-        byte[] p12Bytes;
-        try {
-            p12Bytes = Base64.getDecoder().decode(p12.contentBase64());
-        } catch (IllegalArgumentException e) {
-            throw new KeyLoadingException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
-                    "O conteúdo PKCS#12 não está codificado em Base64 válido.");
-        }
-
-        char[] password = p12.password() != null ? p12.password().toCharArray() : new char[0];
-
-        KeyStore keyStore = KeyStore.getInstance("PKCS12");
-        try {
-            keyStore.load(new ByteArrayInputStream(p12Bytes), password);
-        } catch (Exception e) {
-            throw new KeyLoadingException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
-                    "Não foi possível abrir o PKCS#12 com a senha fornecida.");
-        }
-
-        String alias = p12.alias();
-        if (alias != null && !alias.isEmpty()) {
-            if (!keyStore.containsAlias(alias)) {
-                throw new KeyLoadingException(SignatureExceptionCode.DEVICE_CERTIFICATE_NOT_FOUND,
-                        "O alias '" + alias + "' não foi encontrado no PKCS#12.");
-            }
-            if (!keyStore.isKeyEntry(alias)) {
-                throw new KeyLoadingException(SignatureExceptionCode.DEVICE_KEY_ACCESS_DENIED,
-                        "O alias '" + alias + "' não possui chave privada associada.");
-            }
-        } else {
-            alias = findKeyAliasFor(keyStore, signerPublicKey);
-            if (alias == null) {
-                throw new KeyLoadingException(SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE,
-                        "Nenhuma chave privada do PKCS#12 corresponde ao certificado do signatário.");
-            }
-        }
-
-        return (PrivateKey) keyStore.getKey(alias, password);
-    }
-
-    /** Alias da entrada de chave cujo certificado tem a mesma chave pública do certificado do signatário. */
-    private String findKeyAliasFor(KeyStore keyStore, PublicKey signerPublicKey) throws Exception {
-        Enumeration<String> aliases = keyStore.aliases();
-        while (aliases.hasMoreElements()) {
-            String current = aliases.nextElement();
-            Certificate certificate = keyStore.getCertificate(current);
-            if (keyStore.isKeyEntry(current) && certificate != null
-                    && MessageDigest.isEqual(certificate.getPublicKey().getEncoded(), signerPublicKey.getEncoded())) {
-                return current;
-            }
-        }
-        return null;
     }
 
     private static class KeyLoadingException extends Exception {

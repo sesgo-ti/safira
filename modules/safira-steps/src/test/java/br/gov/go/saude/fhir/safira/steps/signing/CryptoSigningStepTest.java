@@ -10,6 +10,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.StepException;
 import br.gov.go.saude.fhir.safira.engine.domain.StepResult;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
+import br.gov.go.saude.fhir.safira.jades.JadesSigningService;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
@@ -205,6 +206,26 @@ class CryptoSigningStepTest {
         assertFalse(signature.contains("="));
         assertFalse(signature.contains("+"));
         assertFalse(signature.contains("/"));
+    }
+
+    // ===== Autoverificação pelo EU DSS =====
+
+    @Test
+    void shouldFailWhenDssRejectsProducedSignatureValue() throws Exception {
+        KeyPair keys = generateRsaKeyPair(2048);
+        X509Certificate cert = selfSign(keys, "CN=Test");
+        var material = new CryptoMaterial.PemMaterial(toPemBase64(keys.getPrivate()), null);
+        var rejecting = new JadesSigningService() {
+            @Override
+            public boolean isValidSignatureValue(byte[] dataToSign, byte[] signatureValue, X509Certificate signer) {
+                return false;
+            }
+        };
+
+        var result = new CryptoSigningStep(rejecting)
+                .execute(contextWith(material, cert, "data".getBytes(StandardCharsets.UTF_8)));
+
+        assertFailure(result, SignatureExceptionCode.CRYPTO_SIGNATURE_CREATION_FAILED);
     }
 
     // ===== Falhas defensivas =====
