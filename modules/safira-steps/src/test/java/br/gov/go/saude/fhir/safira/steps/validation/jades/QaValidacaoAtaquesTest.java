@@ -528,7 +528,7 @@ class QaValidacaoAtaquesTest {
     }
 
     @Test
-    void shouldRejectReorderedX5cWhenRootComesFirst() {
+    void shouldRejectReorderedX5cWhenIssuingCaComesFirst() {
         long iat = now() - 5;
         String headerJson = header(List.of(pki.ac(), pki.signatario()), Long.toString(iat))
                 .replace(thumbprint(pki.ac()), thumbprint(pki.signatario()));
@@ -1108,10 +1108,32 @@ class QaValidacaoAtaquesTest {
 
     @Test
     void shouldRejectLeafWhenIssuedByRogueRootWithSameName() {
+        assertThat(validateLeafIssuedByRogueRootNamedAs(pki.ac()))
+                .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL.getCode());
+    }
+
+    @Test
+    void shouldRejectLeafWhenIssuedByRogueRootWithSameNameAsTrustedRoot() {
+        assertThat(validateLeafIssuedByRogueRootNamedAs(pki.raiz()))
+                .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL.getCode());
+    }
+
+    @Test
+    void shouldRejectLeafWhenIssuingCaIsNeitherInX5cNorInAcervo() {
+        long iat = now() - 5;
+        // x5c com 2 certificados (exigência do IG), mas sem a AC emissora: [folha, raiz]
+        Artifact artifact = artifact(sign(header(List.of(pki.signatario(), pki.raiz()), Long.toString(iat))).json(), iat);
+
+        assertThat(validate(artifact, policy, FonteDeTeste.com(pki.raiz()), pki.fonteOcsp()))
+                .isEqualTo(SignatureExceptionCode.CERT_CHAIN_INCOMPLETE.getCode());
+    }
+
+    /** Folha emitida por uma raiz autoassinada falsa que copia o DN de {@code impersonado}. */
+    private static String validateLeafIssuedByRogueRootNamedAs(X509Certificate impersonado) {
         KeyPair rogueKeys = rsa(2048);
         X509Certificate rogueRoot;
         try {
-            X500Name name = X500Name.getInstance(pki.ac().getSubjectX500Principal().getEncoded());
+            X500Name name = X500Name.getInstance(impersonado.getSubjectX500Principal().getEncoded());
             JcaX509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(name, BigInteger.ONE,
                     at(pki.inicioValidade()), at(pki.fimValidade()), name, rogueKeys.getPublic());
             builder.addExtension(Extension.basicConstraints, true, new BasicConstraints(true));
@@ -1124,8 +1146,7 @@ class QaValidacaoAtaquesTest {
         X509Certificate leaf = certificate(keys, rogueRoot, rogueKeys.getPrivate(), PkiIcpSimulada.CPF, pki.inicioValidade(),
                 pki.fimValidade(), "2.16.76.1.2.3.1", KeyUsage.digitalSignature, false);
 
-        assertThat(validate(signedBy(keys, List.of(leaf, rogueRoot), now() - 5)))
-                .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL.getCode());
+        return validate(signedBy(keys, List.of(leaf, rogueRoot), now() - 5));
     }
 
     @Test

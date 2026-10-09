@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Callable;
@@ -41,7 +42,7 @@ class VerificadoresDssTest {
     }
 
     private static AcervoDeConfianca acervo(String geracao, PkiIcpSimulada source) {
-        return new AcervoDeConfianca(geracao, List.of(source.raiz()), List.of(source.tsa()));
+        return new AcervoDeConfianca(geracao, List.of(source.raiz()), List.of(source.ac(), source.tsa()));
     }
 
     private static VerificadoresDss verificadores(AtomicReference<AcervoDeConfianca> atual) {
@@ -58,7 +59,7 @@ class VerificadoresDssTest {
 
     private static boolean cadeiaConfiavel(PkiIcpSimulada fonte, CommonCertificateVerifier verifier) {
         X509Certificate leaf = fonte.signatario();
-        CertificateReports reports = new CertificateValidationService().validate(leaf, List.of(fonte.ac()), verifier);
+        CertificateReports reports = new CertificateValidationService().validate(leaf, List.of(), verifier);
         return reports.getDiagnosticData().getUsedCertificateById(new CertificateToken(leaf).getDSSIdAsString())
                 .isTrustedChain();
     }
@@ -96,7 +97,8 @@ class VerificadoresDssTest {
         CommonCertificateVerifier verifier = verificador(verificadores(new AtomicReference<>(acervo("g1", pki))));
 
         assertThat(verifier.getTrustedCertSources().getCertificates()).containsExactly(new CertificateToken(pki.raiz()));
-        assertThat(verifier.getAdjunctCertSources().getCertificates()).containsExactly(new CertificateToken(pki.tsa()));
+        assertThat(verifier.getAdjunctCertSources().getCertificates())
+                .containsExactlyInAnyOrder(new CertificateToken(pki.ac()), new CertificateToken(pki.tsa()));
     }
 
     @Test
@@ -164,8 +166,9 @@ class VerificadoresDssTest {
                         List<CertificateToken> obtido = new ArrayList<>(verifier.getTrustedCertSources().getCertificates());
                         obtido.addAll(verifier.getAdjunctCertSources().getCertificates());
                         AcervoDeConfianca esperado = entregue.get();
-                        if (!obtido.equals(List.of(new CertificateToken(esperado.raizes().getFirst()),
-                                new CertificateToken(esperado.intermediarias().getFirst())))) {
+                        List<CertificateToken> esperados = new ArrayList<>(List.of(new CertificateToken(esperado.raizes().getFirst())));
+                        esperado.intermediarias().forEach(certificado -> esperados.add(new CertificateToken(certificado)));
+                        if (obtido.size() != esperados.size() || !new HashSet<>(obtido).equals(new HashSet<>(esperados))) {
                             divergentes.add(obtido);
                         }
                     }

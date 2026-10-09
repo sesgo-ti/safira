@@ -98,6 +98,16 @@ class PkixChainValidationStepTest {
     }
 
     @Test
+    void shouldRejectLeafWhenIssuingCaIsNeitherSuppliedNorInAcervo() throws Exception {
+        FonteDeConfianca soRaiz = FonteDeTeste.com(pki.raiz());
+
+        StepResult<SigningContext> result = step(soRaiz, pki.fonteOcsp()).execute(context(List.of(b64(pki.signatario()))));
+
+        // o DSS não monta caminho até a raiz sem a AC (NO_CERTIFICATE_CHAIN_FOUND)
+        assertThat(code(result)).isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
+    }
+
+    @Test
     void shouldRejectRevokedSigner() throws Exception {
         RevocationSource<OCSP> revoked = EvidenceRevocationSources.ocspPorCertificado(pki.respostasComSignatarioRevogado());
 
