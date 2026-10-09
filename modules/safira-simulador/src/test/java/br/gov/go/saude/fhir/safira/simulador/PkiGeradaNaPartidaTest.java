@@ -74,4 +74,17 @@ class PkiGeradaNaPartidaTest {
         assertThat(ambiente.getProperty("safira.policy.tsa-policies.policies[0].trust-store.reference"))
                 .isEqualTo(pki.raiz().toUri().toString());
     }
+
+    @Test
+    void shouldUseDirectoryUnderUserHomeWhenNotConfigured() {
+        Path home = Path.of(System.getProperty("user.home"));
+        assertThat(home.toString()).endsWith(Path.of("target", "home").toString());
+        GenericApplicationContext contexto = new GenericApplicationContext();
+        contexto.setEnvironment(new MockEnvironment().withProperty("safira.simulacao.enabled", "true"));
+
+        new PkiGeradaNaPartida().initialize(contexto);
+
+        assertThat(contexto.getBeanFactory().getBean(PkiPersistida.class).diretorio())
+                .isEqualTo(home.resolve(".safira-simulador").resolve("pki").toAbsolutePath().normalize());
+    }
 }
