@@ -103,7 +103,7 @@ public final class ContextoSafira implements AutoCloseable {
         return argumentos.toArray(String[]::new);
     }
 
-    private static void exigirFonteUnica(ConfigurableApplicationContext contexto, Modo modo) {
+    static void exigirFonteUnica(ConfigurableApplicationContext contexto, Modo modo) {
         Map<String, FonteDeConfianca> fontes = contexto.getBeansOfType(FonteDeConfianca.class);
         if (fontes.size() != 1 || !modo.fonte().isInstance(fontes.values().iterator().next())) {
             throw new IllegalStateException("O modo " + modo.nome() + " exige uma única fonte de confiança "

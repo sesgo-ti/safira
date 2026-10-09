@@ -22,7 +22,7 @@ import java.io.PrintWriter;
  * 6 reprovação definitiva; 1 erro interno. O stdout recebe só o JSON de resultado.
  */
 @Command(name = "safira", mixinStandardHelpOptions = true, versionProvider = SafiraCli.Versao.class,
-        subcommands = {Assinar.class, Validar.class, Simulador.class},
+        subcommands = {Assinar.class, Validar.class, Servidor.class, Simulador.class},
         description = "Assina e valida Bundles FHIR (JAdES, política 0.2.0) no modo ICP-Brasil ou simulação.",
         exitCodeListHeading = "%nCódigos de saída:%n",
         exitCodeList = {"0:sucesso (assinatura criada ou VALIDATION.SUCCESS)",
@@ -37,7 +37,7 @@ public final class SafiraCli implements Runnable {
 
     @Override
     public void run() {
-        throw new ParameterException(spec.commandLine(), "informe um comando: assinar, validar ou simulador.");
+        throw new ParameterException(spec.commandLine(), "informe um comando: assinar, validar, servidor ou simulador.");
     }
 
     /** Linha de comando configurada (códigos de saída e tratamento de erros da CLI). */
