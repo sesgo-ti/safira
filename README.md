@@ -125,19 +125,31 @@ Assina e valida pelo **mesmo pipeline** da política 0.2.0 (os steps não mudam)
 
 A PKI simulada vem do `safira-testkit` (PKI factory do EU DSS): raiz e AC marcadas `SIMULACAO - SEM VALOR LEGAL`, signatário A3-like (CPF no `otherName`), signatário revogado e TSA. Há dois modos:
 
-- **PKI gerada na partida** (padrão, sem âncoras configuradas): a PKI é criada a cada partida e gravada em `safira.simulador.diretorio` (`SAFIRA_SIMULADOR_DIRETORIO`; vazio = diretório temporário novo). Revogação (OCSP e LCR) e carimbo do tempo vêm das fontes em memória da PKI — a estratégia `tsa` (JAdES-B-T) funciona sem TSA externa. A PKI é efêmera: assinaturas de uma partida não validam na seguinte (persistência numa próxima etapa).
+- **PKI persistida** (padrão, sem âncoras configuradas): a PKI é gerada na primeira partida em `safira.simulador.diretorio` (`SAFIRA_SIMULADOR_DIRETORIO`, padrão `~/.safira-simulador/pki`) e **reutilizada** nas seguintes — mesmas raízes, então assinaturas feitas antes de um reinício continuam válidas. Revogação (OCSP e LCR) e carimbo do tempo vêm das fontes em memória da PKI carregada (as chaves da raiz, da AC e da TSA ficam em `autoridades.p12`) — a estratégia `tsa` (JAdES-B-T) funciona sem TSA externa, também depois do reinício. O revogado continua revogado; LCR e OCSP são emitidos a cada partida com validade curta (7 dias) e renovada.
 - **PKI em arquivos** (âncoras configuradas): raízes, ACs e LCRs locais pelas propriedades abaixo, por exemplo com o `application-simulacao.yml` do gerador avulso. Só `iat`: sem TSA em memória, a estratégia `tsa` é recusada com `TSA.UNAVAILABLE`, sem acessar a `tsa-url`.
 
+Conteúdo do diretório da PKI persistida:
+
+| Arquivo | Conteúdo | Permissão (POSIX) |
+|---|---|---|
+| `raiz.pem`, `ac.pem` | certificados da raiz (âncora) e da AC | pública |
+| `signatario.p12`, `revogado.p12` | PKCS#12 dos signatários (aliases `signatario` e `revogado`) | 0600 |
+| `autoridades.p12` | chaves e certificados da raiz, da AC e da TSA | 0600 |
+| `senha.txt` | senha (aleatória) de todos os PKCS#12 | 0600 |
+| `lcr-raiz.crl`, `lcr-ac.crl` | LCRs regravadas a cada partida | pública |
+| `pki.properties` | manifesto (formato, política, data da revogação), gravado por último | pública |
+
+O diretório é criado com 0700. O log da partida mostra só caminhos — nunca a senha. Diretório vazio ou inexistente → gera; com arquivos → carrega e confere (PKCS#12 legíveis com a `senha.txt`, PEM iguais aos persistidos, cadeia raiz → AC → folhas); incompleto ou corrompido → a partida falha com o diretório e o motivo (restaure o diretório ou aponte para um vazio — uma PKI nova invalida as assinaturas anteriores). O signatário vale 2 anos; vencido ou a menos de 30 dias do vencimento, só o certificado dele é renovado na partida (mesma AC e mesma chave, serial novo) e o log pede para baixar o `signatario.p12` de novo.
 | Propriedade | Variável | |
 |---|---|---|
-| `safira.simulador.diretorio` | `SAFIRA_SIMULADOR_DIRETORIO` | onde gravar a PKI gerada na partida |
-| `safira.simulacao.trust-anchors` | `SAFIRA_SIMULACAO_TRUST_ANCHORS` | bundle PEM com as raízes autoassinadas (vazio = gerar na partida) |
+| `safira.simulador.diretorio` | `SAFIRA_SIMULADOR_DIRETORIO` | diretório da PKI persistida (padrão `~/.safira-simulador/pki`) |
+| `safira.simulacao.trust-anchors` | `SAFIRA_SIMULACAO_TRUST_ANCHORS` | bundle PEM com as raízes autoassinadas (vazio = PKI persistida) |
 | `safira.simulacao.intermediates` | `SAFIRA_SIMULACAO_INTERMEDIATES` | bundle PEM com ACs intermediárias — opcional |
 | `safira.simulacao.crls` | `SAFIRA_SIMULACAO_CRLS` | LCRs (DER/PEM) separadas por vírgula; a revogação vem só delas |
 | `safira.policy.accepted-certificate-policies[0].oid` | `SAFIRA_SIMULACAO_POLICY_OID` | padrão `2.16.76.1.2.3.1` (A3) |
 | `safira.policy.accepted-certificate-policies[0].issuer-sha256` | `SAFIRA_SIMULACAO_ISSUER_SHA256` | SHA-256 do DER da AC simulada |
 
-O startup falha com mensagem clara se alguma âncora não for AC raiz autoassinada com a marca `SIMULACAO - SEM VALOR LEGAL`, chave RSA ≥ 2048 (ou EC ≥ 256) e dentro da validade, se um recurso não for `file:`/`classpath:`, se uma LCR for ilegível, vencida ou não assinada por raiz/AC configurada, ou se a allowlist não fixar o `issuer-sha256` — as mesmas conferências valem para a PKI gerada na partida.
+O startup falha com mensagem clara se alguma âncora não for AC raiz autoassinada com a marca `SIMULACAO - SEM VALOR LEGAL`, chave RSA ≥ 2048 (ou EC ≥ 256) e dentro da validade, se um recurso não for `file:`/`classpath:`, se uma LCR for ilegível, vencida ou não assinada por raiz/AC configurada, ou se a allowlist não fixar o `issuer-sha256` — as mesmas conferências valem para a PKI persistida.
 
 **1. Subir o simulador.**
 
@@ -148,19 +160,28 @@ java -jar modules/safira-simulador/target/safira-simulador-*-exec.jar \
 curl -s localhost:8090/actuator/health/readiness     # {"status":"UP"}
 ```
 
-O log da partida mostra o diretório, a senha (aleatória) dos PKCS#12 e os aliases `signatario` e `revogado`:
+O log da partida mostra se a PKI foi gerada ou reutilizada e os caminhos do material (a senha fica só em `senha.txt`):
 
 ```text
-PKI simulada (SEM VALOR LEGAL) gerada na partida em /tmp/safira-sim
-  senha dos PKCS#12 : 9o2zisvBoJSJLxm9U2TR
-  aliases           : signatario (válido), revogado (revogado)
-  política (OID)    : 2.16.76.1.2.3.1
+PKI simulada (SEM VALOR LEGAL) gerada em /tmp/safira-sim
+  signatário (PKCS#12): /tmp/safira-sim/signatario.p12 (alias signatario)
+  revogado (PKCS#12)  : /tmp/safira-sim/revogado.p12 (alias revogado)
+  senha dos PKCS#12   : arquivo /tmp/safira-sim/senha.txt
+  política (OID)      : 2.16.76.1.2.3.1
+  validade da folha   : até 2028-10-09T19:12:13Z
 ```
 
-**2. Assinar** com o `signatario.p12` gerado (`strategy` `iat` ou `tsa`; exemplos de `Bundle` e `Provenance` em `modules/safira-rest/src/test/resources/examples/politica-0.2.0/`):
+O material público (raiz, AC e cadeia do signatário em PEM, diretório e valores da allowlist) está em `GET /simulacao/pki` — nunca chave, PKCS#12 ou senha:
 
 ```bash
-SENHA=<senha do log>; D=/tmp/safira-sim; EX=modules/safira-rest/src/test/resources/examples/politica-0.2.0
+curl -s localhost:8090/simulacao/pki | jq -r .raiz > raiz-simulada.pem
+curl -s localhost:8090/simulacao/pki | jq -c '{diretorio, issuerSha256, politicaOid}'
+```
+
+**2. Assinar** com o `signatario.p12` e a `senha.txt` do diretório (`strategy` `iat` ou `tsa`; exemplos de `Bundle` e `Provenance` em `modules/safira-rest/src/test/resources/examples/politica-0.2.0/`):
+
+```bash
+D=/tmp/safira-sim; SENHA=$(cat $D/senha.txt); EX=modules/safira-rest/src/test/resources/examples/politica-0.2.0
 P12=$(base64 < $D/signatario.p12 | tr -d '\n')
 CERT=$(openssl pkcs12 -in $D/signatario.p12 -passin pass:$SENHA -nokeys -clcerts | openssl x509 -outform DER | base64 | tr -d '\n')
 jq -n --slurpfile b $EX/bundle.json --slurpfile p $EX/provenance.json --arg p12 "$P12" --arg senha "$SENHA" \
@@ -184,6 +205,8 @@ curl -s -H 'Content-Type: application/json' --data @validar.json localhost:8090/
   | jq -c '[.issue[].details.text]'
 # ["Assinatura digital validada com sucesso","SIMULAÇÃO — sem validade jurídica ICP-Brasil"]
 ```
+
+**4. Reiniciar.** Pare o simulador (Ctrl+C) e suba de novo com o mesmo diretório: o log diz `reutilizada` e a `assinada.json` do passo 2 continua validando (passo 3) — inclusive a B-T (`tsa`). Conferido à mão com o JAR: assinatura `tsa` → 200; parada; segunda partida → `reutilizada`; `/validar` → `["VALIDATION.SUCCESS", …, "SIMULAÇÃO — sem validade jurídica ICP-Brasil"]`; com `autoridades.p12` corrompido, a partida termina (código 1) com `PKI simulada em <dir> corrompida: autoridades.p12 ilegível com a senha de senha.txt. …`.
 
 Com `tsa`, o `referenceTimestamp` da validação precisa ser posterior ao carimbo mais a accuracy (regra da política, não do simulador): validar no mesmo segundo da assinatura devolve `TEMPORAL.TSA-TIMESTAMP-OUT-OF-BOUNDS`; aguarde 1–2 s.
 
