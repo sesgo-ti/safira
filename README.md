@@ -27,9 +27,9 @@ Implementação da criação e da validação de assinaturas eletrônicas qualif
 | `safira-engine` | Abstrações de pipeline (`Step`, `StepRegistry`, `PipelineExecutor`), JSON lossless e códigos do CodeSystem de situações excepcionais (0.2.0) |
 | `safira-jades` | Integração com o EU DSS: JAdES-B-B, extensão para B-T e validação |
 | `safira-steps` | Steps das pipelines de assinatura e validação da política 0.2.0 |
-| `safira-simulador` | Modo simulação (raízes de confiança próprias, sem valor legal) e gerador de PKI simulada |
 | `safira-rest` | Biblioteca da API REST (Spring Boot 4): controller e serviços registrados por auto-configuração, sem `main` |
-| `safira-app` | Aplicação de produção — artefato de deploy: `safira-rest` + adaptador do acervo ICP-Brasil (icpbrasil-truststore) e filtro de destino de rede |
+| `safira-app` | Aplicação de produção — artefato de deploy: `safira-rest` + adaptador do acervo ICP-Brasil (icpbrasil-truststore) e filtro de destino de rede. Não contém o modo simulação |
+| `safira-simulador` | Modo simulação fora do produto (porta `FonteDeConfianca` com raízes próprias, sem valor legal, sem rede) e gerador de PKI simulada (JAR executável) |
 
 ## Pipelines
 
@@ -121,46 +121,35 @@ As demais propriedades da biblioteca (rede, revogação, política de download, 
 
 Assina e valida pelo **mesmo pipeline** da política 0.2.0 (os steps não mudam) com uma PKI própria no lugar do acervo ICP-Brasil — para QA e para ferramentas externas (ex.: [hubsaude-cli](https://github.com/sesgo-ti/hubsaude-cli)) que não têm certificado ICP-Brasil.
 
-> **Assinaturas simuladas não têm validade jurídica ICP-Brasil.** O modo é desligado por padrão e só liga com `safira.simulacao.enabled=true` (perfil `simulacao`). As raízes simuladas **substituem** o acervo (não há mistura), o startup registra um aviso `WARN` e uma assinatura simulada é recusada (`CERT.NOT-ICP-BRASIL`) por qualquer Safira em modo normal.
+> **Assinaturas simuladas não têm validade jurídica ICP-Brasil.** O modo vive só no módulo `safira-simulador`: o `safira-app` (produção) e o `safira-rest` não dependem dele. Ele é desligado por padrão e só liga com `safira.simulacao.enabled=true` (perfil `simulacao`, `application-simulacao.yml` do módulo). As raízes simuladas são a única fonte de confiança (`FonteDeConfiancaSimulada`, geração = SHA-256 do conteúdo), o startup registra um aviso `WARN`, o sucesso de `POST /validar` ganha a issue "SIMULAÇÃO — sem validade jurídica ICP-Brasil" e uma assinatura simulada é recusada (`CERT.NOT-ICP-BRASIL`) por qualquer Safira em modo normal.
 
 | Propriedade | Variável (perfil `simulacao`) | |
 |---|---|---|
 | `safira.simulacao.trust-anchors` | `SAFIRA_SIMULACAO_TRUST_ANCHORS` | bundle PEM com as raízes autoassinadas — obrigatório |
 | `safira.simulacao.intermediates` | `SAFIRA_SIMULACAO_INTERMEDIATES` | bundle PEM com ACs intermediárias — opcional |
-| `safira.simulacao.crls` | `SAFIRA_SIMULACAO_CRLS` | LCRs (DER/PEM) separadas por vírgula; com elas a revogação é só local, sem elas é buscada online pelo ponto de distribuição |
+| `safira.simulacao.crls` | `SAFIRA_SIMULACAO_CRLS` | LCRs (DER/PEM) separadas por vírgula; a revogação vem só delas — o modo simulação não acessa a rede |
 | `safira.policy.accepted-certificate-policies[0].oid` | `SAFIRA_SIMULACAO_POLICY_OID` | padrão `2.16.76.1.2.3.999` (A3) |
 | `safira.policy.accepted-certificate-policies[0].issuer-sha256` | `SAFIRA_SIMULACAO_ISSUER_SHA256` | SHA-256 do DER da AC simulada |
 
-O startup falha com mensagem clara se as âncoras faltarem, estiverem ilegíveis ou vazias, se alguma não for AC raiz autoassinada, ou se uma LCR for ilegível. O perfil desliga o bootstrap e o agendamento da icpbrasil-truststore (nenhum download do ITI); a readiness fica `UP` logo após a partida.
+O startup falha com mensagem clara se as âncoras faltarem, estiverem ilegíveis ou vazias, se alguma não for AC raiz autoassinada com a marca `SIMULACAO - SEM VALOR LEGAL`, chave RSA ≥ 2048 (ou EC ≥ 256) e dentro da validade, se um recurso não for `file:`/`classpath:`, se uma LCR for ilegível, vencida ou não assinada por raiz/AC configurada, ou se a allowlist não fixar o `issuer-sha256`.
 
-**1. Gerar a PKI simulada** (raiz, AC, `signatario.p12`, `revogado.p12` revogado na LCR, `lcr-raiz.crl`, `lcr-ac.crl` e um `application-simulacao.yml` com caminhos e allowlist):
+**1. Gerar a PKI simulada** (raiz, AC, `signatario.p12`, `revogado.p12` revogado na LCR, `lcr-raiz.crl`, `lcr-ac.crl` e um `application-simulacao.yml` com caminhos e allowlist) pelo JAR executável do simulador:
 
 ```bash
 ./mvnw -DskipTests package
-java -cp modules/safira-app/target/safira-app-*.jar \
-    -Dloader.main=br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada \
-    org.springframework.boot.loader.launch.PropertiesLauncher \
+java -jar modules/safira-simulador/target/safira-simulador-*.jar \
     --saida /tmp/pki [--senha <senha>] [--politica 2.16.76.1.2.3.<n>] [--cpf <cpf>] [--validade-dias 365]
 ```
 
 Sem `--senha`, a senha dos PKCS#12 é aleatória e impressa (aliases `signatario` e `revogado`). Os nomes trazem `SIMULACAO - SEM VALOR LEGAL`; as LCRs e os certificados folha valem `--validade-dias` (gere de novo ao expirar).
 
-**2. Subir o serviço** com o trecho gerado:
+**2. Subir o serviço em modo simulação.** Ainda não há JAR de serviço em modo simulação: o `safira-app` não inclui o simulador e a aplicação de simulação própria (`safira-rest` + `safira-simulador`) é a próxima etapa. Até lá, o perfil é exercitado pelos testes de sistema do módulo, que sobem `safira-rest` + simulador com a PKI gerada:
 
 ```bash
-java -jar safira-app.jar --spring.profiles.active=simulacao \
-    --spring.config.additional-location=file:/tmp/pki/
+./mvnw verify -pl modules/safira-simulador -am
 ```
 
-ou só com variáveis de ambiente (o `issuer-sha256` é impresso pelo gerador):
-
-```bash
-SAFIRA_SIMULACAO_TRUST_ANCHORS=file:/tmp/pki/raiz.pem \
-SAFIRA_SIMULACAO_INTERMEDIATES=file:/tmp/pki/ac.pem \
-SAFIRA_SIMULACAO_CRLS=file:/tmp/pki/lcr-raiz.crl,file:/tmp/pki/lcr-ac.crl \
-SAFIRA_SIMULACAO_ISSUER_SHA256=<64 hex> \
-java -jar safira-app.jar --spring.profiles.active=simulacao
-```
+Numa aplicação que inclua `safira-rest` e `safira-simulador`, o perfil liga com o trecho gerado (`--spring.profiles.active=simulacao --spring.config.additional-location=file:/tmp/pki/`) ou com as variáveis `SAFIRA_SIMULACAO_*` acima (o `issuer-sha256` é impresso pelo gerador).
 
 **3. Assinar** com `POST /assinar`, `signerCryptoMaterial` `{"type":"PKCS12","contentBase64":"<signatario.p12 em Base64>","password":"<senha>","alias":"signatario"}`, `certificateChain` com o certificado do signatário (DER em Base64) e `strategy` `iat`; validar com `POST /validar`. Com `revogado.p12`, a assinatura é recusada com `CERT.REVOKED`.
 
