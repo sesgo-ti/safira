@@ -88,7 +88,7 @@ public final class PkiGeradaNaPartida implements ApplicationContextInitializer<C
         propriedades.put("safira.policy.tsa-policies.version", "1.0.0");
         propriedades.put("safira.policy.tsa-policies.policies[0].oid", PkiIcpSimulada.POLITICA_TSA);
         propriedades.put("safira.policy.tsa-policies.policies[0].max-accuracy-seconds", "1");
-        propriedades.put("safira.policy.tsa-policies.policies[0].trust-store.reference", "file:" + pki.raiz());
+        propriedades.put("safira.policy.tsa-policies.policies[0].trust-store.reference", pki.raiz().toUri().toString());
         return propriedades;
     }
 }

@@ -73,6 +73,6 @@ class PkiGeradaNaPartidaTest {
                 .isEqualTo(pki.issuerSha256());
         assertThat(ambiente.getProperty("safira.policy.tsa-policies.policies[0].oid")).isEqualTo(PkiIcpSimulada.POLITICA_TSA);
         assertThat(ambiente.getProperty("safira.policy.tsa-policies.policies[0].trust-store.reference"))
-                .isEqualTo("file:" + pki.raiz());
+                .isEqualTo(pki.raiz().toUri().toString());
     }
 }
