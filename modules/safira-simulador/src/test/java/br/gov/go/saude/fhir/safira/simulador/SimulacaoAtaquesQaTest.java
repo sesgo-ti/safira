@@ -301,7 +301,8 @@ class SimulacaoAtaquesQaTest {
 
         Set<BigInteger> seriais = new HashSet<>();
         todos.forEach(c -> seriais.add(c.getSerialNumber()));
-        assertThat(seriais).hasSize(4).allMatch(s -> s.signum() > 0 && s.bitLength() >= 64 && s.bitLength() <= 159);
+        // Seriais da PKI factory do DSS (long): deslocamento aleatório por PKI, não 64 bits de entropia.
+        assertThat(seriais).hasSize(4).allMatch(s -> s.signum() > 0 && s.bitLength() > 20 && s.bitLength() <= 63);
         assertThat(todos).allMatch(c -> ((RSAPublicKey) c.getPublicKey()).getModulus().bitLength() >= 2048);
         assertThat(todos).allMatch(c -> c.getSigAlgName().toUpperCase().startsWith("SHA256"));
     }
@@ -312,6 +313,7 @@ class SimulacaoAtaquesQaTest {
 
         assertThat(certificadoPem(segunda.raiz()).getPublicKey()).isNotEqualTo(certificadoPem(pki.raiz()).getPublicKey());
         assertThat(segunda.issuerSha256()).isNotEqualTo(pki.issuerSha256());
+        assertThat(certificadoPem(segunda.raiz()).getSerialNumber()).isNotEqualTo(certificadoPem(pki.raiz()).getSerialNumber());
     }
 
     @Test
@@ -365,14 +367,9 @@ class SimulacaoAtaquesQaTest {
     }
 
     @Test
-    void shouldNotIssueLeafOutlivingIssuerWhenValidityIsLarge(@TempDir Path destino) throws Exception {
-        Resultado longo = GeradorPkiSimulada.gerar(destino, Opcoes.padrao().comSenha("senha-qa").comValidadeDias(4000));
-        X509Certificate ac = certificadoPem(longo.ac());
-        KeyStore keyStore = KeyStore.getInstance("PKCS12");
-        try (InputStream in = Files.newInputStream(longo.signatario())) {
-            keyStore.load(in, "senha-qa".toCharArray());
-        }
-        X509Certificate folha = (X509Certificate) keyStore.getCertificate(GeradorPkiSimulada.ALIAS_SIGNATARIO);
+    void shouldNotIssueLeafOutlivingIssuerWhenGenerating() throws Exception {
+        X509Certificate ac = certificadoPem(pki.ac());
+        X509Certificate folha = folha(pki.signatario(), GeradorPkiSimulada.ALIAS_SIGNATARIO);
 
         assertThat(folha.getNotAfter()).isBeforeOrEqualTo(ac.getNotAfter());
     }

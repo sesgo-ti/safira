@@ -22,7 +22,7 @@ safira:
 
   policy:
     accepted-certificate-policies:
-      - oid: ${SAFIRA_SIMULACAO_POLICY_OID:2.16.76.1.2.3.999}
+      - oid: ${SAFIRA_SIMULACAO_POLICY_OID:2.16.76.1.2.3.1}
         type: A3
         # SHA-256 (hex minúsculo) do DER da AC emissora do signatário simulado
         issuer-sha256: ${SAFIRA_SIMULACAO_ISSUER_SHA256:}

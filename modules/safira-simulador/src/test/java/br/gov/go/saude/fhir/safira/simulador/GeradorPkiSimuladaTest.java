@@ -11,6 +11,7 @@ import br.gov.go.saude.fhir.safira.steps.certificate.CertificateType;
 import br.gov.go.saude.fhir.safira.steps.certificate.IcpBrasilCertificateProfile;
 import br.gov.go.saude.fhir.safira.steps.certificate.ProfileResult;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -116,6 +117,16 @@ class GeradorPkiSimuladaTest {
         assertThat(lcrAc.isRevoked(p12(resultado.revogado()).getCertificate(GeradorPkiSimulada.ALIAS_REVOGADO))).isTrue();
         assertThat(lcrAc.isRevoked(p12(resultado.signatario()).getCertificate(GeradorPkiSimulada.ALIAS_SIGNATARIO))).isFalse();
         assertThat(lcrRaiz.isRevoked(ac)).isFalse();
+    }
+
+    @Test
+    void shouldGenerateFromTestkitPkiWhenGenerating() throws Exception {
+        PkiIcpSimulada pki = resultado.pki();
+
+        assertThat(certificado(resultado.raiz())).isEqualTo(pki.raiz());
+        assertThat(certificado(resultado.ac())).isEqualTo(pki.ac());
+        assertThat(p12(resultado.revogado()).getCertificate(GeradorPkiSimulada.ALIAS_REVOGADO)).isEqualTo(pki.revogado());
+        assertThat(lcr(resultado.lcrAc()).isRevoked(pki.revogado())).isTrue();
     }
 
     @Test
