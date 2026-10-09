@@ -9,8 +9,9 @@ import br.gov.go.saude.fhir.safira.engine.domain.StepResult;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki.LeafProfile;
+import br.gov.go.saude.fhir.safira.testkit.EvidenceRevocationSources;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
+import br.gov.go.saude.fhir.safira.testkit.PerfilSignatario;
 import br.gov.go.saude.fhir.safira.steps.certificate.CertificateType;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
@@ -33,13 +34,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** Passo {@code pkix-chain-validation} sobre o verificador do DSS offline (PKI de teste). */
 class PkixChainValidationStepTest {
 
-    private static TestPki pki;
+    private static PkiIcpSimulada pki;
     private static FonteDeConfianca acervo;
 
     @BeforeAll
     static void createPki() {
-        pki = TestPki.create();
-        acervo = FonteDeTeste.com(pki.caCert);
+        pki = PkiIcpSimulada.criar();
+        acervo = FonteDeTeste.com(pki.raiz(), pki.ac());
     }
 
     private static PkixChainValidationStep step(FonteDeConfianca trust, RevocationSource<OCSP> ocsp) {
@@ -47,9 +48,9 @@ class PkixChainValidationStepTest {
                 CertificateVerifierFactory.offline(ocsp, null)), allowlist(pki));
     }
 
-    private static SafiraPolicyProperties allowlist(TestPki issuer) {
+    private static SafiraPolicyProperties allowlist(PkiIcpSimulada issuer) {
         return new SafiraPolicyProperties(List.of(new AcceptedCertificatePolicy("2.16.76.1.2.3.1", CertificateType.A3,
-                issuer.issuerSha256())), null, null);
+                issuer.emissorSha256())), null, null);
     }
 
     private static PkixChainValidationStep step(RevocationSource<OCSP> ocsp) {
@@ -71,97 +72,97 @@ class PkixChainValidationStepTest {
 
     @Test
     void shouldStoreChainEndingInAcervoRootWhenOnlyLeafIsSupplied() throws Exception {
-        StepResult<SigningContext> result = step(pki.ocspGoodSource()).execute(context(List.of(b64(pki.leafCert))));
+        StepResult<SigningContext> result = step(pki.fonteOcsp()).execute(context(List.of(b64(pki.signatario()))));
 
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.context().getCertificateChain().orElseThrow()).containsExactly(pki.leafCert, pki.caCert);
+        assertThat(result.context().getCertificateChain().orElseThrow()).containsExactly(pki.cadeia().toArray(X509Certificate[]::new));
     }
 
     @Test
     void shouldCaptureAcervoSnapshotInContext() throws Exception {
-        StepResult<SigningContext> result = step(pki.ocspGoodSource()).execute(context(List.of(b64(pki.leafCert))));
+        StepResult<SigningContext> result = step(pki.fonteOcsp()).execute(context(List.of(b64(pki.signatario()))));
 
         assertThat(result.context().getAttribute(SigningKeys.ACERVO, AcervoDeConfianca.class)).isPresent();
     }
 
     @Test
     void shouldStoreSameChainWhenRootIsAlsoSupplied() throws Exception {
-        StepResult<SigningContext> result = step(pki.ocspGoodSource())
-                .execute(context(List.of(b64(pki.leafCert), b64(pki.caCert))));
+        StepResult<SigningContext> result = step(pki.fonteOcsp())
+                .execute(context(List.of(b64(pki.signatario()), b64(pki.ac()), b64(pki.raiz()))));
 
-        assertThat(result.context().getCertificateChain().orElseThrow()).containsExactly(pki.leafCert, pki.caCert);
+        assertThat(result.context().getCertificateChain().orElseThrow()).containsExactly(pki.cadeia().toArray(X509Certificate[]::new));
     }
 
     @Test
     void shouldRejectRevokedSigner() throws Exception {
-        RevocationSource<OCSP> revoked = TestPki.ocspSource(pki::ocspRevokedFor);
+        RevocationSource<OCSP> revoked = EvidenceRevocationSources.ocspPorCertificado(pki::ocspRevogado);
 
-        assertThat(code(step(revoked).execute(context(List.of(b64(pki.leafCert))))))
+        assertThat(code(step(revoked).execute(context(List.of(b64(pki.signatario()))))))
                 .isEqualTo(SignatureExceptionCode.CERT_REVOKED);
     }
 
     @Test
     void shouldRejectWhenNoRevocationIsReachable() throws Exception {
-        assertThat(code(step(TestPki.ocspSource(certificate -> null)).execute(context(List.of(b64(pki.leafCert))))))
+        assertThat(code(step(EvidenceRevocationSources.ocspPorCertificado(certificate -> null)).execute(context(List.of(b64(pki.signatario()))))))
                 .isEqualTo(SignatureExceptionCode.REVOCATION_STATUS_UNKNOWN);
     }
 
     @Test
     void shouldRejectSignerWhenRootIsOutsideAcervo() throws Exception {
-        FonteDeConfianca other = FonteDeTeste.com(TestPki.create().caCert);
+        FonteDeConfianca other = FonteDeTeste.com(PkiIcpSimulada.criar().raiz());
 
-        assertThat(code(step(other, pki.ocspGoodSource()).execute(context(List.of(b64(pki.leafCert), b64(pki.caCert))))))
+        assertThat(code(step(other, pki.fonteOcsp()).execute(context(List.of(b64(pki.signatario()), b64(pki.ac()))))))
                 .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
     }
 
     @Test
     void shouldFailClosedWhenAcervoIsUnavailable() throws Exception {
-        assertThat(code(step(Optional::empty, pki.ocspGoodSource()).execute(context(List.of(b64(pki.leafCert))))))
+        assertThat(code(step(Optional::empty, pki.fonteOcsp()).execute(context(List.of(b64(pki.signatario()))))))
                 .isEqualTo(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY);
     }
 
     @Test
     void shouldRejectEmptyChain() {
-        assertThat(code(step(pki.ocspGoodSource()).execute(context(List.of()))))
+        assertThat(code(step(pki.fonteOcsp()).execute(context(List.of()))))
                 .isEqualTo(SignatureExceptionCode.CERT_CHAIN_INCOMPLETE);
     }
 
     @Test
     void shouldRejectNonBase64Certificate() {
-        assertThat(code(step(pki.ocspGoodSource()).execute(context(List.of("não é base64")))))
+        assertThat(code(step(pki.fonteOcsp()).execute(context(List.of("não é base64")))))
                 .isEqualTo(SignatureExceptionCode.FORMAT_BASE64_INVALID);
     }
 
     @Test
     void shouldRejectNonDerCertificate() {
-        assertThat(code(step(pki.ocspGoodSource()).execute(context(List.of("AAAA")))))
+        assertThat(code(step(pki.fonteOcsp()).execute(context(List.of("AAAA")))))
                 .isEqualTo(SignatureExceptionCode.CERT_INVALID_FORMAT);
     }
 
     @Test
     void shouldRejectWithNotIcpBrasilWhenLeafPolicyIsOutsideAcceptedList() throws Exception {
-        TestPki a1 = TestPki.create(LeafProfile.a3().withPolicyOid("2.16.76.1.2.1.1"));
-        FonteDeConfianca trust = FonteDeTeste.com(a1.caCert);
+        PkiIcpSimulada a1 = PkiIcpSimulada.criar(PerfilSignatario.a3().comPolitica("2.16.76.1.2.1.1"));
+        FonteDeConfianca trust = FonteDeTeste.com(a1.raiz(), a1.ac());
 
-        assertThat(code(step(trust, a1.ocspGoodSource()).execute(context(List.of(b64(a1.leafCert))))))
+        assertThat(code(step(trust, a1.fonteOcsp()).execute(context(List.of(b64(a1.signatario()))))))
                 .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
     }
 
     @Test
     void shouldReportPolicyBeforeRevocationWhenLeafPolicyIsOutsideAcceptedList() throws Exception {
-        TestPki a1 = TestPki.create(LeafProfile.a3().withPolicyOid("2.16.76.1.2.1.1"));
-        FonteDeConfianca trust = FonteDeTeste.com(a1.caCert);
+        PkiIcpSimulada a1 = PkiIcpSimulada.criar(PerfilSignatario.a3().comPolitica("2.16.76.1.2.1.1"));
+        FonteDeConfianca trust = FonteDeTeste.com(a1.raiz(), a1.ac());
 
-        assertThat(code(step(trust, TestPki.ocspSource(a1::ocspRevokedFor)).execute(context(List.of(b64(a1.leafCert))))))
+        assertThat(code(step(trust, EvidenceRevocationSources.ocspPorCertificado(a1::ocspRevogado)).execute(context(List.of(b64(a1.signatario()))))))
                 .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
     }
 
     @Test
     void shouldFailClosedWhenAllowlistIsEmpty() throws Exception {
         PkixChainValidationStep step = new PkixChainValidationStep(new VerificadoresDss(acervo,
-                CertificateVerifierFactory.offline(pki.ocspGoodSource(), null)), new SafiraPolicyProperties(List.of(), null, null));
+                CertificateVerifierFactory.offline(pki.fonteOcsp(), null)), new SafiraPolicyProperties(List.of(), null, null));
 
-        assertThat(code(step.execute(context(List.of(b64(pki.leafCert))))))
+        assertThat(code(step.execute(context(List.of(b64(pki.signatario()))))))
                 .isEqualTo(SignatureExceptionCode.CONFIG_INVALID_PARAMETER);
     }
 }

@@ -10,7 +10,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.json.JsonValue.JsonString;
 import br.gov.go.saude.fhir.safira.engine.domain.json.LosslessJson;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.support.FonteDeTeste;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
@@ -27,16 +27,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** Steps {@code content-integrity} e {@code signer-certificate}. */
 class ContentAndSignerStepsTest {
 
-    private static TestPki pki;
+    private static PkiIcpSimulada pki;
     private static SafiraPolicyProperties policy;
     private static FonteDeConfianca trust;
     private static ValidationContext structured;
 
     @BeforeAll
     static void setUp() {
-        pki = TestPki.create();
+        pki = PkiIcpSimulada.criar();
         policy = TestConfigs.policy(pki);
-        trust = FonteDeTeste.com(pki.caCert);
+        trust = FonteDeTeste.com(pki.raiz(), pki.ac());
         ValidationContext context = SignedArtifactFixture.validationContext(SignedArtifactFixture.sign(pki, policy));
         context = new SignatureBindingStep().execute(context).context();
         structured = new JwsStructureStep().execute(context).context();
@@ -110,15 +110,15 @@ class ContentAndSignerStepsTest {
 
     @Test
     void shouldLeaveRootTrustToDssWhenProfileAccepts() {
-        FonteDeConfianca other = FonteDeTeste.com(TestPki.create().caCert);
+        FonteDeConfianca other = FonteDeTeste.com(PkiIcpSimulada.criar().raiz());
 
         assertThat(signer(policy, other, structured).isSuccess()).isTrue();
     }
 
     @Test
     void shouldReportNotIcpBrasilWhenRootIsOutsideAcervoAndIssuerNotInAllowlist() {
-        TestPki other = TestPki.create();
-        FonteDeConfianca otherAcervo = FonteDeTeste.com(other.caCert);
+        PkiIcpSimulada other = PkiIcpSimulada.criar();
+        FonteDeConfianca otherAcervo = FonteDeTeste.com(other.raiz(), other.ac());
 
         assertThat(code(signer(TestConfigs.policy(other), otherAcervo, structured)))
                 .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
@@ -126,7 +126,7 @@ class ContentAndSignerStepsTest {
 
     @Test
     void shouldReportPolicyComplianceWhenLeafPolicyNotInAllowlist() {
-        TestPki other = TestPki.create();
+        PkiIcpSimulada other = PkiIcpSimulada.criar();
 
         assertThat(code(signer(TestConfigs.policy(other), trust, structured)))
                 .isEqualTo(SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED);
@@ -134,7 +134,7 @@ class ContentAndSignerStepsTest {
 
     @Test
     void shouldRejectSignatureWhoDifferentFromCertificate() {
-        String who = LosslessJson.write(structured.getSignatureJson()).replace(TestPki.TEST_CPF, "11144477735");
+        String who = LosslessJson.write(structured.getSignatureJson()).replace(PkiIcpSimulada.CPF, "11144477735");
 
         assertThat(code(signer(policy, trust, structured.toBuilder()
                 .signatureJson(LosslessJson.parseObject(who)).build())))

@@ -13,7 +13,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
 import br.gov.go.saude.fhir.safira.jades.JadesSigningService;
 import br.gov.go.saude.fhir.safira.jades.JadesSigningSession;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.steps.signing.CryptoSigningStep;
 import br.gov.go.saude.fhir.safira.steps.signing.FramedContentDigestStep;
 import br.gov.go.saude.fhir.safira.steps.signing.SigningKeys;
@@ -45,11 +45,11 @@ class DiagnosticosSemVazamentoTest {
 
     @TempDir
     static Path tempDir;
-    private static TestPki pki;
+    private static PkiIcpSimulada pki;
 
     @BeforeAll
     static void setUp() {
-        pki = TestPki.create();
+        pki = PkiIcpSimulada.criar();
     }
 
     private static String diagnostics(StepResult<?> result) {
@@ -66,7 +66,7 @@ class DiagnosticosSemVazamentoTest {
 
     private static SigningContext dataToSignContext(String contentDigest) {
         return SigningContext.builder()
-                .certificateChain(new X509Certificate[]{pki.leafCert, pki.caCert})
+                .certificateChain(pki.cadeia().toArray(X509Certificate[]::new))
                 .attribute(SigningKeys.CONTENT_DIGEST, contentDigest)
                 .build();
     }
@@ -128,7 +128,7 @@ class DiagnosticosSemVazamentoTest {
     }
 
     private static StepResult<SigningContext> extension(JadesExtensionService service) throws Exception {
-        var policy = TestConfigs.policy(pki, TestConfigs.tsaPolicies(tempDir, TestPki.TSA_POLICY_OID, 1, pki.caCert));
+        var policy = TestConfigs.policy(pki, TestConfigs.tsaPolicies(tempDir, PkiIcpSimulada.POLITICA_TSA, 1, pki.raiz()));
         return new JadesExtensionStep(service, policy).execute(SigningContext.builder()
                 .strategy(TimestampStrategy.TSA)
                 .operationalConfig(TestConfigs.operational("https://tsa.exemplo.invalid/tsa"))

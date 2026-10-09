@@ -8,7 +8,7 @@ package br.gov.go.saude.fhir.safira.steps.support;
 import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties;
 import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties.SecurityLimitsProps;
 import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties.VerificationProps;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.steps.certificate.CertificateType;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
@@ -40,15 +40,15 @@ public final class TestConfigs {
         return operational(null);
     }
 
-    /** Allowlist com a política A3 do {@link TestPki} emitida pela CA da PKI de teste. */
-    public static SafiraPolicyProperties policy(TestPki pki) {
+    /** Allowlist com as políticas A3 e SE-S emitidas pela AC da {@link PkiIcpSimulada}. */
+    public static SafiraPolicyProperties policy(PkiIcpSimulada pki) {
         return policy(pki, null);
     }
 
-    public static SafiraPolicyProperties policy(TestPki pki, TsaPolicies tsa) {
+    public static SafiraPolicyProperties policy(PkiIcpSimulada pki, TsaPolicies tsa) {
         return new SafiraPolicyProperties(
-                List.of(new AcceptedCertificatePolicy("2.16.76.1.2.3.1", CertificateType.A3, pki.issuerSha256()),
-                        new AcceptedCertificatePolicy("2.16.76.1.2.201.1", CertificateType.SE_S, pki.issuerSha256())),
+                List.of(new AcceptedCertificatePolicy("2.16.76.1.2.3.1", CertificateType.A3, pki.emissorSha256()),
+                        new AcceptedCertificatePolicy("2.16.76.1.2.201.1", CertificateType.SE_S, pki.emissorSha256())),
                 tsa,
                 new TemporalPolicy(1751328000L));
     }

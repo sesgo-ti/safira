@@ -14,7 +14,8 @@ import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.testkit.EvidenceRevocationSources;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
+import br.gov.go.saude.fhir.safira.testkit.TsaHttpLocal;
 import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TrustStoreRef;
@@ -61,15 +62,15 @@ class JadesSigningStepsTest {
 
     @TempDir
     static Path tempDir;
-    private static TestPki pki;
-    private static TestPki.FakeTsa fakeTsa;
+    private static PkiIcpSimulada pki;
+    private static TsaHttpLocal fakeTsa;
     private static SafiraPolicyProperties policy;
 
     @BeforeAll
     static void setUp() {
-        pki = TestPki.create();
-        fakeTsa = pki.startFakeTsa();
-        policy = TestConfigs.policy(pki, TestConfigs.tsaPolicies(tempDir, TestPki.TSA_POLICY_OID, 1, pki.caCert));
+        pki = PkiIcpSimulada.criar();
+        fakeTsa = pki.iniciarTsaHttp();
+        policy = TestConfigs.policy(pki, TestConfigs.tsaPolicies(tempDir, PkiIcpSimulada.POLITICA_TSA, 1, pki.raiz()));
     }
 
     @AfterAll
@@ -95,7 +96,7 @@ class JadesSigningStepsTest {
         assertThat(etsiU.get(0).get("sigTst").get("tstTokens").get(0).get("val").isTextual()).isTrue();
         assertThat(dssFormat(jws)).isEqualTo(SignatureLevel.JAdES_BASELINE_T);
         assertThat(extended.context().getAttribute(JadesExtensionStep.TSA_POLICY_OID_KEY, String.class))
-                .contains(TestPki.TSA_POLICY_OID);
+                .contains(PkiIcpSimulada.POLITICA_TSA);
     }
 
     @Test
@@ -108,18 +109,18 @@ class JadesSigningStepsTest {
     /** Contexto com o snapshot que {@code pkix-chain-validation} guardaria para o acervo de teste. */
     private static SigningContext comSnapshot(SigningContext context) {
         return context.toBuilder().attribute(SigningKeys.ACERVO,
-                SignedArtifactFixture.acervo(FonteDeTeste.com(pki.caCert))).build();
+                SignedArtifactFixture.acervo(FonteDeTeste.com(pki.raiz(), pki.ac()))).build();
     }
 
     /** Verificador do DSS offline sobre o acervo de teste, com OCSP GOOD para qualquer certificado. */
     private static VerificadoresDss verifiers(RevocationSource<OCSP> ocsp) {
-        return new VerificadoresDss(FonteDeTeste.com(pki.caCert),
+        return new VerificadoresDss(FonteDeTeste.com(pki.raiz(), pki.ac()),
                 CertificateVerifierFactory.offline(ocsp, null));
     }
 
     @Test
     void shouldAcceptTimestampTokenAnchoredInTsaTrustStore() throws Exception {
-        StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.ocspGoodSource()), policy)
+        StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.fonteOcsp()), policy)
                 .execute(comSnapshot(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context()));
 
         assertThat(result.isSuccess()).isTrue();
@@ -129,7 +130,7 @@ class JadesSigningStepsTest {
     void shouldFailWhenAcervoSnapshotIsMissing() throws Exception {
         SigningContext semSnapshot = extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context();
 
-        StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.ocspGoodSource()), policy)
+        StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.fonteOcsp()), policy)
                 .execute(semSnapshot);
 
         assertThat(((StepResult.Failure<SigningContext>) result).code())
@@ -138,12 +139,12 @@ class JadesSigningStepsTest {
 
     @Test
     void shouldUseSameAcervoGenerationAcrossSigningSteps() throws Exception {
-        AcervoDeConfianca capturado = SignedArtifactFixture.acervo(FonteDeTeste.com(pki.caCert));
+        AcervoDeConfianca capturado = SignedArtifactFixture.acervo(FonteDeTeste.com(pki.raiz(), pki.ac()));
         SigningContext context = extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context().toBuilder()
                 .attribute(SigningKeys.ACERVO, capturado).build();
         VerificadoresDss mudou = new VerificadoresDss(
                 (FonteDeConfianca) Optional::empty,
-                CertificateVerifierFactory.offline(pki.ocspGoodSource(), null));
+                CertificateVerifierFactory.offline(pki.fonteOcsp(), null));
 
         assertThat(new TsaTokenVerificationStep(mudou, policy).execute(context).isSuccess()).isTrue();
     }
@@ -151,9 +152,9 @@ class JadesSigningStepsTest {
     @Test
     void shouldNotLeakTrustStoreReferenceWhenTsaTrustStoreIsUnreadable() throws Exception {
         SafiraPolicyProperties broken = TestConfigs.policy(pki, new TsaPolicies("1.0.0", List.of(new TsaPolicy(
-                TestPki.TSA_POLICY_OID, 1L, new TrustStoreRef("file:/segredo-caminho/ausente.pem")))));
+                PkiIcpSimulada.POLITICA_TSA, 1L, new TrustStoreRef("file:/segredo-caminho/ausente.pem")))));
 
-        StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.ocspGoodSource()), broken)
+        StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.fonteOcsp()), broken)
                 .execute(comSnapshot(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context()));
 
         assertThat(((StepResult.Failure<SigningContext>) result).code())
@@ -164,9 +165,9 @@ class JadesSigningStepsTest {
     @Test
     void shouldRejectTimestampTokenOutsideTsaTrustStore() throws Exception {
         SafiraPolicyProperties otherAnchor = TestConfigs.policy(pki,
-                TestConfigs.tsaPolicies(tempDir, TestPki.TSA_POLICY_OID, 1, TestPki.create().caCert));
+                TestConfigs.tsaPolicies(tempDir, PkiIcpSimulada.POLITICA_TSA, 1, PkiIcpSimulada.criar().raiz()));
 
-        StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.ocspGoodSource()), otherAnchor)
+        StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.fonteOcsp()), otherAnchor)
                 .execute(comSnapshot(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context()));
 
         assertThat(((StepResult.Failure<SigningContext>) result).code())
@@ -175,9 +176,9 @@ class JadesSigningStepsTest {
 
     @Test
     void shouldRejectTimestampTokenWhenTsaIsRevoked() throws Exception {
-        RevocationSource<OCSP> tsaRevoked = TestPki.ocspSource(certificate -> certificate.equals(fakeTsa.tsaCert())
-                ? pki.ocspRevokedFor(certificate)
-                : pki.ocspGoodFor(certificate));
+        RevocationSource<OCSP> tsaRevoked = EvidenceRevocationSources.ocspPorCertificado(certificate -> certificate.equals(fakeTsa.certificado())
+                ? pki.ocspRevogado(certificate)
+                : pki.ocspBom(certificate));
 
         StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(tsaRevoked), policy)
                 .execute(comSnapshot(extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context()));
@@ -188,7 +189,7 @@ class JadesSigningStepsTest {
 
     @Test
     void shouldSkipTokenVerificationForIatStrategy() throws Exception {
-        StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.ocspGoodSource()), policy)
+        StepResult<SigningContext> result = new TsaTokenVerificationStep(verifiers(pki.fonteOcsp()), policy)
                 .execute(extend(signedContext(TimestampStrategy.IAT, fakeTsa.url())).context());
 
         assertThat(result.isSuccess()).isTrue();
@@ -212,8 +213,8 @@ class JadesSigningStepsTest {
                 .strategy(strategy)
                 .referenceTimestamp(Instant.now().getEpochSecond())
                 .policyIdentifierUri(Policy020.POLICY_URI)
-                .certificateChain(new X509Certificate[]{pki.leafCert, pki.caCert})
-                .cryptoMaterial(new CryptoMaterial.PemMaterial(pki.leafKeyPemBase64(), null))
+                .certificateChain(pki.cadeia().toArray(X509Certificate[]::new))
+                .cryptoMaterial(new CryptoMaterial.PemMaterial(pki.chavePrivadaSignatarioPemBase64(), null))
                 .operationalConfig(TestConfigs.operational(tsaUrl))
                 .attribute(SigningKeys.CONTENT_DIGEST, Base64.getUrlEncoder().withoutPadding().encodeToString(hash))
                 .build();
@@ -226,9 +227,11 @@ class JadesSigningStepsTest {
     }
 
     private SignatureLevel dssFormat(String jws) {
-        var verifier = TestPki.verifier(List.of(pki.caCert),
-                EvidenceRevocationSources.ocspFromEvidence(List.of(pki.ocspGoodFor(pki.leafCert), pki.ocspGoodFor(fakeTsa.tsaCert()))),
-                EvidenceRevocationSources.crlFromEvidence(List.of(pki.crl())));
+        var verifier = CertificateVerifierFactory.offline(
+                        EvidenceRevocationSources.ocspFromEvidence(List.of(pki.ocspBom(pki.signatario()),
+                                pki.ocspBom(pki.ac()), pki.ocspBom(fakeTsa.certificado()))),
+                        EvidenceRevocationSources.crlFromEvidence(List.of(pki.lcr())))
+                .create(CertificateVerifierFactory.acervo(List.of(pki.raiz()), List.of(pki.ac())), List.of());
         Reports reports = new JadesValidationService().validate(jws, verifier);
         String id = reports.getSimpleReport().getFirstSignatureId();
         assertThat(reports.getSimpleReport().getIndication(id)).isEqualTo(Indication.TOTAL_PASSED);

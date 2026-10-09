@@ -7,7 +7,7 @@ package br.gov.go.saude.fhir.safira.steps.trust;
 
 import br.gov.go.saude.fhir.safira.jades.CertificateValidationService;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 import eu.europa.esig.dss.validation.reports.CertificateReports;
@@ -31,17 +31,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class VerificadoresDssTest {
 
-    private static TestPki pki;
-    private static TestPki other;
+    private static PkiIcpSimulada pki;
+    private static PkiIcpSimulada other;
 
     @BeforeAll
     static void setUp() {
-        pki = TestPki.create();
-        other = TestPki.create();
+        pki = PkiIcpSimulada.criar();
+        other = PkiIcpSimulada.criar();
     }
 
-    private static AcervoDeConfianca acervo(String geracao, TestPki source) {
-        return new AcervoDeConfianca(geracao, List.of(source.caCert), List.of(source.tsaCert));
+    private static AcervoDeConfianca acervo(String geracao, PkiIcpSimulada source) {
+        return new AcervoDeConfianca(geracao, List.of(source.raiz()), List.of(source.tsa()));
     }
 
     private static VerificadoresDss verificadores(AtomicReference<AcervoDeConfianca> atual) {
@@ -56,8 +56,9 @@ class VerificadoresDssTest {
         return verificadores.paraOperacao(verificadores.acervoAtual().orElseThrow(), extras);
     }
 
-    private static boolean cadeiaConfiavel(X509Certificate leaf, CommonCertificateVerifier verifier) {
-        CertificateReports reports = new CertificateValidationService().validate(leaf, List.of(), verifier);
+    private static boolean cadeiaConfiavel(PkiIcpSimulada fonte, CommonCertificateVerifier verifier) {
+        X509Certificate leaf = fonte.signatario();
+        CertificateReports reports = new CertificateValidationService().validate(leaf, List.of(fonte.ac()), verifier);
         return reports.getDiagnosticData().getUsedCertificateById(new CertificateToken(leaf).getDSSIdAsString())
                 .isTrustedChain();
     }
@@ -82,7 +83,7 @@ class VerificadoresDssTest {
         CommonCertificateVerifier verifier = verificador(verificadores);
 
         assertThat(verifier.getTrustedCertSources().getSources().getFirst()).isNotSameAs(primeira);
-        assertThat(verifier.getTrustedCertSources().getCertificates()).containsExactly(new CertificateToken(other.caCert));
+        assertThat(verifier.getTrustedCertSources().getCertificates()).containsExactly(new CertificateToken(other.raiz()));
     }
 
     @Test
@@ -94,18 +95,18 @@ class VerificadoresDssTest {
     void shouldKeepOnlyRootsAsTrustedAndCasAsAdjunct() {
         CommonCertificateVerifier verifier = verificador(verificadores(new AtomicReference<>(acervo("g1", pki))));
 
-        assertThat(verifier.getTrustedCertSources().getCertificates()).containsExactly(new CertificateToken(pki.caCert));
-        assertThat(verifier.getAdjunctCertSources().getCertificates()).containsExactly(new CertificateToken(pki.tsaCert));
+        assertThat(verifier.getTrustedCertSources().getCertificates()).containsExactly(new CertificateToken(pki.raiz()));
+        assertThat(verifier.getAdjunctCertSources().getCertificates()).containsExactly(new CertificateToken(pki.tsa()));
     }
 
     @Test
     void shouldAddExtraAnchorsOnlyToThatOperation() {
         VerificadoresDss verificadores = verificadores(new AtomicReference<>(acervo("g1", pki)));
 
-        assertThat(verificador(verificadores, List.of(other.caCert)).getTrustedCertSources().getCertificates())
-                .containsExactlyInAnyOrder(new CertificateToken(pki.caCert), new CertificateToken(other.caCert));
+        assertThat(verificador(verificadores, List.of(other.raiz())).getTrustedCertSources().getCertificates())
+                .containsExactlyInAnyOrder(new CertificateToken(pki.raiz()), new CertificateToken(other.raiz()));
         assertThat(verificador(verificadores).getTrustedCertSources().getCertificates())
-                .containsExactly(new CertificateToken(pki.caCert));
+                .containsExactly(new CertificateToken(pki.raiz()));
     }
 
     @Test
@@ -116,8 +117,8 @@ class VerificadoresDssTest {
         atual.set(acervo("g2", other));
         verificador(verificadores);
 
-        assertThat(cadeiaConfiavel(pki.leafCert, obtido)).isTrue();
-        assertThat(cadeiaConfiavel(other.leafCert, obtido)).isFalse();
+        assertThat(cadeiaConfiavel(pki, obtido)).isTrue();
+        assertThat(cadeiaConfiavel(other, obtido)).isFalse();
     }
 
     @Test
@@ -128,7 +129,7 @@ class VerificadoresDssTest {
             return Optional.of(acervo("g1", pki));
         }, CertificateVerifierFactory.offline(null, null));
 
-        verificador(verificadores, List.of(other.caCert));
+        verificador(verificadores, List.of(other.raiz()));
 
         assertThat(chamadas).hasValue(1);
     }

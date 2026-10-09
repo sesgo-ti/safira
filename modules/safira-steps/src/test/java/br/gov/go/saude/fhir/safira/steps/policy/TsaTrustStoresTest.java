@@ -5,7 +5,7 @@
 
 package br.gov.go.saude.fhir.safira.steps.policy;
 
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -35,18 +35,18 @@ class TsaTrustStoresTest {
 
     @Test
     void shouldLoadPemBundleFromFile(@TempDir Path dir) throws Exception {
-        TestPki pki = TestPki.create();
-        Path file = writePem(dir, pki.caCert, pki.tsaCert);
+        PkiIcpSimulada pki = PkiIcpSimulada.criar();
+        Path file = writePem(dir, pki.ac(), pki.tsa());
 
-        assertThat(TsaTrustStores.load("file:" + file)).containsExactly(pki.caCert, pki.tsaCert);
+        assertThat(TsaTrustStores.load("file:" + file)).containsExactly(pki.ac(), pki.tsa());
     }
 
     @Test
     void shouldAcceptPlainPath(@TempDir Path dir) throws Exception {
-        TestPki pki = TestPki.create();
-        Path file = writePem(dir, pki.caCert);
+        PkiIcpSimulada pki = PkiIcpSimulada.criar();
+        Path file = writePem(dir, pki.ac());
 
-        assertThat(TsaTrustStores.load(file.toString())).containsExactly(pki.caCert);
+        assertThat(TsaTrustStores.load(file.toString())).containsExactly(pki.ac());
     }
 
     @Test

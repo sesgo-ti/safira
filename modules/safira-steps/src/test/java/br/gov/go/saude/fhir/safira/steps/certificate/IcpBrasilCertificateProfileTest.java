@@ -6,8 +6,8 @@
 package br.gov.go.saude.fhir.safira.steps.certificate;
 
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki.LeafProfile;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
+import br.gov.go.saude.fhir.safira.testkit.PerfilSignatario;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
 import org.bouncycastle.asn1.x509.KeyUsage;
 import org.junit.jupiter.api.BeforeAll;
@@ -21,19 +21,19 @@ class IcpBrasilCertificateProfileTest {
 
     private static final long MIN_DATE = 1751328000L;
 
-    private static TestPki a3;
+    private static PkiIcpSimulada a3;
 
     @BeforeAll
     static void createPki() {
-        a3 = TestPki.create();
+        a3 = PkiIcpSimulada.criar();
     }
 
-    private static List<AcceptedCertificatePolicy> allowlist(TestPki pki, String oid, CertificateType type) {
-        return List.of(new AcceptedCertificatePolicy(oid, type, pki.issuerSha256()));
+    private static List<AcceptedCertificatePolicy> allowlist(PkiIcpSimulada pki, String oid, CertificateType type) {
+        return List.of(new AcceptedCertificatePolicy(oid, type, pki.emissorSha256()));
     }
 
-    private static ProfileResult evaluate(TestPki pki, List<AcceptedCertificatePolicy> allowlist) {
-        return IcpBrasilCertificateProfile.evaluate(pki.leafCert, pki.caCert, allowlist, MIN_DATE);
+    private static ProfileResult evaluate(PkiIcpSimulada pki, List<AcceptedCertificatePolicy> allowlist) {
+        return IcpBrasilCertificateProfile.evaluate(pki.signatario(), pki.ac(), allowlist, MIN_DATE);
     }
 
     private static SignatureExceptionCode rejection(ProfileResult result) {
@@ -46,24 +46,24 @@ class IcpBrasilCertificateProfileTest {
         ProfileResult result = evaluate(a3, allowlist(a3, "2.16.76.1.2.3.1", CertificateType.A3));
 
         assertThat(result).isEqualTo(new ProfileResult.Eligible(
-                new SignerIdentity(CertificateType.A3, SignerIdentity.CPF_SYSTEM, TestPki.TEST_CPF),
+                new SignerIdentity(CertificateType.A3, SignerIdentity.CPF_SYSTEM, PkiIcpSimulada.CPF),
                 "2.16.76.1.2.3.1"));
     }
 
     @Test
     void shouldExtractCnpjForSeS() {
-        TestPki seS = TestPki.create(LeafProfile.seS());
+        PkiIcpSimulada seS = PkiIcpSimulada.criar(PerfilSignatario.seS());
 
         ProfileResult result = evaluate(seS, allowlist(seS, "2.16.76.1.2.201.1", CertificateType.SE_S));
 
         assertThat(result).isEqualTo(new ProfileResult.Eligible(
-                new SignerIdentity(CertificateType.SE_S, SignerIdentity.CNPJ_SYSTEM, TestPki.TEST_CNPJ),
+                new SignerIdentity(CertificateType.SE_S, SignerIdentity.CNPJ_SYSTEM, PkiIcpSimulada.CNPJ),
                 "2.16.76.1.2.201.1"));
     }
 
     @Test
     void shouldRejectPolicyAbsentFromAllowlist() {
-        TestPki a1 = TestPki.create(LeafProfile.a3().withPolicyOid("2.16.76.1.2.1.1"));
+        PkiIcpSimulada a1 = PkiIcpSimulada.criar(PerfilSignatario.a3().comPolitica("2.16.76.1.2.1.1"));
 
         assertThat(rejection(evaluate(a1, allowlist(a1, "2.16.76.1.2.3.1", CertificateType.A3))))
                 .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
@@ -78,7 +78,7 @@ class IcpBrasilCertificateProfileTest {
 
     @Test
     void shouldRejectAnyPolicy() {
-        TestPki any = TestPki.create(LeafProfile.a3().withPolicyOid("2.5.29.32.0"));
+        PkiIcpSimulada any = PkiIcpSimulada.criar(PerfilSignatario.a3().comPolitica("2.5.29.32.0"));
 
         assertThat(rejection(evaluate(any, allowlist(any, "2.16.76.1.2.3.1", CertificateType.A3))))
                 .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
@@ -86,7 +86,7 @@ class IcpBrasilCertificateProfileTest {
 
     @Test
     void shouldRejectEcKey() {
-        TestPki ec = TestPki.create(LeafProfile.a3().withKey("EC", 0));
+        PkiIcpSimulada ec = PkiIcpSimulada.criar(PerfilSignatario.a3().comChave("EC", 0));
 
         assertThat(rejection(evaluate(ec, allowlist(ec, "2.16.76.1.2.3.1", CertificateType.A3))))
                 .isEqualTo(SignatureExceptionCode.CERT_UNSUPPORTED_ALGORITHM);
@@ -94,7 +94,7 @@ class IcpBrasilCertificateProfileTest {
 
     @Test
     void shouldRejectRsa3072ForA3() {
-        TestPki big = TestPki.create(LeafProfile.a3().withKey("RSA", 3072));
+        PkiIcpSimulada big = PkiIcpSimulada.criar(PerfilSignatario.a3().comChave("RSA", 3072));
 
         assertThat(rejection(evaluate(big, allowlist(big, "2.16.76.1.2.3.1", CertificateType.A3))))
                 .isEqualTo(SignatureExceptionCode.CERT_WEAK_KEY);
@@ -102,7 +102,7 @@ class IcpBrasilCertificateProfileTest {
 
     @Test
     void shouldRejectLeafWithoutDigitalSignature() {
-        TestPki noDs = TestPki.create(LeafProfile.a3().withKeyUsage(KeyUsage.nonRepudiation));
+        PkiIcpSimulada noDs = PkiIcpSimulada.criar(PerfilSignatario.a3().comKeyUsage(KeyUsage.nonRepudiation));
 
         assertThat(rejection(evaluate(noDs, allowlist(noDs, "2.16.76.1.2.3.1", CertificateType.A3))))
                 .isEqualTo(SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED);
@@ -110,7 +110,7 @@ class IcpBrasilCertificateProfileTest {
 
     @Test
     void shouldNotRequireNonRepudiation() {
-        TestPki dsOnly = TestPki.create(LeafProfile.a3().withKeyUsage(KeyUsage.digitalSignature));
+        PkiIcpSimulada dsOnly = PkiIcpSimulada.criar(PerfilSignatario.a3().comKeyUsage(KeyUsage.digitalSignature));
 
         assertThat(evaluate(dsOnly, allowlist(dsOnly, "2.16.76.1.2.3.1", CertificateType.A3)))
                 .isInstanceOf(ProfileResult.Eligible.class);
@@ -118,15 +118,15 @@ class IcpBrasilCertificateProfileTest {
 
     @Test
     void shouldRejectCertificateIssuedBeforeMinimumDate() {
-        ProfileResult result = IcpBrasilCertificateProfile.evaluate(a3.leafCert, a3.caCert,
-                allowlist(a3, "2.16.76.1.2.3.1", CertificateType.A3), MIN_DATE + 1);
+        ProfileResult result = IcpBrasilCertificateProfile.evaluate(a3.signatario(), a3.ac(),
+                allowlist(a3, "2.16.76.1.2.3.1", CertificateType.A3), a3.inicioValidade() + 1);
 
         assertThat(rejection(result)).isEqualTo(SignatureExceptionCode.CERT_ISSUE_DATE_TOO_OLD);
     }
 
     @Test
     void shouldRejectDivergentCpfBetweenSerialNumberAndSan() {
-        TestPki divergent = TestPki.create(LeafProfile.a3().withSubjectDn("CN=Fulano,SERIALNUMBER=11144477735"));
+        PkiIcpSimulada divergent = PkiIcpSimulada.criar(PerfilSignatario.a3().comDn("CN=Fulano,SERIALNUMBER=11144477735"));
 
         assertThat(rejection(evaluate(divergent, allowlist(divergent, "2.16.76.1.2.3.1", CertificateType.A3))))
                 .isEqualTo(SignatureExceptionCode.CERT_MISSING_IDENTIFICATION);
@@ -134,9 +134,9 @@ class IcpBrasilCertificateProfileTest {
 
     @Test
     void shouldRejectInvalidCpfCheckDigits() {
-        TestPki invalid = TestPki.create(LeafProfile.a3()
-                .withSubjectDn("CN=Fulano")
-                .withSan("2.16.76.1.3.1", "01011990" + "12345678901" + "000000000000000000"));
+        PkiIcpSimulada invalid = PkiIcpSimulada.criar(PerfilSignatario.a3()
+                .comDn("CN=Fulano")
+                .comSan("2.16.76.1.3.1", "01011990" + "12345678901" + "000000000000000000"));
 
         assertThat(rejection(evaluate(invalid, allowlist(invalid, "2.16.76.1.2.3.1", CertificateType.A3))))
                 .isEqualTo(SignatureExceptionCode.CERT_MISSING_IDENTIFICATION);
@@ -144,7 +144,7 @@ class IcpBrasilCertificateProfileTest {
 
     @Test
     void shouldAcceptIdentityOnlyInSan() {
-        TestPki sanOnly = TestPki.create(LeafProfile.a3().withSubjectDn("CN=Fulano de Tal"));
+        PkiIcpSimulada sanOnly = PkiIcpSimulada.criar(PerfilSignatario.a3().comDn("CN=Fulano de Tal"));
 
         assertThat(evaluate(sanOnly, allowlist(sanOnly, "2.16.76.1.2.3.1", CertificateType.A3)))
                 .isInstanceOf(ProfileResult.Eligible.class);
@@ -152,9 +152,9 @@ class IcpBrasilCertificateProfileTest {
 
     @Test
     void shouldRejectCnpjOnNaturalPersonCertificate() {
-        TestPki wrong = TestPki.create(LeafProfile.a3()
-                .withSubjectDn("CN=Fulano")
-                .withSan("2.16.76.1.3.3", TestPki.TEST_CNPJ));
+        PkiIcpSimulada wrong = PkiIcpSimulada.criar(PerfilSignatario.a3()
+                .comDn("CN=Fulano")
+                .comSan("2.16.76.1.3.3", PkiIcpSimulada.CNPJ));
 
         assertThat(rejection(evaluate(wrong, allowlist(wrong, "2.16.76.1.2.3.1", CertificateType.A3))))
                 .isEqualTo(SignatureExceptionCode.CERT_MISSING_IDENTIFICATION);

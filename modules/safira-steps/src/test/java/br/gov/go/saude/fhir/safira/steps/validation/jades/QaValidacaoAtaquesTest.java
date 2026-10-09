@@ -15,8 +15,10 @@ import br.gov.go.saude.fhir.safira.engine.domain.json.LosslessJsonException;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationStep;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki.TokenOptions;
+import br.gov.go.saude.fhir.safira.testkit.EvidenceRevocationSources;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
+import br.gov.go.saude.fhir.safira.testkit.TsaHttpLocal;
+import br.gov.go.saude.fhir.safira.testkit.OpcoesCarimbo;
 import br.gov.go.saude.fhir.safira.steps.content.FramedContentDigest;
 import br.gov.go.saude.fhir.safira.steps.content.SignedContentRules;
 import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
@@ -92,8 +94,8 @@ class QaValidacaoAtaquesTest {
 
     @TempDir
     static Path tempDir;
-    private static TestPki pki;
-    private static TestPki.FakeTsa tsa;
+    private static PkiIcpSimulada pki;
+    private static TsaHttpLocal tsa;
     private static SafiraPolicyProperties policy;
     private static FonteDeConfianca trust;
 
@@ -134,10 +136,10 @@ class QaValidacaoAtaquesTest {
 
     @BeforeAll
     static void setUp() {
-        pki = TestPki.create();
-        tsa = pki.startFakeTsa();
-        policy = TestConfigs.policy(pki, TestConfigs.tsaPolicies(tempDir, TestPki.TSA_POLICY_OID, 1, pki.caCert));
-        trust = FonteDeTeste.com(pki.caCert);
+        pki = PkiIcpSimulada.criar();
+        tsa = pki.iniciarTsaHttp();
+        policy = TestConfigs.policy(pki, TestConfigs.tsaPolicies(tempDir, PkiIcpSimulada.POLITICA_TSA, 1, pki.raiz()));
+        trust = FonteDeTeste.com(pki.raiz(), pki.ac());
     }
 
     @AfterAll
@@ -150,7 +152,7 @@ class QaValidacaoAtaquesTest {
     // ---------------------------------------------------------------------------------------------
 
     private static String validate(Artifact artifact) {
-        return validate(artifact, policy, trust, pki.ocspGoodSource());
+        return validate(artifact, policy, trust, pki.fonteOcsp());
     }
 
     /** Executa os steps na ordem do pipeline VALIDATION 0.2.0; exceção vira INTERNAL_ERROR (PipelineExecutor). */
@@ -199,7 +201,7 @@ class QaValidacaoAtaquesTest {
                 .build();
         context = new SignatureBindingStep().execute(context).context();
         context = new JwsStructureStep().execute(context).context();
-        context = new SignerCertificateStep(policy, verificadores(trust, pki.ocspGoodSource())).execute(SignedArtifactFixture.comAcervo(context, trust)).context();
+        context = new SignerCertificateStep(policy, verificadores(trust, pki.fonteOcsp())).execute(SignedArtifactFixture.comAcervo(context, trust)).context();
         return new ValidationOutcomeStep().execute(context).context().getOperationOutcome().issue().getFirst().diagnostics();
     }
 
@@ -244,7 +246,7 @@ class QaValidacaoAtaquesTest {
     }
 
     private static String header(long iat) {
-        return header(pki.chain(), Long.toString(iat));
+        return header(pki.cadeia(), Long.toString(iat));
     }
 
     private static Jws sign(String headerJson, String payload, PrivateKey key) {
@@ -253,7 +255,7 @@ class QaValidacaoAtaquesTest {
     }
 
     private static Jws sign(String headerJson) {
-        return sign(headerJson, payload(bundle(), provenance()), pki.leafKeys.getPrivate());
+        return sign(headerJson, payload(bundle(), provenance()), pki.chavesSignatario().getPrivate());
     }
 
     private static String rs256(PrivateKey key, String input) {
@@ -279,7 +281,7 @@ class QaValidacaoAtaquesTest {
     }
 
     private static Artifact artifact(String jws, long iat) {
-        return artifact(jws, iat, TestPki.TEST_CPF, bundle(), provenance());
+        return artifact(jws, iat, PkiIcpSimulada.CPF, bundle(), provenance());
     }
 
     /** Artefato JAdES-B-B legítimo (assinado pela chave do titular). */
@@ -288,12 +290,28 @@ class QaValidacaoAtaquesTest {
         return artifact(sign(header(iat)).json(), iat);
     }
 
+    /**
+     * B-B legítimo cujo {@code data} tem padding, para que o base64url difira do base64: o tamanho do
+     * JWS depende da PKI; espaços (JSON válido) no cabeçalho protegido variam o tamanho de forma determinística.
+     */
+    private static Artifact legitimateBaselineBWithPadding() {
+        long iat = now() - 5;
+        for (int espacos = 0; espacos < 3; espacos++) {
+            String headerJson = header(iat).replaceFirst("\\{", "{" + " ".repeat(espacos));
+            Artifact artifact = artifact(sign(headerJson).json(), iat);
+            if (artifact.signature().string("data").orElseThrow().endsWith("=")) {
+                return artifact;
+            }
+        }
+        throw new IllegalStateException("Sem variante de cabeçalho com padding no base64 de data");
+    }
+
     private static String sigTst(byte[] token) {
         return "{\"etsiU\":[{\"sigTst\":{\"tstTokens\":[{\"val\":\"" + STD.encodeToString(token) + "\"}]}}]}";
     }
 
     private static byte[] tokenOver(String signatureText, Date genTime) {
-        return pki.timestampToken(sha256(signatureText.getBytes(StandardCharsets.US_ASCII)), TokenOptions.at(genTime));
+        return pki.carimbo(sha256(signatureText.getBytes(StandardCharsets.US_ASCII)), OpcoesCarimbo.em(genTime));
     }
 
     private static Date at(long epochSeconds) {
@@ -354,7 +372,7 @@ class QaValidacaoAtaquesTest {
 
     private static X509Certificate leafFromTestCa(KeyPair keys, long notBefore, long notAfter, String policyOid,
                                                   int keyUsage, boolean ca) {
-        return certificate(keys, pki.caCert, pki.caKeys.getPrivate(), TestPki.TEST_CPF, notBefore, notAfter, policyOid,
+        return certificate(keys, pki.ac(), pki.chavesAc().getPrivate(), PkiIcpSimulada.CPF, notBefore, notAfter, policyOid,
                 keyUsage, ca);
     }
 
@@ -413,7 +431,7 @@ class QaValidacaoAtaquesTest {
         String protectedB64 = URL.encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
         String payload = payload(bundle(), provenance());
         Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(pki.leafCert.getPublicKey().getEncoded(), "HmacSHA256"));
+        mac.init(new SecretKeySpec(pki.signatario().getPublicKey().getEncoded(), "HmacSHA256"));
         String tag = URL.encodeToString(mac.doFinal((protectedB64 + "." + payload).getBytes(StandardCharsets.US_ASCII)));
 
         assertThat(validate(artifact(new Jws(protectedB64, payload, tag).json(), iat)))
@@ -428,7 +446,7 @@ class QaValidacaoAtaquesTest {
         String payload = payload(bundle(), provenance());
         Signature pss = Signature.getInstance("RSASSA-PSS");
         pss.setParameter(new PSSParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, 32, 1));
-        pss.initSign(pki.leafKeys.getPrivate());
+        pss.initSign(pki.chavesSignatario().getPrivate());
         pss.update((protectedB64 + "." + payload).getBytes(StandardCharsets.US_ASCII));
 
         assertThat(validate(artifact(new Jws(protectedB64, payload, URL.encodeToString(pss.sign())).json(), iat)))
@@ -487,7 +505,7 @@ class QaValidacaoAtaquesTest {
     @Test
     void shouldRejectThumbprintWhenItPointsToIssuerCertificate() {
         long iat = now() - 5;
-        String headerJson = header(iat).replace(thumbprint(pki.leafCert), thumbprint(pki.caCert));
+        String headerJson = header(iat).replace(thumbprint(pki.signatario()), thumbprint(pki.ac()));
 
         assertThat(validate(artifact(sign(headerJson).json(), iat))).isEqualTo(SignatureExceptionCode.FORMAT_JWS_MALFORMED.getCode());
     }
@@ -495,7 +513,7 @@ class QaValidacaoAtaquesTest {
     @Test
     void shouldRejectMissingThumbprintWhenOnlyX5cIsPresent() {
         long iat = now() - 5;
-        String headerJson = header(iat).replace("\"x5t#S256\":\"" + thumbprint(pki.leafCert) + "\",", "");
+        String headerJson = header(iat).replace("\"x5t#S256\":\"" + thumbprint(pki.signatario()) + "\",", "");
 
         assertThat(validate(artifact(sign(headerJson).json(), iat))).isEqualTo(SignatureExceptionCode.FORMAT_JWS_MALFORMED.getCode());
     }
@@ -503,8 +521,8 @@ class QaValidacaoAtaquesTest {
     @Test
     void shouldRejectReorderedX5cWhenRootComesFirst() {
         long iat = now() - 5;
-        String headerJson = header(List.of(pki.caCert, pki.leafCert), Long.toString(iat))
-                .replace(thumbprint(pki.caCert), thumbprint(pki.leafCert));
+        String headerJson = header(List.of(pki.ac(), pki.signatario()), Long.toString(iat))
+                .replace(thumbprint(pki.ac()), thumbprint(pki.signatario()));
 
         assertThat(validate(artifact(sign(headerJson).json(), iat)))
                 .isIn(SignatureExceptionCode.CERT_CHAIN_INCOMPLETE.getCode(), SignatureExceptionCode.FORMAT_JWS_MALFORMED.getCode());
@@ -513,7 +531,7 @@ class QaValidacaoAtaquesTest {
     @Test
     void shouldRejectX5cWhenUnrelatedCertificateIsAppended() {
         long iat = now() - 5;
-        List<X509Certificate> chain = List.of(pki.leafCert, pki.caCert, TestPki.create().caCert);
+        List<X509Certificate> chain = List.of(pki.signatario(), pki.ac(), PkiIcpSimulada.criar().ac());
 
         assertThat(validate(artifact(sign(header(chain, Long.toString(iat))).json(), iat)))
                 .isIn(SignatureExceptionCode.CERT_CHAIN_INCOMPLETE.getCode(), SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED.getCode());
@@ -523,7 +541,7 @@ class QaValidacaoAtaquesTest {
     void shouldRejectX5cWhenOnlyLeafIsPresent() {
         long iat = now() - 5;
 
-        assertThat(validate(artifact(sign(header(List.of(pki.leafCert), Long.toString(iat))).json(), iat)))
+        assertThat(validate(artifact(sign(header(List.of(pki.signatario()), Long.toString(iat))).json(), iat)))
                 .isEqualTo(SignatureExceptionCode.CERT_CHAIN_INCOMPLETE.getCode());
     }
 
@@ -568,9 +586,9 @@ class QaValidacaoAtaquesTest {
     void shouldRejectIatWhenItHasFractionOrExponent() {
         long iat = now() - 5;
 
-        assertThat(validate(artifact(sign(header(pki.chain(), iat + ".0")).json(), iat)))
+        assertThat(validate(artifact(sign(header(pki.cadeia(), iat + ".0")).json(), iat)))
                 .isEqualTo(SignatureExceptionCode.TEMPORAL_IAT_INVALID.getCode());
-        assertThat(validate(artifact(sign(header(pki.chain(), "1.7e9")).json(), 1_700_000_000L)))
+        assertThat(validate(artifact(sign(header(pki.cadeia(), "1.7e9")).json(), 1_700_000_000L)))
                 .isEqualTo(SignatureExceptionCode.TEMPORAL_IAT_INVALID.getCode());
     }
 
@@ -578,7 +596,7 @@ class QaValidacaoAtaquesTest {
     void shouldRejectIatWhenItIsAString() {
         long iat = now() - 5;
 
-        assertThat(validate(artifact(sign(header(pki.chain(), "\"" + iat + "\"")).json(), iat)))
+        assertThat(validate(artifact(sign(header(pki.cadeia(), "\"" + iat + "\"")).json(), iat)))
                 .isEqualTo(SignatureExceptionCode.TEMPORAL_IAT_INVALID.getCode());
     }
 
@@ -586,7 +604,7 @@ class QaValidacaoAtaquesTest {
     void shouldRejectIatWithTemporalCodeWhenItOverflowsLong() {
         long when = now() - 5;
 
-        assertThat(validate(artifact(sign(header(pki.chain(), "9999999999999999999")).json(), when)))
+        assertThat(validate(artifact(sign(header(pki.cadeia(), "9999999999999999999")).json(), when)))
                 .isEqualTo(SignatureExceptionCode.TEMPORAL_IAT_INVALID.getCode());
     }
 
@@ -594,7 +612,7 @@ class QaValidacaoAtaquesTest {
     void shouldNotAcceptIatWhenItOverflowsLong() {
         long when = now() - 5;
 
-        assertThat(validate(artifact(sign(header(pki.chain(), "9999999999999999999")).json(), when))).isNotEqualTo(SUCCESS);
+        assertThat(validate(artifact(sign(header(pki.cadeia(), "9999999999999999999")).json(), when))).isNotEqualTo(SUCCESS);
     }
 
     @Test
@@ -607,7 +625,7 @@ class QaValidacaoAtaquesTest {
 
     @Test
     void shouldRejectIatWhenItIsBeforeCertificateValidity() {
-        long iat = TestPki.CERT_START - 3600;
+        long iat = pki.inicioValidade() - 3600;
 
         assertThat(validate(artifact(sign(header(iat)).json(), iat)))
                 .isEqualTo(SignatureExceptionCode.TEMPORAL_IAT_OUT_OF_CERT_PERIOD.getCode());
@@ -658,7 +676,7 @@ class QaValidacaoAtaquesTest {
     @Test
     void shouldRejectDetachedPayloadWhenPayloadIsEmpty() {
         long iat = now() - 5;
-        Jws jws = sign(header(iat), "", pki.leafKeys.getPrivate());
+        Jws jws = sign(header(iat), "", pki.chavesSignatario().getPrivate());
 
         assertThat(validate(artifact(jws.json(), iat))).isEqualTo(SignatureExceptionCode.FORMAT_JWS_MALFORMED.getCode());
     }
@@ -668,7 +686,7 @@ class QaValidacaoAtaquesTest {
         long iat = now() - 5;
         String payload = URL.encodeToString(SignedArtifactFixture.BUNDLE.getBytes(StandardCharsets.UTF_8));
 
-        assertThat(validate(artifact(sign(header(iat), payload, pki.leafKeys.getPrivate()).json(), iat)))
+        assertThat(validate(artifact(sign(header(iat), payload, pki.chavesSignatario().getPrivate()).json(), iat)))
                 .isEqualTo(SignatureExceptionCode.FORMAT_JWS_MALFORMED.getCode());
     }
 
@@ -770,8 +788,8 @@ class QaValidacaoAtaquesTest {
     void shouldRejectTimestampWhenTsaPolicyIsNotAccepted() {
         long iat = now() - 5;
         Jws jws = sign(header(iat));
-        byte[] token = pki.timestampToken(sha256(jws.signature().getBytes(StandardCharsets.US_ASCII)),
-                TokenOptions.at(at(iat)).withPolicy("1.2.3.4.5"));
+        byte[] token = pki.carimbo(sha256(jws.signature().getBytes(StandardCharsets.US_ASCII)),
+                OpcoesCarimbo.em(at(iat)).comPolitica("1.2.3.4.5"));
 
         assertThat(validate(artifact(jws.json(sigTst(token)), iat)))
                 .isEqualTo(SignatureExceptionCode.TSA_POLICY_UNSUPPORTED.getCode());
@@ -781,8 +799,8 @@ class QaValidacaoAtaquesTest {
     void shouldRejectTimestampWhenAccuracyExceedsPolicy() {
         long iat = now() - 5;
         Jws jws = sign(header(iat));
-        byte[] token = pki.timestampToken(sha256(jws.signature().getBytes(StandardCharsets.US_ASCII)),
-                TokenOptions.at(at(iat)).withAccuracy(120));
+        byte[] token = pki.carimbo(sha256(jws.signature().getBytes(StandardCharsets.US_ASCII)),
+                OpcoesCarimbo.em(at(iat)).comAccuracy(120));
 
         assertThat(validate(artifact(jws.json(sigTst(token)), iat))).isEqualTo(SignatureExceptionCode.TSA_INVALID_TOKEN.getCode());
     }
@@ -889,8 +907,8 @@ class QaValidacaoAtaquesTest {
         JsonObject provenance = provenance().with("target", new JsonArray(List.of(
                 object("{\"reference\":\"" + SignedArtifactFixture.U2 + "\"}"))));
         long iat = now() - 5;
-        Jws jws = sign(header(iat), payload(bundle(), provenance), pki.leafKeys.getPrivate());
-        Artifact artifact = artifact(jws.json(), iat, TestPki.TEST_CPF, bundle(), provenance);
+        Jws jws = sign(header(iat), payload(bundle(), provenance), pki.chavesSignatario().getPrivate());
+        Artifact artifact = artifact(jws.json(), iat, PkiIcpSimulada.CPF, bundle(), provenance);
         assertThat(validate(artifact)).isEqualTo(SUCCESS);
 
         Artifact swappedPatient = artifact.withBundle(SignedArtifactFixture.BUNDLE.replace("\"gender\":\"female\"",
@@ -976,7 +994,7 @@ class QaValidacaoAtaquesTest {
     @Test
     void shouldRejectSignatureWhenCpfSystemIsSwappedForCnpj() {
         Artifact base = legitimateBaselineB();
-        JsonObject identifier = object("{\"system\":\"urn:brasil:cnpj\",\"value\":\"" + TestPki.TEST_CPF + "\"}");
+        JsonObject identifier = object("{\"system\":\"urn:brasil:cnpj\",\"value\":\"" + PkiIcpSimulada.CPF + "\"}");
         Artifact artifact = base
                 .withSignature(s -> s.with("who", object("{\"identifier\":" + LosslessJson.write(identifier) + "}")))
                 .withProvenance(p -> p.with("agent", new JsonArray(List.of(object("{\"who\":{\"identifier\":"
@@ -1022,7 +1040,7 @@ class QaValidacaoAtaquesTest {
 
     @Test
     void shouldRejectSignatureDataWhenItIsBase64Url() {
-        Artifact base = legitimateBaselineB();
+        Artifact base = legitimateBaselineBWithPadding();
         String data = base.signature().string("data").orElseThrow();
         String url = data.replace('+', '-').replace('/', '_').replace("=", "");
 
@@ -1070,10 +1088,10 @@ class QaValidacaoAtaquesTest {
     @Test
     void shouldRejectSelfSignedLeafWhenItCarriesIcpBrasilPolicyAndIdentity() {
         KeyPair keys = rsa(2048);
-        X509Certificate self = certificate(keys, null, keys.getPrivate(), TestPki.TEST_CPF, TestPki.CERT_START,
-                TestPki.CERT_END, "2.16.76.1.2.3.1", KeyUsage.digitalSignature, false);
+        X509Certificate self = certificate(keys, null, keys.getPrivate(), PkiIcpSimulada.CPF, pki.inicioValidade(),
+                pki.fimValidade(), "2.16.76.1.2.3.1", KeyUsage.digitalSignature, false);
 
-        assertThat(validate(signedBy(keys, List.of(self, pki.caCert), now() - 5)))
+        assertThat(validate(signedBy(keys, List.of(self, pki.ac()), now() - 5)))
                 .isIn(SignatureExceptionCode.CERT_CHAIN_INCOMPLETE.getCode(), SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED.getCode());
         assertThat(validate(signedBy(keys, List.of(self), now() - 5)))
                 .isEqualTo(SignatureExceptionCode.CERT_CHAIN_INCOMPLETE.getCode());
@@ -1084,9 +1102,9 @@ class QaValidacaoAtaquesTest {
         KeyPair rogueKeys = rsa(2048);
         X509Certificate rogueRoot;
         try {
-            X500Name name = X500Name.getInstance(pki.caCert.getSubjectX500Principal().getEncoded());
+            X500Name name = X500Name.getInstance(pki.ac().getSubjectX500Principal().getEncoded());
             JcaX509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(name, BigInteger.ONE,
-                    at(TestPki.CERT_START), at(TestPki.CERT_END), name, rogueKeys.getPublic());
+                    at(pki.inicioValidade()), at(pki.fimValidade()), name, rogueKeys.getPublic());
             builder.addExtension(Extension.basicConstraints, true, new BasicConstraints(true));
             rogueRoot = new JcaX509CertificateConverter().getCertificate(
                     builder.build(new JcaContentSignerBuilder("SHA256withRSA").build(rogueKeys.getPrivate())));
@@ -1094,8 +1112,8 @@ class QaValidacaoAtaquesTest {
             throw new IllegalStateException(e);
         }
         KeyPair keys = rsa(2048);
-        X509Certificate leaf = certificate(keys, rogueRoot, rogueKeys.getPrivate(), TestPki.TEST_CPF, TestPki.CERT_START,
-                TestPki.CERT_END, "2.16.76.1.2.3.1", KeyUsage.digitalSignature, false);
+        X509Certificate leaf = certificate(keys, rogueRoot, rogueKeys.getPrivate(), PkiIcpSimulada.CPF, pki.inicioValidade(),
+                pki.fimValidade(), "2.16.76.1.2.3.1", KeyUsage.digitalSignature, false);
 
         assertThat(validate(signedBy(keys, List.of(leaf, rogueRoot), now() - 5)))
                 .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL.getCode());
@@ -1103,30 +1121,30 @@ class QaValidacaoAtaquesTest {
 
     @Test
     void shouldRejectChainWhenRootIsTrustedButNotInAllowlist() {
-        TestPki other = TestPki.create();
-        FonteDeConfianca both = FonteDeTeste.com(pki.caCert, other.caCert);
+        PkiIcpSimulada other = PkiIcpSimulada.criar();
+        FonteDeConfianca both = FonteDeTeste.com(pki.raiz(), pki.ac(), other.raiz(), other.ac());
         long iat = now() - 5;
-        Artifact artifact = signedBy(other.leafKeys, other.chain(), iat);
+        Artifact artifact = signedBy(other.chavesSignatario(), other.cadeia(), iat);
 
-        assertThat(validate(artifact, policy, both, other.ocspGoodSource()))
+        assertThat(validate(artifact, policy, both, other.fonteOcsp()))
                 .isEqualTo(SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED.getCode());
     }
 
     @Test
     void shouldRejectChainWhenRootIsNotInAcervo() {
-        TestPki other = TestPki.create();
+        PkiIcpSimulada other = PkiIcpSimulada.criar();
 
-        assertThat(validate(signedBy(other.leafKeys, other.chain(), now() - 5), policy, trust, other.ocspGoodSource()))
+        assertThat(validate(signedBy(other.chavesSignatario(), other.cadeia(), now() - 5), policy, trust, other.fonteOcsp()))
                 .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL.getCode());
     }
 
     @Test
     void shouldRejectCaCertificateWhenUsedAsSigner() {
         KeyPair keys = rsa(2048);
-        X509Certificate subCa = leafFromTestCa(keys, TestPki.CERT_START, TestPki.CERT_END, "2.16.76.1.2.3.1",
+        X509Certificate subCa = leafFromTestCa(keys, pki.inicioValidade(), pki.fimValidade(), "2.16.76.1.2.3.1",
                 KeyUsage.digitalSignature | KeyUsage.keyCertSign, true);
 
-        assertThat(validate(signedBy(keys, List.of(subCa, pki.caCert), now() - 5)))
+        assertThat(validate(signedBy(keys, List.of(subCa, pki.ac()), now() - 5)))
                 .isIn(SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED.getCode(),
                         SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED.getCode());
     }
@@ -1134,10 +1152,10 @@ class QaValidacaoAtaquesTest {
     @Test
     void shouldRejectLeafWhenKeyUsageLacksDigitalSignature() {
         KeyPair keys = rsa(2048);
-        X509Certificate leaf = leafFromTestCa(keys, TestPki.CERT_START, TestPki.CERT_END, "2.16.76.1.2.3.1",
+        X509Certificate leaf = leafFromTestCa(keys, pki.inicioValidade(), pki.fimValidade(), "2.16.76.1.2.3.1",
                 KeyUsage.keyEncipherment, false);
 
-        assertThat(validate(signedBy(keys, List.of(leaf, pki.caCert), now() - 5)))
+        assertThat(validate(signedBy(keys, List.of(leaf, pki.ac()), now() - 5)))
                 .isIn(SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED.getCode(),
                         SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED.getCode());
     }
@@ -1145,10 +1163,10 @@ class QaValidacaoAtaquesTest {
     @Test
     void shouldRejectLeafWhenPolicyOidIsA1() {
         KeyPair keys = rsa(2048);
-        X509Certificate leaf = leafFromTestCa(keys, TestPki.CERT_START, TestPki.CERT_END, "2.16.76.1.2.1.1",
+        X509Certificate leaf = leafFromTestCa(keys, pki.inicioValidade(), pki.fimValidade(), "2.16.76.1.2.1.1",
                 KeyUsage.digitalSignature, false);
 
-        assertThat(validate(signedBy(keys, List.of(leaf, pki.caCert), now() - 5)))
+        assertThat(validate(signedBy(keys, List.of(leaf, pki.ac()), now() - 5)))
                 .isIn(SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED.getCode(),
                         SignatureExceptionCode.CERT_NOT_ICP_BRASIL.getCode());
     }
@@ -1156,10 +1174,10 @@ class QaValidacaoAtaquesTest {
     @Test
     void shouldRejectLeafWhenKeyIsRsa1024() {
         KeyPair keys = rsa(1024);
-        X509Certificate leaf = leafFromTestCa(keys, TestPki.CERT_START, TestPki.CERT_END, "2.16.76.1.2.3.1",
+        X509Certificate leaf = leafFromTestCa(keys, pki.inicioValidade(), pki.fimValidade(), "2.16.76.1.2.3.1",
                 KeyUsage.digitalSignature, false);
 
-        assertThat(validate(signedBy(keys, List.of(leaf, pki.caCert), now() - 5)))
+        assertThat(validate(signedBy(keys, List.of(leaf, pki.ac()), now() - 5)))
                 .isIn(SignatureExceptionCode.CERT_WEAK_KEY.getCode(),
                         SignatureExceptionCode.VALIDATION_SIGNATURE_VERIFICATION_FAILED.getCode());
     }
@@ -1167,46 +1185,46 @@ class QaValidacaoAtaquesTest {
     @Test
     void shouldRejectLeafWhenCertificateIsExpired() {
         KeyPair keys = rsa(2048);
-        long notBefore = TestPki.CERT_START + 86_400;
+        long notBefore = pki.ac().getNotBefore().toInstant().getEpochSecond() + 86_400;
         long notAfter = notBefore + 30L * 86_400;
         X509Certificate leaf = leafFromTestCa(keys, notBefore, notAfter, "2.16.76.1.2.3.1", KeyUsage.digitalSignature, false);
 
-        assertThat(validate(signedBy(keys, List.of(leaf, pki.caCert), notBefore + 86_400)))
+        assertThat(validate(signedBy(keys, List.of(leaf, pki.ac()), notBefore + 86_400)))
                 .isEqualTo(SignatureExceptionCode.CERT_EXPIRED.getCode());
     }
 
     @Test
     void shouldNotAcceptLeafWhenCertificateIsExpired() {
         KeyPair keys = rsa(2048);
-        long notBefore = TestPki.CERT_START + 86_400;
+        long notBefore = pki.ac().getNotBefore().toInstant().getEpochSecond() + 86_400;
         X509Certificate leaf = leafFromTestCa(keys, notBefore, notBefore + 30L * 86_400, "2.16.76.1.2.3.1",
                 KeyUsage.digitalSignature, false);
 
-        assertThat(validate(signedBy(keys, List.of(leaf, pki.caCert), notBefore + 86_400))).isNotEqualTo(SUCCESS);
+        assertThat(validate(signedBy(keys, List.of(leaf, pki.ac()), notBefore + 86_400))).isNotEqualTo(SUCCESS);
     }
 
     @Test
     void shouldRejectLeafWhenCertificateIsNotYetValid() {
         KeyPair keys = rsa(2048);
         long notBefore = now() + 86_400;
-        X509Certificate leaf = leafFromTestCa(keys, notBefore, TestPki.CERT_END, "2.16.76.1.2.3.1",
+        X509Certificate leaf = leafFromTestCa(keys, notBefore, pki.fimValidade(), "2.16.76.1.2.3.1",
                 KeyUsage.digitalSignature, false);
 
-        assertThat(validate(signedBy(keys, List.of(leaf, pki.caCert), now() - 5)))
+        assertThat(validate(signedBy(keys, List.of(leaf, pki.ac()), now() - 5)))
                 .isIn(SignatureExceptionCode.TEMPORAL_IAT_OUT_OF_CERT_PERIOD.getCode(),
                         SignatureExceptionCode.CERT_NOT_YET_VALID.getCode());
     }
 
     @Test
     void shouldRejectLeafWhenCertificateIsRevoked() {
-        RevocationSource<OCSP> revoked = TestPki.ocspSource(pki::ocspRevokedFor);
+        RevocationSource<OCSP> revoked = EvidenceRevocationSources.ocspPorCertificado(pki::ocspRevogado);
 
         assertThat(validate(legitimateBaselineB(), policy, trust, revoked)).isEqualTo(SignatureExceptionCode.CERT_REVOKED.getCode());
     }
 
     @Test
     void shouldRejectBaselineBWhenRevocationIsUnavailable() {
-        assertThat(validate(legitimateBaselineB(), policy, trust, TestPki.ocspSource(certificate -> null)))
+        assertThat(validate(legitimateBaselineB(), policy, trust, EvidenceRevocationSources.ocspPorCertificado(certificate -> null)))
                 .isEqualTo(SignatureExceptionCode.REVOCATION_STATUS_UNKNOWN.getCode());
     }
 
@@ -1217,9 +1235,9 @@ class QaValidacaoAtaquesTest {
     @Test
     void shouldRejectHugeX5cWithoutInternalErrorWhenChainHasManyCertificates() {
         List<X509Certificate> chain = new ArrayList<>();
-        chain.add(pki.leafCert);
+        chain.add(pki.signatario());
         for (int i = 0; i < 20; i++) {
-            chain.add(TestPki.create().caCert);
+            chain.add(PkiIcpSimulada.criar().ac());
         }
         long iat = now() - 5;
 
@@ -1246,7 +1264,7 @@ class QaValidacaoAtaquesTest {
     void shouldNotLeakStackOrExceptionTextWhenProtectedHeaderIsNotJson() {
         long iat = now() - 5;
         String protectedB64 = URL.encodeToString("not-json\u0000<script>".getBytes(StandardCharsets.UTF_8));
-        Jws jws = new Jws(protectedB64, payload(bundle(), provenance()), rs256(pki.leafKeys.getPrivate(), protectedB64 + ".x"));
+        Jws jws = new Jws(protectedB64, payload(bundle(), provenance()), rs256(pki.chavesSignatario().getPrivate(), protectedB64 + ".x"));
 
         assertThat(validate(artifact(jws.json(), iat))).isEqualTo(SignatureExceptionCode.FORMAT_JWS_MALFORMED.getCode());
     }

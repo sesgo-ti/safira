@@ -8,7 +8,7 @@ package br.gov.go.saude.fhir.safira.steps.validation.jades;
 import br.gov.go.saude.fhir.safira.engine.domain.StepResult;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.support.FonteDeTeste;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
@@ -26,13 +26,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ValidationRequestContextStepTest {
 
-    private static TestPki pki;
+    private static PkiIcpSimulada pki;
     private static SafiraPolicyProperties policy;
     private static ValidationContext valid;
 
     @BeforeAll
     static void setUp() {
-        pki = TestPki.create();
+        pki = PkiIcpSimulada.criar();
         policy = TestConfigs.policy(pki);
         valid = SignedArtifactFixture.validationContext(SignedArtifactFixture.sign(pki, policy));
     }
@@ -42,7 +42,7 @@ class ValidationRequestContextStepTest {
     }
 
     private static FonteDeConfianca loaded() {
-        return FonteDeTeste.com(pki.caCert);
+        return FonteDeTeste.com(pki.raiz(), pki.ac());
     }
 
     private static SignatureExceptionCode code(StepResult<ValidationContext> result) {
