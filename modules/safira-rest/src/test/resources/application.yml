@@ -11,6 +11,20 @@ icpbrasil-truststore:
   filesystem:
     base-dir: target/icpbrasil-truststore-test
 
+# Mesmo grupo readiness do application.yml principal (este arquivo o substitui nos testes).
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,fonteDeConfianca
+
 safira:
   # ---------------------------------------------------------------------------
   # Configuração das Pipelines de Assinatura e Verificação

@@ -8,6 +8,10 @@
 # síncrono do acervo ICP-Brasil da icpbrasil-truststore. Assim orquestradores
 # (e o hubsaude-cli) não enviam tráfego antes de o acervo carregar.
 #
+# O grupo readiness inclui também fonteDeConfianca (FonteDeConfiancaHealthIndicator,
+# do safira-rest): DOWN (503) quando a porta de confiança não tem acervo vigente,
+# mesmo depois do bootstrap (por exemplo, se um refresh deixar de entregar acervo).
+#
 # O indicador trustStoreCache da biblioteca não é incluído: a versão 0.0.2 ainda o
 # condiciona a org.springframework.boot.actuate.health.HealthIndicator (Spring
 # Boot 3), ausente no Spring Boot 4, e incluí-lo num grupo aborta o startup.
@@ -21,6 +25,9 @@ management:
     health:
       probes:
         enabled: true
+      group:
+        readiness:
+          include: readinessState,fonteDeConfianca
 
 # -----------------------------------------------------------------------------
 # Acervo ICP-Brasil (lib icpbrasil-truststore): download do ITI, cache, PKIX e revogação.
