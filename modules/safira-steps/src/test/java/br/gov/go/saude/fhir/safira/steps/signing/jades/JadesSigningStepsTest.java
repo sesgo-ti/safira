@@ -22,12 +22,12 @@ import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TsaPolici
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TsaPolicy;
 import br.gov.go.saude.fhir.safira.steps.signing.CryptoSigningStep;
 import br.gov.go.saude.fhir.safira.steps.signing.SigningKeys;
+import br.gov.go.saude.fhir.safira.steps.support.FonteDeTeste;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
 import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
-import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import eu.europa.esig.dss.enumerations.Indication;
@@ -108,12 +108,12 @@ class JadesSigningStepsTest {
     /** Contexto com o snapshot que {@code pkix-chain-validation} guardaria para o acervo de teste. */
     private static SigningContext comSnapshot(SigningContext context) {
         return context.toBuilder().attribute(SigningKeys.ACERVO,
-                SignedArtifactFixture.acervo(() -> Optional.of(TrustMaterial.of(List.of(pki.caCert))))).build();
+                SignedArtifactFixture.acervo(FonteDeTeste.com(pki.caCert))).build();
     }
 
     /** Verificador do DSS offline sobre o acervo de teste, com OCSP GOOD para qualquer certificado. */
     private static VerificadoresDss verifiers(RevocationSource<OCSP> ocsp) {
-        return new VerificadoresDss(new FonteDeConfiancaIcpBrasil(() -> Optional.of(TrustMaterial.of(List.of(pki.caCert)))),
+        return new VerificadoresDss(FonteDeTeste.com(pki.caCert),
                 CertificateVerifierFactory.offline(ocsp, null));
     }
 
@@ -138,11 +138,11 @@ class JadesSigningStepsTest {
 
     @Test
     void shouldUseSameAcervoGenerationAcrossSigningSteps() throws Exception {
-        AcervoDeConfianca capturado = SignedArtifactFixture.acervo(() -> Optional.of(TrustMaterial.of(List.of(pki.caCert))));
+        AcervoDeConfianca capturado = SignedArtifactFixture.acervo(FonteDeTeste.com(pki.caCert));
         SigningContext context = extend(signedContext(TimestampStrategy.TSA, fakeTsa.url())).context().toBuilder()
                 .attribute(SigningKeys.ACERVO, capturado).build();
         VerificadoresDss mudou = new VerificadoresDss(
-                new FonteDeConfiancaIcpBrasil(Optional::empty),
+                (FonteDeConfianca) Optional::empty,
                 CertificateVerifierFactory.offline(pki.ocspGoodSource(), null));
 
         assertThat(new TsaTokenVerificationStep(mudou, policy).execute(context).isSuccess()).isTrue();

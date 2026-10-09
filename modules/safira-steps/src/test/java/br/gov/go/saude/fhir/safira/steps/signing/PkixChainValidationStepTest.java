@@ -16,9 +16,8 @@ import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
 import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
-import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.support.FonteDeTeste;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import eu.europa.esig.dss.model.x509.revocation.ocsp.OCSP;
 import eu.europa.esig.dss.spi.x509.revocation.RevocationSource;
 import org.junit.jupiter.api.BeforeAll;
@@ -35,16 +34,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PkixChainValidationStepTest {
 
     private static TestPki pki;
-    private static TrustMaterialSource acervo;
+    private static FonteDeConfianca acervo;
 
     @BeforeAll
     static void createPki() {
         pki = TestPki.create();
-        acervo = () -> Optional.of(TrustMaterial.of(List.of(pki.caCert)));
+        acervo = FonteDeTeste.com(pki.caCert);
     }
 
-    private static PkixChainValidationStep step(TrustMaterialSource trust, RevocationSource<OCSP> ocsp) {
-        return new PkixChainValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
+    private static PkixChainValidationStep step(FonteDeConfianca trust, RevocationSource<OCSP> ocsp) {
+        return new PkixChainValidationStep(new VerificadoresDss(trust,
                 CertificateVerifierFactory.offline(ocsp, null)), allowlist(pki));
     }
 
@@ -109,7 +108,7 @@ class PkixChainValidationStepTest {
 
     @Test
     void shouldRejectSignerWhenRootIsOutsideAcervo() throws Exception {
-        TrustMaterialSource other = () -> Optional.of(TrustMaterial.of(List.of(TestPki.create().caCert)));
+        FonteDeConfianca other = FonteDeTeste.com(TestPki.create().caCert);
 
         assertThat(code(step(other, pki.ocspGoodSource()).execute(context(List.of(b64(pki.leafCert), b64(pki.caCert))))))
                 .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
@@ -142,7 +141,7 @@ class PkixChainValidationStepTest {
     @Test
     void shouldRejectWithNotIcpBrasilWhenLeafPolicyIsOutsideAcceptedList() throws Exception {
         TestPki a1 = TestPki.create(LeafProfile.a3().withPolicyOid("2.16.76.1.2.1.1"));
-        TrustMaterialSource trust = () -> Optional.of(TrustMaterial.of(List.of(a1.caCert)));
+        FonteDeConfianca trust = FonteDeTeste.com(a1.caCert);
 
         assertThat(code(step(trust, a1.ocspGoodSource()).execute(context(List.of(b64(a1.leafCert))))))
                 .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
@@ -151,7 +150,7 @@ class PkixChainValidationStepTest {
     @Test
     void shouldReportPolicyBeforeRevocationWhenLeafPolicyIsOutsideAcceptedList() throws Exception {
         TestPki a1 = TestPki.create(LeafProfile.a3().withPolicyOid("2.16.76.1.2.1.1"));
-        TrustMaterialSource trust = () -> Optional.of(TrustMaterial.of(List.of(a1.caCert)));
+        FonteDeConfianca trust = FonteDeTeste.com(a1.caCert);
 
         assertThat(code(step(trust, TestPki.ocspSource(a1::ocspRevokedFor)).execute(context(List.of(b64(a1.leafCert))))))
                 .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
@@ -159,7 +158,7 @@ class PkixChainValidationStepTest {
 
     @Test
     void shouldFailClosedWhenAllowlistIsEmpty() throws Exception {
-        PkixChainValidationStep step = new PkixChainValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(acervo),
+        PkixChainValidationStep step = new PkixChainValidationStep(new VerificadoresDss(acervo,
                 CertificateVerifierFactory.offline(pki.ocspGoodSource(), null)), new SafiraPolicyProperties(List.of(), null, null));
 
         assertThat(code(step.execute(context(List.of(b64(pki.leafCert))))))

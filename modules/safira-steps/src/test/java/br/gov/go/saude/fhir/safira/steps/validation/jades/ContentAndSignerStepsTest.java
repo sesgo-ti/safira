@@ -12,18 +12,15 @@ import br.gov.go.saude.fhir.safira.engine.domain.json.LosslessJson;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
+import br.gov.go.saude.fhir.safira.steps.support.FonteDeTeste;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
-import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,14 +29,14 @@ class ContentAndSignerStepsTest {
 
     private static TestPki pki;
     private static SafiraPolicyProperties policy;
-    private static TrustMaterialSource trust;
+    private static FonteDeConfianca trust;
     private static ValidationContext structured;
 
     @BeforeAll
     static void setUp() {
         pki = TestPki.create();
         policy = TestConfigs.policy(pki);
-        trust = () -> Optional.of(TrustMaterial.of(List.of(pki.caCert)));
+        trust = FonteDeTeste.com(pki.caCert);
         ValidationContext context = SignedArtifactFixture.validationContext(SignedArtifactFixture.sign(pki, policy));
         context = new SignatureBindingStep().execute(context).context();
         structured = new JwsStructureStep().execute(context).context();
@@ -50,9 +47,9 @@ class ContentAndSignerStepsTest {
         return ((StepResult.Failure<ValidationContext>) result).code();
     }
 
-    private static StepResult<ValidationContext> signer(SafiraPolicyProperties properties, TrustMaterialSource source,
+    private static StepResult<ValidationContext> signer(SafiraPolicyProperties properties, FonteDeConfianca source,
                                                         ValidationContext context) {
-        return new SignerCertificateStep(properties, new VerificadoresDss(new FonteDeConfiancaIcpBrasil(source),
+        return new SignerCertificateStep(properties, new VerificadoresDss(source,
                 CertificateVerifierFactory.offline(null, null)))
                 .execute(SignedArtifactFixture.comAcervo(context, source));
     }
@@ -113,7 +110,7 @@ class ContentAndSignerStepsTest {
 
     @Test
     void shouldLeaveRootTrustToDssWhenProfileAccepts() {
-        TrustMaterialSource other = () -> Optional.of(TrustMaterial.of(List.of(TestPki.create().caCert)));
+        FonteDeConfianca other = FonteDeTeste.com(TestPki.create().caCert);
 
         assertThat(signer(policy, other, structured).isSuccess()).isTrue();
     }
@@ -121,7 +118,7 @@ class ContentAndSignerStepsTest {
     @Test
     void shouldReportNotIcpBrasilWhenRootIsOutsideAcervoAndIssuerNotInAllowlist() {
         TestPki other = TestPki.create();
-        TrustMaterialSource otherAcervo = () -> Optional.of(TrustMaterial.of(List.of(other.caCert)));
+        FonteDeConfianca otherAcervo = FonteDeTeste.com(other.caCert);
 
         assertThat(code(signer(TestConfigs.policy(other), otherAcervo, structured)))
                 .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);

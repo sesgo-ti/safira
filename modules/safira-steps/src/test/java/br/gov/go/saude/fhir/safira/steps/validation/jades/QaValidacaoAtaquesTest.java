@@ -21,12 +21,11 @@ import br.gov.go.saude.fhir.safira.steps.content.FramedContentDigest;
 import br.gov.go.saude.fhir.safira.steps.content.SignedContentRules;
 import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
+import br.gov.go.saude.fhir.safira.steps.support.FonteDeTeste;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
-import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import eu.europa.esig.dss.model.x509.revocation.ocsp.OCSP;
 import eu.europa.esig.dss.spi.x509.revocation.RevocationSource;
 import org.bouncycastle.asn1.ASN1EncodableVector;
@@ -70,7 +69,6 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.UnaryOperator;
 
@@ -97,7 +95,7 @@ class QaValidacaoAtaquesTest {
     private static TestPki pki;
     private static TestPki.FakeTsa tsa;
     private static SafiraPolicyProperties policy;
-    private static TrustMaterialSource trust;
+    private static FonteDeConfianca trust;
 
     /** Artefato submetido à validação: entradas 1, 2, 3 e 4. */
     private record Artifact(JsonObject signature, JsonObject bundle, JsonObject provenance, long reference) {
@@ -139,7 +137,7 @@ class QaValidacaoAtaquesTest {
         pki = TestPki.create();
         tsa = pki.startFakeTsa();
         policy = TestConfigs.policy(pki, TestConfigs.tsaPolicies(tempDir, TestPki.TSA_POLICY_OID, 1, pki.caCert));
-        trust = () -> Optional.of(TrustMaterial.of(List.of(pki.caCert)));
+        trust = FonteDeTeste.com(pki.caCert);
     }
 
     @AfterAll
@@ -156,10 +154,10 @@ class QaValidacaoAtaquesTest {
     }
 
     /** Executa os steps na ordem do pipeline VALIDATION 0.2.0; exceção vira INTERNAL_ERROR (PipelineExecutor). */
-    private static String validate(Artifact artifact, SafiraPolicyProperties policy, TrustMaterialSource trust,
+    private static String validate(Artifact artifact, SafiraPolicyProperties policy, FonteDeConfianca trust,
                                    RevocationSource<OCSP> ocsp) {
         List<ValidationStep> steps = List.of(
-                new ValidationRequestContextStep(policy, new FonteDeConfiancaIcpBrasil(trust), Clock.systemUTC()),
+                new ValidationRequestContextStep(policy, trust, Clock.systemUTC()),
                 new SignatureBindingStep(),
                 new JwsStructureStep(),
                 new ContentIntegrityStep(),
@@ -205,8 +203,8 @@ class QaValidacaoAtaquesTest {
         return new ValidationOutcomeStep().execute(context).context().getOperationOutcome().issue().getFirst().diagnostics();
     }
 
-    private static VerificadoresDss verificadores(TrustMaterialSource trust, RevocationSource<OCSP> ocsp) {
-        return new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust), CertificateVerifierFactory.offline(ocsp, null));
+    private static VerificadoresDss verificadores(FonteDeConfianca trust, RevocationSource<OCSP> ocsp) {
+        return new VerificadoresDss(trust, CertificateVerifierFactory.offline(ocsp, null));
     }
 
     private static long now() {
@@ -1106,7 +1104,7 @@ class QaValidacaoAtaquesTest {
     @Test
     void shouldRejectChainWhenRootIsTrustedButNotInAllowlist() {
         TestPki other = TestPki.create();
-        TrustMaterialSource both = () -> Optional.of(TrustMaterial.of(List.of(pki.caCert, other.caCert)));
+        FonteDeConfianca both = FonteDeTeste.com(pki.caCert, other.caCert);
         long iat = now() - 5;
         Artifact artifact = signedBy(other.leafKeys, other.chain(), iat);
 

@@ -29,16 +29,13 @@ import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesExtensionStep;
 import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.ValidationKeys;
-import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Artefato assinado real (Signature, Bundle, Provenance) produzido pelos steps de assinatura da
@@ -47,12 +44,12 @@ import java.util.Optional;
 public final class SignedArtifactFixture {
 
     /** Snapshot do acervo que a fonte informada entrega agora. */
-    public static AcervoDeConfianca acervo(TrustMaterialSource source) {
-        return new FonteDeConfiancaIcpBrasil(source).atual().orElseThrow();
+    public static AcervoDeConfianca acervo(FonteDeConfianca source) {
+        return source.atual().orElseThrow();
     }
 
     /** Contexto com o snapshot que {@code validation-context} guardaria para essa fonte. */
-    public static ValidationContext comAcervo(ValidationContext context, TrustMaterialSource source) {
+    public static ValidationContext comAcervo(ValidationContext context, FonteDeConfianca source) {
         return context.toBuilder().attribute(ValidationKeys.ACERVO, acervo(source)).build();
     }
 
@@ -90,7 +87,7 @@ public final class SignedArtifactFixture {
     private static SigningResult sign(TestPki pki, SafiraPolicyProperties policy, long iat, TestPki.FakeTsa tsa,
                                       boolean verificarCadeia) {
         VerificadoresDss verifiers = new VerificadoresDss(
-                new FonteDeConfiancaIcpBrasil(() -> Optional.of(TrustMaterial.of(List.of(pki.caCert)))),
+                FonteDeTeste.com(pki.caCert),
                 CertificateVerifierFactory.offline(pki.ocspGoodSource(), null));
         try {
             SigningContext context = SigningContext.builder()

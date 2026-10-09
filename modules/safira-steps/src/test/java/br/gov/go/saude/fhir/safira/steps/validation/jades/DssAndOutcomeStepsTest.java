@@ -18,12 +18,11 @@ import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedC
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TrustStoreRef;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TsaPolicies;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TsaPolicy;
+import br.gov.go.saude.fhir.safira.steps.support.FonteDeTeste;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
-import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import eu.europa.esig.dss.model.x509.revocation.ocsp.OCSP;
 import eu.europa.esig.dss.spi.x509.revocation.RevocationSource;
 import org.junit.jupiter.api.AfterAll;
@@ -36,7 +35,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,7 +47,7 @@ class DssAndOutcomeStepsTest {
     private static TestPki pki;
     private static TestPki.FakeTsa tsa;
     private static SafiraPolicyProperties policy;
-    private static TrustMaterialSource trust;
+    private static FonteDeConfianca trust;
     private static ValidationContext bb;
     private static ValidationContext bbSemAcervo;
     private static ValidationContext bt;
@@ -60,7 +58,7 @@ class DssAndOutcomeStepsTest {
         pki = TestPki.create();
         tsa = pki.startFakeTsa();
         policy = TestConfigs.policy(pki, TestConfigs.tsaPolicies(tempDir, TestPki.TSA_POLICY_OID, 1, pki.caCert));
-        trust = () -> Optional.of(TrustMaterial.of(List.of(pki.caCert)));
+        trust = FonteDeTeste.com(pki.caCert);
         ValidationContext signed = SignedArtifactFixture.validationContext(SignedArtifactFixture.sign(pki, policy));
         bb = structured(signed);
         bbSemAcervo = new JwsStructureStep().execute(new SignatureBindingStep().execute(signed).context()).context();
@@ -77,13 +75,13 @@ class DssAndOutcomeStepsTest {
     private static ValidationContext structured(ValidationContext context) {
         ValidationContext bound = new SignatureBindingStep().execute(context).context();
         ValidationContext parsed = new JwsStructureStep().execute(bound).context();
-        return new SignerCertificateStep(policy, new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
+        return new SignerCertificateStep(policy, new VerificadoresDss(trust,
                 CertificateVerifierFactory.offline(null, null))).execute(SignedArtifactFixture.comAcervo(parsed, trust)).context();
     }
 
     /** DSS offline: respostas OCSP prontas (sem rede) sobre o acervo informado. */
     private static DssValidationStep step(RevocationSource<OCSP> ocsp) {
-        return new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
+        return new DssValidationStep(new VerificadoresDss(trust,
                 CertificateVerifierFactory.offline(ocsp, null)), policy);
     }
 
@@ -112,7 +110,7 @@ class DssAndOutcomeStepsTest {
     void shouldReportPolicyComplianceWhenDssRejectsLeafPolicyOutsideAcceptedList() {
         SafiraPolicyProperties seloApenas = new SafiraPolicyProperties(List.of(new AcceptedCertificatePolicy(
                 "2.16.76.1.2.201.1", CertificateType.SE_S, pki.issuerSha256())), policy.tsaPolicies(), policy.temporalPolicy());
-        DssValidationStep step = new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
+        DssValidationStep step = new DssValidationStep(new VerificadoresDss(trust,
                 CertificateVerifierFactory.offline(good(), null)), seloApenas);
 
         assertThat(code(step.execute(bb))).isEqualTo(SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED);
@@ -121,7 +119,7 @@ class DssAndOutcomeStepsTest {
     @Test
     void shouldFailClosedWhenAllowlistIsEmpty() {
         SafiraPolicyProperties semAllowlist = new SafiraPolicyProperties(List.of(), policy.tsaPolicies(), policy.temporalPolicy());
-        DssValidationStep step = new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
+        DssValidationStep step = new DssValidationStep(new VerificadoresDss(trust,
                 CertificateVerifierFactory.offline(good(), null)), semAllowlist);
 
         assertThat(code(step.execute(bb))).isEqualTo(SignatureExceptionCode.CONFIG_INVALID_PARAMETER);
@@ -144,11 +142,11 @@ class DssAndOutcomeStepsTest {
         TestPki leafPki = TestPki.create(profile);
         SafiraPolicyProperties leafPolicy = TestConfigs.policy(leafPki,
                 TestConfigs.tsaPolicies(tempDir, TestPki.TSA_POLICY_OID, 1, leafPki.caCert));
-        TrustMaterialSource leafTrust = () -> Optional.of(TrustMaterial.of(List.of(leafPki.caCert)));
+        FonteDeConfianca leafTrust = FonteDeTeste.com(leafPki.caCert);
         ValidationContext signed = SignedArtifactFixture.validationContext(
                 SignedArtifactFixture.signSemVerificarCadeia(leafPki, leafPolicy));
         ValidationContext parsed = new JwsStructureStep().execute(new SignatureBindingStep().execute(signed).context()).context();
-        DssValidationStep step = new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(leafTrust),
+        DssValidationStep step = new DssValidationStep(new VerificadoresDss(leafTrust,
                 CertificateVerifierFactory.offline(EvidenceRevocationSources.ocspFromEvidence(
                         List.of(leafPki.ocspGoodFor(leafPki.leafCert))), null)), leafPolicy);
         return step.execute(SignedArtifactFixture.comAcervo(parsed, leafTrust));
@@ -158,7 +156,7 @@ class DssAndOutcomeStepsTest {
     void shouldNotLeakTrustStoreReferenceWhenTsaTrustStoreIsUnreadable() {
         SafiraPolicyProperties broken = TestConfigs.policy(pki, new TsaPolicies("1.0.0", List.of(new TsaPolicy(
                 TestPki.TSA_POLICY_OID, 1L, new TrustStoreRef("file:/segredo-caminho/ausente.pem")))));
-        DssValidationStep step = new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
+        DssValidationStep step = new DssValidationStep(new VerificadoresDss(trust,
                 CertificateVerifierFactory.offline(good(), null)), broken);
 
         StepResult<ValidationContext> result = step.execute(bt);
@@ -199,20 +197,20 @@ class DssAndOutcomeStepsTest {
 
     @Test
     void shouldRejectSignerWhenRootIsOutsideAcervo() {
-        TrustMaterialSource otherAcervo = () -> Optional.of(TrustMaterial.of(List.of(TestPki.create().caCert)));
+        FonteDeConfianca otherAcervo = FonteDeTeste.com(TestPki.create().caCert);
 
         assertThat(code(step(good()).execute(SignedArtifactFixture.comAcervo(bb, otherAcervo)))).isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
     }
 
     @Test
     void shouldUseSameAcervoGenerationAcrossValidationSteps() {
-        AtomicReference<TrustMaterialSource> vigente = new AtomicReference<>(trust);
-        FonteDeConfiancaIcpBrasil fonte = new FonteDeConfiancaIcpBrasil(() -> vigente.get().current());
+        AtomicReference<FonteDeConfianca> vigente = new AtomicReference<>(trust);
+        FonteDeConfianca fonte = () -> vigente.get().atual();
         ValidationContext signed = SignedArtifactFixture.validationContext(SignedArtifactFixture.sign(pki, policy));
         ValidationContext context = new ValidationRequestContextStep(policy, fonte, Clock.systemUTC())
                 .execute(signed).context();
         context = new JwsStructureStep().execute(new SignatureBindingStep().execute(context).context()).context();
-        vigente.set(() -> Optional.of(TrustMaterial.of(List.of(TestPki.create().caCert))));
+        vigente.set(FonteDeTeste.com(TestPki.create().caCert));
 
         ValidationContext verified = new SignerCertificateStep(policy, new VerificadoresDss(fonte,
                 CertificateVerifierFactory.offline(good(), null))).execute(context).context();
@@ -231,7 +229,7 @@ class DssAndOutcomeStepsTest {
     void shouldRejectTimestampWhoseTsaIsOutsideTsaTrustStore() {
         SafiraPolicyProperties otherAnchor = TestConfigs.policy(pki,
                 TestConfigs.tsaPolicies(tempDir, TestPki.TSA_POLICY_OID, 1, TestPki.create().caCert));
-        DssValidationStep step = new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
+        DssValidationStep step = new DssValidationStep(new VerificadoresDss(trust,
                 CertificateVerifierFactory.offline(good(), null)), otherAnchor);
 
         assertThat(code(step.execute(bt))).isEqualTo(SignatureExceptionCode.TSA_CHAIN_VALIDATION_FAILED);
