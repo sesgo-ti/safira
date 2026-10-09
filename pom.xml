@@ -64,6 +64,7 @@
         <icpbrasil-truststore.version>0.0.2</icpbrasil-truststore.version>
         <netty.version>4.2.17.Final</netty.version>
         <vavr.version>0.10.4</vavr.version>
+        <archunit.version>1.5.1</archunit.version>
 
         <surefire.version>3.2.5</surefire.version>
         <jacoco.version>0.8.12</jacoco.version>
@@ -84,6 +85,13 @@
                 <version>${netty.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>com.tngtech.archunit</groupId>
+                <artifactId>archunit-junit5</artifactId>
+                <version>${archunit.version}</version>
+                <scope>test</scope>
             </dependency>
 
             <!-- CVE-2026-54399 / CVE-2026-54428 / CVE-2026-64607 -->
