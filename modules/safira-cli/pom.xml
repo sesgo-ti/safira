@@ -96,6 +96,37 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- SHA-256 do JAR executável (safira-cli-*-exec.jar.sha256, só o hash) e conferência no build -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.2.0</version>
+                <executions>
+                    <execution>
+                        <id>checksum-exec</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <property name="exec.jar"
+                                          value="${project.build.directory}/${project.build.finalName}-exec.jar"/>
+                                <checksum file="${exec.jar}" algorithm="SHA-256" fileext=".sha256"/>
+                                <checksum file="${exec.jar}" algorithm="SHA-256" fileext=".sha256"
+                                          verifyproperty="exec.checksum.ok"/>
+                                <fail message="SHA-256 do JAR executável não confere com o arquivo .sha256">
+                                    <condition>
+                                        <not>
+                                            <equals arg1="${exec.checksum.ok}" arg2="true"/>
+                                        </not>
+                                    </condition>
+                                </fail>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
