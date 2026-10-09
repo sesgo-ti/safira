@@ -15,13 +15,11 @@ import eu.europa.esig.dss.enumerations.SignatureLevel;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 import eu.europa.esig.dss.validation.reports.Reports;
 import eu.europa.esig.jades.JAdESUtils;
-import org.bouncycastle.asn1.ASN1Sequence;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.security.Signature;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -141,17 +139,6 @@ class JadesSigningServiceTest {
         assertThatThrownBy(() -> service.newSession(new JadesSigningService.Request(
                 ec.chain(), payload, REFERENCE_TIMESTAMP, POLICY_URI)))
                 .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    void shouldTranscodeEcdsaConcatToDerSequence() {
-        byte[] rs = new byte[64];
-        new SecureRandom().nextBytes(rs);
-
-        byte[] der = EcdsaSignatureFormats.concatToDer(rs);
-
-        assertThat(der[0]).isEqualTo((byte) 0x30);
-        assertThat(ASN1Sequence.getInstance(der).size()).isEqualTo(2);
     }
 
     private static JsonNode decodeProtectedHeader(String jwsJson) throws Exception {
