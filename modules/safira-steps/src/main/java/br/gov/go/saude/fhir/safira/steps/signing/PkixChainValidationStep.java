@@ -11,12 +11,16 @@ import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
 import br.gov.go.saude.fhir.safira.jades.CertificateValidationService;
+import br.gov.go.saude.fhir.safira.jades.StrictValidationPolicies;
 import br.gov.go.saude.fhir.safira.steps.dss.DssOutcomes;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
 import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
 import eu.europa.esig.dss.diagnostic.CertificateWrapper;
 import eu.europa.esig.dss.enumerations.Indication;
 import eu.europa.esig.dss.enumerations.SubIndication;
+import eu.europa.esig.dss.jaxb.object.Message;
 import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.simplecertificatereport.SimpleCertificateReport;
 import eu.europa.esig.dss.spi.DSSUtils;
@@ -42,6 +46,10 @@ import java.util.Optional;
  * candidatos: a confiança vem exclusivamente do acervo. O snapshot do acervo usado fica em
  * {@link SigningKeys#ACERVO} para os demais steps da operação.
  *
+ * <p>Política do DSS: {@link StrictValidationPolicies} com a lista explícita dos OIDs de
+ * {@code safira.policy.accepted-certificate-policies}, montada uma vez na construção. Folha sem
+ * nenhum desses OIDs resulta em {@code CERT.NOT-ICP-BRASIL} (criar 2.5) antes de revogação.
+ *
  * <p>Recusa entradas com mais de {@link #MAX_CHAIN_LENGTH} certificados antes de decodificá-los.
  *
  * <p>Escreve {@code certificateChain} = caminho validado pelo DSS (folha primeiro, raiz por último).
@@ -53,10 +61,12 @@ public class PkixChainValidationStep implements SigningStep {
     public static final int MAX_CHAIN_LENGTH = 10;
 
     private final VerificadoresDss verifiers;
-    private final CertificateValidationService validationService = new CertificateValidationService();
+    private final CertificateValidationService validationService;
 
-    public PkixChainValidationStep(VerificadoresDss verifiers) {
+    public PkixChainValidationStep(VerificadoresDss verifiers, SafiraPolicyProperties policy) {
         this.verifiers = verifiers;
+        this.validationService = new CertificateValidationService(StrictValidationPolicies.comPoliticasAceitas(
+                policy.acceptedCertificatePolicies().stream().map(AcceptedCertificatePolicy::oid).toList()));
     }
 
     @Override
@@ -105,9 +115,10 @@ public class PkixChainValidationStep implements SigningStep {
             SubIndication sub = report.getCertificateSubIndication(id);
             List<CertificateWrapper> path = new ArrayList<>(List.of(subject));
             issuers.stream().filter(issuer -> !issuer.getId().equals(id)).forEach(path::add);
-            return fail(DssOutcomes.code(indication, sub, path,
-                    reports.getDiagnosticData().getValidationDate()), "EU DSS (certificado): " + indication
-                    + (sub == null ? "" : "/" + sub) + " " + DssOutcomes.messages(report.getX509ValidationErrors(id)), context);
+            List<Message> errors = report.getX509ValidationErrors(id);
+            return fail(DssOutcomes.code(indication, sub, path, reports.getDiagnosticData().getValidationDate(), errors),
+                    "EU DSS (certificado): " + indication + (sub == null ? "" : "/" + sub) + " "
+                            + DssOutcomes.messages(errors), context);
         }
 
         List<X509Certificate> chain = new ArrayList<>(List.of(leaf));

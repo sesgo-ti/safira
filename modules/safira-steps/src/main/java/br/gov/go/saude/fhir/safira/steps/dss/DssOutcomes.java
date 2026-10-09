@@ -10,6 +10,7 @@ import br.gov.go.saude.fhir.safira.steps.policy.PolicyViolation;
 import eu.europa.esig.dss.diagnostic.CertificateWrapper;
 import eu.europa.esig.dss.enumerations.Indication;
 import eu.europa.esig.dss.enumerations.SubIndication;
+import eu.europa.esig.dss.i18n.MessageTag;
 import eu.europa.esig.dss.jaxb.object.Message;
 import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.simplereport.SimpleReport;
@@ -31,6 +32,7 @@ public final class DssOutcomes {
 
     private static final Set<SubIndication> REVOKED =
             EnumSet.of(SubIndication.REVOKED, SubIndication.REVOKED_NO_POE, SubIndication.REVOKED_CA_NO_POE);
+    private static final String POLICY_IDS_NOT_ACCEPTED = MessageTag.BBB_XCV_CMDCIPI_ANS.getId();
 
     private DssOutcomes() {
     }
@@ -41,12 +43,17 @@ public final class DssOutcomes {
      * @param chain          cadeia montada pelo DSS (certificado do signatário primeiro)
      * @param validationTime instante da validação do DSS; folha com {@code notAfter} anterior a ele
      *                       resulta em {@code CERT.EXPIRED} (salvo revogação, que prevalece)
+     * @param errors         erros do relatório do DSS; a restrição {@code PolicyIds} da política
+     *                       versionada (folha sem OID aceito) resulta em {@code CERT.NOT-ICP-BRASIL}
      */
     public static SignatureExceptionCode code(Indication indication, SubIndication sub, List<CertificateWrapper> chain,
-                                              Date validationTime) {
+                                              Date validationTime, List<Message> errors) {
         if (!REVOKED.contains(sub) && !chain.isEmpty() && validationTime != null
                 && chain.getFirst().getNotAfter().before(validationTime)) {
             return SignatureExceptionCode.CERT_EXPIRED;
+        }
+        if (sub == SubIndication.CHAIN_CONSTRAINTS_FAILURE && policyIdsRejected(errors)) {
+            return SignatureExceptionCode.CERT_NOT_ICP_BRASIL;
         }
         if (sub == SubIndication.CERTIFICATE_CHAIN_GENERAL_FAILURE && missingRevocation(chain)) {
             return SignatureExceptionCode.REVOCATION_STATUS_UNKNOWN;
@@ -107,6 +114,11 @@ public final class DssOutcomes {
                     "A cadeia da TSA não termina em âncora do trust store da política " + tsaPolicyOid + "."));
         }
         return Optional.empty();
+    }
+
+    /** O DSS recusou o certificado do signatário por {@code PolicyIds} (nenhum OID aceito). */
+    public static boolean policyIdsRejected(List<Message> errors) {
+        return errors.stream().anyMatch(error -> POLICY_IDS_NOT_ACCEPTED.equals(error.getKey()));
     }
 
     public static List<String> messages(List<Message> messages) {

@@ -10,6 +10,10 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.jades.fixture.TestPki.LeafProfile;
+import br.gov.go.saude.fhir.safira.steps.certificate.CertificateType;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
 import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
 import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
@@ -41,7 +45,12 @@ class PkixChainValidationStepTest {
 
     private static PkixChainValidationStep step(TrustMaterialSource trust, RevocationSource<OCSP> ocsp) {
         return new PkixChainValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
-                CertificateVerifierFactory.offline(ocsp, null)));
+                CertificateVerifierFactory.offline(ocsp, null)), allowlist(pki));
+    }
+
+    private static SafiraPolicyProperties allowlist(TestPki issuer) {
+        return new SafiraPolicyProperties(List.of(new AcceptedCertificatePolicy("2.16.76.1.2.3.1", CertificateType.A3,
+                issuer.issuerSha256())), null, null);
     }
 
     private static PkixChainValidationStep step(RevocationSource<OCSP> ocsp) {
@@ -128,5 +137,23 @@ class PkixChainValidationStepTest {
     void shouldRejectNonDerCertificate() {
         assertThat(code(step(pki.ocspGoodSource()).execute(context(List.of("AAAA")))))
                 .isEqualTo(SignatureExceptionCode.CERT_INVALID_FORMAT);
+    }
+
+    @Test
+    void shouldRejectWithNotIcpBrasilWhenLeafPolicyIsOutsideAcceptedList() throws Exception {
+        TestPki a1 = TestPki.create(LeafProfile.a3().withPolicyOid("2.16.76.1.2.1.1"));
+        TrustMaterialSource trust = () -> Optional.of(TrustMaterial.of(List.of(a1.caCert)));
+
+        assertThat(code(step(trust, a1.ocspGoodSource()).execute(context(List.of(b64(a1.leafCert))))))
+                .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
+    }
+
+    @Test
+    void shouldReportPolicyBeforeRevocationWhenLeafPolicyIsOutsideAcceptedList() throws Exception {
+        TestPki a1 = TestPki.create(LeafProfile.a3().withPolicyOid("2.16.76.1.2.1.1"));
+        TrustMaterialSource trust = () -> Optional.of(TrustMaterial.of(List.of(a1.caCert)));
+
+        assertThat(code(step(trust, TestPki.ocspSource(a1::ocspRevokedFor)).execute(context(List.of(b64(a1.leafCert))))))
+                .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
     }
 }

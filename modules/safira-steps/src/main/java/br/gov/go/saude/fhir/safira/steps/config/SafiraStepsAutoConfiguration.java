@@ -99,7 +99,7 @@ public class SafiraStepsAutoConfiguration {
         // Assinatura — política 0.2.0 (JAdES-B-B/B-T via EU DSS)
         steps.add(new ContextValidationStep(policyProperties, clock));
         steps.add(new PayloadValidationStep());
-        steps.add(new PkixChainValidationStep(verificadores));
+        steps.add(new PkixChainValidationStep(verificadores, policyProperties));
         steps.add(new CertificatePolicyStep(policyProperties));
         steps.add(new FramedContentDigestStep());
         steps.add(new JadesDataToSignStep());

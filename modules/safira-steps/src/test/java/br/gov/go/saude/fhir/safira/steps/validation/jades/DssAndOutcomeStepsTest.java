@@ -12,7 +12,9 @@ import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.jades.fixture.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.steps.certificate.CertificateType;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
@@ -101,6 +103,16 @@ class DssAndOutcomeStepsTest {
     @Test
     void shouldAcceptBaselineTThroughDss() {
         assertThat(step(good()).execute(bt).isSuccess()).isTrue();
+    }
+
+    @Test
+    void shouldReportPolicyComplianceWhenDssRejectsLeafPolicyOutsideAcceptedList() {
+        SafiraPolicyProperties seloApenas = new SafiraPolicyProperties(List.of(new AcceptedCertificatePolicy(
+                "2.16.76.1.2.201.1", CertificateType.SE_S, pki.issuerSha256())), policy.tsaPolicies(), policy.temporalPolicy());
+        DssValidationStep step = new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
+                CertificateVerifierFactory.offline(good(), null)), seloApenas);
+
+        assertThat(code(step.execute(bb))).isEqualTo(SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED);
     }
 
     @Test

@@ -89,7 +89,7 @@ public final class SignedArtifactFixture {
                     .operationalConfig(TestConfigs.operational(tsa == null ? null : tsa.url()))
                     .build();
             List<Step<SigningContext>> steps = List.of(
-                    new PkixChainValidationStep(verifiers),
+                    new PkixChainValidationStep(verifiers, policy),
                     new CertificatePolicyStep(policy),
                     new FramedContentDigestStep(),
                     new JadesDataToSignStep(),

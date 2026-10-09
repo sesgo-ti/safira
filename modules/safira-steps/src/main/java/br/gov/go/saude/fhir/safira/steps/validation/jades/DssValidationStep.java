@@ -11,9 +11,11 @@ import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationStep;
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
+import br.gov.go.saude.fhir.safira.jades.StrictValidationPolicies;
 import br.gov.go.saude.fhir.safira.steps.dss.DssOutcomes;
 import br.gov.go.saude.fhir.safira.steps.policy.PolicyViolation;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TsaPolicy;
 import br.gov.go.saude.fhir.safira.steps.policy.TsaTrustStores;
 import br.gov.go.saude.fhir.safira.steps.timestamp.TimestampTokenException;
@@ -25,6 +27,7 @@ import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
 import eu.europa.esig.dss.enumerations.Indication;
 import eu.europa.esig.dss.enumerations.SignatureLevel;
 import eu.europa.esig.dss.enumerations.SubIndication;
+import eu.europa.esig.dss.jaxb.object.Message;
 import eu.europa.esig.dss.simplereport.SimpleReport;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 import eu.europa.esig.dss.validation.reports.Reports;
@@ -44,9 +47,10 @@ import java.util.Optional;
  * (certificado revogado agora → {@code REVOKED_NO_POE} → {@code CERT.REVOKED}); em B-T o carimbo
  * é a POE e revogação posterior a ele não invalida a assinatura.
  *
- * <p>Política de validação: a padrão do DSS 6.5 (ETSI EN 319 102-1). As regras específicas da
- * SES-GO (OIDs ICP-Brasil, keyUsage, identidade, janela do carimbo) ficam nos passos próprios;
- * uma política XML versionada só se justifica se a padrão divergir do IG.
+ * <p>Política de validação: {@link StrictValidationPolicies} (versionada, derivada da padrão do
+ * DSS 6.5) com a lista explícita dos OIDs da allowlist. As demais regras SES-GO (emissor da
+ * allowlist, tipo, chave, keyUsage, identidade, janela do carimbo) ficam nos passos próprios; a
+ * recusa por {@code PolicyIds} vira {@code VALIDATION.POLICY-COMPLIANCE-FAILED} (validar 4.1).
  */
 // DIVERGENCIA-IG D7: validade histórica (intervalo I) em B-T decidida pelo DSS com o carimbo como POE
 @StepId("dss-validation")
@@ -54,11 +58,13 @@ public class DssValidationStep implements ValidationStep {
 
     private final VerificadoresDss verifiers;
     private final SafiraPolicyProperties policy;
-    private final JadesValidationService validationService = new JadesValidationService();
+    private final JadesValidationService validationService;
 
     public DssValidationStep(VerificadoresDss verifiers, SafiraPolicyProperties policy) {
         this.verifiers = verifiers;
         this.policy = policy;
+        this.validationService = new JadesValidationService(StrictValidationPolicies.comPoliticasAceitas(
+                policy.acceptedCertificatePolicies().stream().map(AcceptedCertificatePolicy::oid).toList()));
     }
 
     @Override
@@ -104,11 +110,15 @@ public class DssValidationStep implements ValidationStep {
         Indication indication = report.getIndication(id);
         if (indication != Indication.TOTAL_PASSED) {
             SubIndication sub = report.getSubIndication(id);
+            List<Message> errors = report.getAdESValidationErrors(id);
             SignatureExceptionCode code = DssOutcomes.code(indication, sub,
                     reports.getDiagnosticData().getSignatureById(id).getCertificateChain(),
-                    reports.getDiagnosticData().getValidationDate());
+                    reports.getDiagnosticData().getValidationDate(), errors);
+            if (code == SignatureExceptionCode.CERT_NOT_ICP_BRASIL && DssOutcomes.policyIdsRejected(errors)) {
+                code = SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED;
+            }
             return fail(code, "EU DSS: " + indication + (sub == null ? "" : "/" + sub)
-                    + " " + DssOutcomes.messages(report.getAdESValidationErrors(id)), context);
+                    + " " + DssOutcomes.messages(errors), context);
         }
         SignatureLevel expected = level == JadesLevel.B_B ? SignatureLevel.JAdES_BASELINE_B : SignatureLevel.JAdES_BASELINE_T;
         if (report.getSignatureFormat(id) != expected) {
