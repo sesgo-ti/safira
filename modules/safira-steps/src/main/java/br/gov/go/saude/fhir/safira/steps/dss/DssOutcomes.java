@@ -34,6 +34,7 @@ public final class DssOutcomes {
             EnumSet.of(SubIndication.REVOKED, SubIndication.REVOKED_NO_POE, SubIndication.REVOKED_CA_NO_POE);
     private static final String POLICY_IDS_NOT_ACCEPTED = MessageTag.BBB_XCV_CMDCIPI_ANS.getId();
     private static final String UNSUPPORTED_CRITICAL_EXTENSION = MessageTag.BBB_XCV_DCCUCE_ANS.getId();
+    private static final String FORBIDDEN_EXTENSION = MessageTag.BBB_XCV_DCCFCE_ANS.getId();
 
     private DssOutcomes() {
     }
@@ -46,19 +47,22 @@ public final class DssOutcomes {
      *                       resulta em {@code CERT.EXPIRED} (salvo revogação, que prevalece)
      * @param errors         erros do relatório do DSS; as restrições da política versionada no
      *                       certificado do signatário têm código próprio: {@code PolicyIds} (folha sem
-     *                       OID aceito) → {@code CERT.NOT-ICP-BRASIL}; extensão crítica não suportada
-     *                       → {@code CERT.CHAIN-VALIDATION-FAILED} (criar 2.7, validar 4.1)
+     *                       OID aceito) → {@code CERT.NOT-ICP-BRASIL}, antes de {@code CERT.EXPIRED}
+     *                       (criar 2.5 antes de 2.6); extensão crítica não suportada ou proibida
+     *                       ({@code ocsp_noCheck}) → {@code CERT.CHAIN-VALIDATION-FAILED} (criar 2.7,
+     *                       validar 4.1)
      */
     public static SignatureExceptionCode code(Indication indication, SubIndication sub, List<CertificateWrapper> chain,
                                               Date validationTime, List<Message> errors) {
+        if (sub == SubIndication.CHAIN_CONSTRAINTS_FAILURE && policyIdsRejected(errors)) {
+            return SignatureExceptionCode.CERT_NOT_ICP_BRASIL;
+        }
         if (!REVOKED.contains(sub) && !chain.isEmpty() && validationTime != null
                 && chain.getFirst().getNotAfter().before(validationTime)) {
             return SignatureExceptionCode.CERT_EXPIRED;
         }
-        if (sub == SubIndication.CHAIN_CONSTRAINTS_FAILURE && policyIdsRejected(errors)) {
-            return SignatureExceptionCode.CERT_NOT_ICP_BRASIL;
-        }
-        if (sub == SubIndication.CERTIFICATE_CHAIN_GENERAL_FAILURE && hasError(errors, UNSUPPORTED_CRITICAL_EXTENSION)) {
+        if (sub == SubIndication.CERTIFICATE_CHAIN_GENERAL_FAILURE
+                && (hasError(errors, UNSUPPORTED_CRITICAL_EXTENSION) || hasError(errors, FORBIDDEN_EXTENSION))) {
             return SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED;
         }
         if (sub == SubIndication.CERTIFICATE_CHAIN_GENERAL_FAILURE && missingRevocation(chain)) {
