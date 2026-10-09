@@ -132,6 +132,15 @@ class GeradorPkiSimuladaTest {
     }
 
     @Test
+    void shouldNotPointYamlUsageToProductJarsWhenGenerating() throws Exception {
+        String yaml = Files.readString(resultado.yaml());
+
+        assertThat(yaml).contains("--spring.profiles.active=simulacao")
+                .doesNotContain("safira-rest.jar")
+                .doesNotContain("safira-app");
+    }
+
+    @Test
     void shouldRejectCpfWhenCheckDigitsAreInvalid() {
         assertThatThrownBy(() -> Opcoes.padrao().comCpf("12345678900"))
                 .isInstanceOf(IllegalArgumentException.class);

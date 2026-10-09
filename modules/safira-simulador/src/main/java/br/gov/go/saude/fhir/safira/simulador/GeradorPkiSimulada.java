@@ -232,8 +232,8 @@ public final class GeradorPkiSimulada {
     private static String yaml(Resultado r) {
         return """
                 # PKI de simulação (%s) gerada pelo GeradorPkiSimulada.
-                # Uso: java -jar safira-rest.jar --spring.profiles.active=simulacao \\
-                #        --spring.config.additional-location=file:%s/
+                # Uso: numa aplicação com safira-rest e safira-simulador,
+                #        --spring.profiles.active=simulacao --spring.config.additional-location=file:%s/
                 safira:
                   simulacao:
                     enabled: true

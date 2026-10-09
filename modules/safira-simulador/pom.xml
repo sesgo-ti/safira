@@ -79,4 +79,25 @@
         </dependency>
     </dependencies>
 
+    <build>
+        <plugins>
+            <!-- JAR executável do gerador de PKI simulada (java -jar, opção saida); a
+                 aplicação de simulação própria virá depois. Nenhum módulo depende deste. -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada</mainClass>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
 </project>
