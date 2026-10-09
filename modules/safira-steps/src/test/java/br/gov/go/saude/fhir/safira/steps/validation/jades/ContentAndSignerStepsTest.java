@@ -14,6 +14,9 @@ import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
+import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
+import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
 import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
 import org.junit.jupiter.api.BeforeAll;
@@ -49,7 +52,9 @@ class ContentAndSignerStepsTest {
 
     private static StepResult<ValidationContext> signer(SafiraPolicyProperties properties, TrustMaterialSource source,
                                                         ValidationContext context) {
-        return new SignerCertificateStep(properties).execute(SignedArtifactFixture.comAcervo(context, source));
+        return new SignerCertificateStep(properties, new VerificadoresDss(new FonteDeConfiancaIcpBrasil(source),
+                CertificateVerifierFactory.offline(null, null)))
+                .execute(SignedArtifactFixture.comAcervo(context, source));
     }
 
     @Test
@@ -107,10 +112,19 @@ class ContentAndSignerStepsTest {
     }
 
     @Test
-    void shouldNotDecideRootTrustAtSignerStep() {
+    void shouldLeaveRootTrustToDssWhenProfileAccepts() {
         TrustMaterialSource other = () -> Optional.of(TrustMaterial.of(List.of(TestPki.create().caCert)));
 
         assertThat(signer(policy, other, structured).isSuccess()).isTrue();
+    }
+
+    @Test
+    void shouldReportNotIcpBrasilWhenRootIsOutsideAcervoAndIssuerNotInAllowlist() {
+        TestPki other = TestPki.create();
+        TrustMaterialSource otherAcervo = () -> Optional.of(TrustMaterial.of(List.of(other.caCert)));
+
+        assertThat(code(signer(TestConfigs.policy(other), otherAcervo, structured)))
+                .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
     }
 
     @Test

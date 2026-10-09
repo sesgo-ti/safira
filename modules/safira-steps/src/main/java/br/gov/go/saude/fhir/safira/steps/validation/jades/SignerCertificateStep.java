@@ -15,6 +15,8 @@ import br.gov.go.saude.fhir.safira.steps.certificate.IcpBrasilCertificateProfile
 import br.gov.go.saude.fhir.safira.steps.certificate.ProfileResult;
 import br.gov.go.saude.fhir.safira.steps.certificate.SignerIdentity;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
+import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
+import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
 
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPublicKey;
@@ -24,19 +26,24 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Passo {@code signer-certificate}: seções 4.1 e 4.2 do caso de uso de validação — política/tipo/chave/identidade do certificado
- * folha, correspondência com {@code Signature.who} e coerência de {@code Signature.when},
- * {@code iat}, timestamp de referência e validade da folha. Escreve
- * {@link ValidationKeys#SIGNER_IDENTITY}. A confiança na raiz de {@code x5c} não é decidida
- * aqui: é do {@code dss-validation}.
+ * Passo {@code signer-certificate}: seções 4.1 e 4.2 do caso de uso de validação — política,
+ * tipo, chave e identidade do certificado folha, correspondência com {@code Signature.who} e
+ * coerência de {@code Signature.when}, {@code iat}, timestamp de referência e validade da folha.
+ * Escreve {@link ValidationKeys#SIGNER_IDENTITY}.
+ *
+ * <p>A confiança na cadeia é do {@code dss-validation}. Aqui o DSS só diferencia a recusa do
+ * perfil: raiz que não é âncora do snapshot vira {@code CERT.NOT-ICP-BRASIL}, avaliado antes da
+ * allowlist ({@code POLICY-COMPLIANCE-FAILED}).
  */
 @StepId("signer-certificate")
 public class SignerCertificateStep implements ValidationStep {
 
     private final SafiraPolicyProperties policy;
+    private final VerificadoresDss verificadores;
 
-    public SignerCertificateStep(SafiraPolicyProperties policy) {
+    public SignerCertificateStep(SafiraPolicyProperties policy, VerificadoresDss verificadores) {
         this.policy = policy;
+        this.verificadores = verificadores;
     }
 
     @Override
@@ -50,6 +57,16 @@ public class SignerCertificateStep implements ValidationStep {
         ProfileResult profile = IcpBrasilCertificateProfile.evaluate(leaf, chain.get(1),
                 policy.acceptedCertificatePolicies(), policy.minCertIssueDate());
         if (profile instanceof ProfileResult.Rejected rejected) {
+            if (rejected.code() == SignatureExceptionCode.CERT_NOT_ICP_BRASIL) {
+                Optional<AcervoDeConfianca> acervo = context.getAttribute(ValidationKeys.ACERVO, AcervoDeConfianca.class);
+                if (acervo.isEmpty()) {
+                    return fail(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY, "Acervo ICP-Brasil indisponível.", context);
+                }
+                if (!verificadores.ehAncora(acervo.get(), chain.getLast())) {
+                    return fail(SignatureExceptionCode.CERT_NOT_ICP_BRASIL,
+                            "A raiz de x5c não é âncora do acervo ICP-Brasil.", context);
+                }
+            }
             return fail(validationCode(rejected.code(), leaf), rejected.diagnostics(), context);
         }
         SignerIdentity identity = ((ProfileResult.Eligible) profile).identity();

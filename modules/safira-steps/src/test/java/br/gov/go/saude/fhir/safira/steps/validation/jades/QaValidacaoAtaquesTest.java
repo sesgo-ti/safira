@@ -163,10 +163,8 @@ class QaValidacaoAtaquesTest {
                 new SignatureBindingStep(),
                 new JwsStructureStep(),
                 new ContentIntegrityStep(),
-                new SignerCertificateStep(policy),
-                new DssValidationStep(new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
-                        CertificateVerifierFactory.offline(ocsp, null)),
-                        policy),
+                new SignerCertificateStep(policy, verificadores(trust, ocsp)),
+                new DssValidationStep(verificadores(trust, ocsp), policy),
                 new TimestampValidationStep(policy),
                 new ValidationOutcomeStep());
         ValidationContext context = ValidationContext.builder()
@@ -203,8 +201,12 @@ class QaValidacaoAtaquesTest {
                 .build();
         context = new SignatureBindingStep().execute(context).context();
         context = new JwsStructureStep().execute(context).context();
-        context = new SignerCertificateStep(policy).execute(SignedArtifactFixture.comAcervo(context, trust)).context();
+        context = new SignerCertificateStep(policy, verificadores(trust, pki.ocspGoodSource())).execute(SignedArtifactFixture.comAcervo(context, trust)).context();
         return new ValidationOutcomeStep().execute(context).context().getOperationOutcome().issue().getFirst().diagnostics();
+    }
+
+    private static VerificadoresDss verificadores(TrustMaterialSource trust, RevocationSource<OCSP> ocsp) {
+        return new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust), CertificateVerifierFactory.offline(ocsp, null));
     }
 
     private static long now() {
@@ -1098,7 +1100,7 @@ class QaValidacaoAtaquesTest {
                 TestPki.CERT_END, "2.16.76.1.2.3.1", KeyUsage.digitalSignature, false);
 
         assertThat(validate(signedBy(keys, List.of(leaf, rogueRoot), now() - 5)))
-                .isEqualTo(SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED.getCode());
+                .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL.getCode());
     }
 
     @Test
@@ -1117,7 +1119,7 @@ class QaValidacaoAtaquesTest {
         TestPki other = TestPki.create();
 
         assertThat(validate(signedBy(other.leafKeys, other.chain(), now() - 5), policy, trust, other.ocspGoodSource()))
-                .isEqualTo(SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED.getCode());
+                .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL.getCode());
     }
 
     @Test

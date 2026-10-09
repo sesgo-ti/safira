@@ -7,6 +7,7 @@ package br.gov.go.saude.fhir.safira.steps.trust;
 
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory.Acervo;
+import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 
 import java.security.cert.X509Certificate;
@@ -53,6 +54,13 @@ public class VerificadoresDss {
         Objects.requireNonNull(acervo, "acervo");
         Objects.requireNonNull(ancorasExtras, "ancorasExtras");
         return factory.create(fontes(acervo), ancorasExtras);
+    }
+
+    /** Se o DSS considera o certificado uma âncora confiável da geração do snapshot informado. */
+    public boolean ehAncora(AcervoDeConfianca acervo, X509Certificate certificado) {
+        Objects.requireNonNull(acervo, "acervo");
+        Objects.requireNonNull(certificado, "certificado");
+        return fontes(acervo).trusted().isTrusted(new CertificateToken(certificado));
     }
 
     private Acervo fontes(AcervoDeConfianca acervo) {

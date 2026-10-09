@@ -114,7 +114,7 @@ public class SafiraStepsAutoConfiguration {
         steps.add(new SignatureBindingStep());
         steps.add(new JwsStructureStep());
         steps.add(new ContentIntegrityStep());
-        steps.add(new SignerCertificateStep(policyProperties));
+        steps.add(new SignerCertificateStep(policyProperties, verificadores));
         steps.add(new DssValidationStep(verificadores, policyProperties));
         steps.add(new TimestampValidationStep(policyProperties));
         steps.add(new ValidationOutcomeStep());

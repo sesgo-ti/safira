@@ -72,7 +72,8 @@ class DssAndOutcomeStepsTest {
     private static ValidationContext structured(ValidationContext context) {
         ValidationContext bound = new SignatureBindingStep().execute(context).context();
         ValidationContext parsed = new JwsStructureStep().execute(bound).context();
-        return new SignerCertificateStep(policy).execute(SignedArtifactFixture.comAcervo(parsed, trust)).context();
+        return new SignerCertificateStep(policy, new VerificadoresDss(new FonteDeConfiancaIcpBrasil(trust),
+                CertificateVerifierFactory.offline(null, null))).execute(SignedArtifactFixture.comAcervo(parsed, trust)).context();
     }
 
     /** DSS offline: respostas OCSP prontas (sem rede) sobre o acervo informado. */
@@ -149,7 +150,8 @@ class DssAndOutcomeStepsTest {
         context = new JwsStructureStep().execute(new SignatureBindingStep().execute(context).context()).context();
         vigente.set(() -> Optional.of(TrustMaterial.of(List.of(TestPki.create().caCert))));
 
-        ValidationContext verified = new SignerCertificateStep(policy).execute(context).context();
+        ValidationContext verified = new SignerCertificateStep(policy, new VerificadoresDss(fonte,
+                CertificateVerifierFactory.offline(good(), null))).execute(context).context();
         DssValidationStep dss = new DssValidationStep(new VerificadoresDss(fonte,
                 CertificateVerifierFactory.offline(good(), null)), policy);
 
