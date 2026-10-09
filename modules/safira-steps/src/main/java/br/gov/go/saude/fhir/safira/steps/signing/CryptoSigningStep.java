@@ -100,7 +100,7 @@ public class CryptoSigningStep implements SigningStep {
                 .orElseThrow(() -> new StepException(
                         SignatureExceptionCode.CRYPTO_SIGNATURE_CREATION_FAILED,
                         "Os bytes do signing input não foram encontrados no contexto. "
-                                + "Verifique se o step signing-input foi executado."));
+                                + "Verifique se o step jades-data-to-sign foi executado."));
 
         CryptoMaterial material = context.getCryptoMaterial();
         if (material == null) {

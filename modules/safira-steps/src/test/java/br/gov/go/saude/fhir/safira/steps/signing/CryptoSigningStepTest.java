@@ -288,7 +288,8 @@ class CryptoSigningStepTest {
                 .cryptoMaterial(material)
                 .build();
 
-        assertThrows(StepException.class, () -> step.execute(context));
+        StepException exception = assertThrows(StepException.class, () -> step.execute(context));
+        assertTrue(exception.getMessage().contains("jades-data-to-sign"));
     }
 
     @Test
