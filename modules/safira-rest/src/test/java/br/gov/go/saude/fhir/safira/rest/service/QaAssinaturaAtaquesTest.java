@@ -383,21 +383,27 @@ class QaAssinaturaAtaquesTest {
 
     @Test
     void shouldRejectSigningWhenLeafIsRevoked() throws Exception {
-        OfflineRevocationConfig.responder = PKI::ocspRevogado;
+        OfflineRevocationConfig.responder = PKI.respostasComSignatarioRevogado();
 
         MvcResult result = sign(baseBody());
 
         assertThat(result.getResponse().getStatus()).isEqualTo(422);
         assertThat(code(result)).isEqualTo("CERT.REVOKED");
+        // a folha (REVOKED_NO_POE), não a AC (REVOKED_CA_NO_POE ou aceita, mesmo código)
+        assertThat(diagnostics(result)).contains("/REVOKED_NO_POE");
     }
 
     @Test
     void shouldRejectSigningWhenRevocationIsUnavailable() throws Exception {
-        OfflineRevocationConfig.responder = certificate -> null;
+        OfflineRevocationConfig.responder = PKI.respostasSemRevogacaoDoSignatario();
 
         MvcResult result = sign(baseBody());
 
         assertThat(result.getResponse().getStatus()).isEqualTo(422);
+        assertThat(code(result)).isEqualTo("REVOCATION.STATUS-UNKNOWN");
+        // só a folha sem revogação: a AC sem resposta acrescentaria "revocation issuer" (mesmo código)
+        assertThat(diagnostics(result)).contains("No revocation data found for the certificate")
+                .doesNotContain("revocation issuer");
     }
 
     // ------------------------------------------------------------------ parâmetros de contexto
@@ -773,6 +779,10 @@ class QaAssinaturaAtaquesTest {
 
     private JsonNode json(MvcResult result) throws Exception {
         return mapper.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8));
+    }
+
+    private String diagnostics(MvcResult result) throws Exception {
+        return json(result).get("issue").get(0).get("diagnostics").asText();
     }
 
     private String code(MvcResult result) throws Exception {

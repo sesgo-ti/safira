@@ -87,10 +87,13 @@ public class SignAndValidateSystemTest {
     }
 
     private String validateAndGetCode(String body, int expectedStatus) throws Exception {
+        return validateAndGetIssue(body, expectedStatus).get("details").get("coding").get(0).get("code").asText();
+    }
+
+    private JsonNode validateAndGetIssue(String body, int expectedStatus) throws Exception {
         MvcResult result = validate(body);
         assertThat(result.getResponse().getStatus()).isEqualTo(expectedStatus);
-        return mapper.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8))
-                .get("issue").get(0).get("details").get("coding").get(0).get("code").asText();
+        return mapper.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8)).get("issue").get(0);
     }
 
     @Test
@@ -136,21 +139,28 @@ public class SignAndValidateSystemTest {
     @Test
     void shouldRejectWhenNoRevocationIsReachable() throws Exception {
         JsonNode signed = signed();
-        OfflineRevocationConfig.responder = certificate -> null;
+        OfflineRevocationConfig.responder = JadesSigningSystemTest.PKI.respostasSemRevogacaoDoSignatario();
 
-        assertThat(validateAndGetCode(validationBody(signed.get("signature").toString(),
-                JadesSigningSystemTest.example("bundle.json"), signed.get("provenance").toString()), 422))
-                .isEqualTo("REVOCATION.STATUS-UNKNOWN");
+        JsonNode issue = validateAndGetIssue(validationBody(signed.get("signature").toString(),
+                JadesSigningSystemTest.example("bundle.json"), signed.get("provenance").toString()), 422);
+
+        assertThat(issue.get("details").get("coding").get(0).get("code").asText()).isEqualTo("REVOCATION.STATUS-UNKNOWN");
+        // só a folha sem revogação: a AC sem resposta acrescentaria "revocation issuer" (mesmo código)
+        assertThat(issue.get("diagnostics").asText()).contains("No revocation data found for the certificate")
+                .doesNotContain("revocation issuer");
     }
 
     @Test
     void shouldRejectWhenSignerIsRevoked() throws Exception {
         JsonNode signed = signed();
-        OfflineRevocationConfig.responder = JadesSigningSystemTest.PKI::ocspRevogado;
+        OfflineRevocationConfig.responder = JadesSigningSystemTest.PKI.respostasComSignatarioRevogado();
 
-        assertThat(validateAndGetCode(validationBody(signed.get("signature").toString(),
-                JadesSigningSystemTest.example("bundle.json"), signed.get("provenance").toString()), 422))
-                .isEqualTo("CERT.REVOKED");
+        JsonNode issue = validateAndGetIssue(validationBody(signed.get("signature").toString(),
+                JadesSigningSystemTest.example("bundle.json"), signed.get("provenance").toString()), 422);
+
+        assertThat(issue.get("details").get("coding").get(0).get("code").asText()).isEqualTo("CERT.REVOKED");
+        // a folha (REVOKED_NO_POE), não a AC (REVOKED_CA_NO_POE, mesmo código)
+        assertThat(issue.get("diagnostics").asText()).contains("/REVOKED_NO_POE");
     }
 
     @Test

@@ -155,8 +155,17 @@ class QaValidacaoAtaquesTest {
         return validate(artifact, policy, trust, pki.fonteOcsp());
     }
 
-    /** Executa os steps na ordem do pipeline VALIDATION 0.2.0; exceção vira INTERNAL_ERROR (PipelineExecutor). */
     private static String validate(Artifact artifact, SafiraPolicyProperties policy, FonteDeConfianca trust,
+                                   RevocationSource<OCSP> ocsp) {
+        return outcome(artifact, policy, trust, ocsp).code();
+    }
+
+    /** Código e diagnóstico do resultado da validação (diagnóstico vazio quando não há falha de step). */
+    private record Outcome(String code, String diagnostics) {
+    }
+
+    /** Executa os steps na ordem do pipeline VALIDATION 0.2.0; exceção vira INTERNAL_ERROR (PipelineExecutor). */
+    private static Outcome outcome(Artifact artifact, SafiraPolicyProperties policy, FonteDeConfianca trust,
                                    RevocationSource<OCSP> ocsp) {
         List<ValidationStep> steps = List.of(
                 new ValidationRequestContextStep(policy, trust, Clock.systemUTC()),
@@ -180,14 +189,14 @@ class QaValidacaoAtaquesTest {
             try {
                 result = step.execute(context);
             } catch (Exception e) {
-                return INTERNAL_ERROR;
+                return new Outcome(INTERNAL_ERROR, "");
             }
             if (result instanceof StepResult.Failure<ValidationContext> failure) {
-                return failure.code().getCode();
+                return new Outcome(failure.code().getCode(), failure.diagnostics());
             }
             context = result.context();
         }
-        return context.getOperationOutcome().issue().getFirst().details().coding().getFirst().code();
+        return new Outcome(context.getOperationOutcome().issue().getFirst().details().coding().getFirst().code(), "");
     }
 
     private static String diagnosticsOf(Artifact artifact) {
@@ -1217,15 +1226,24 @@ class QaValidacaoAtaquesTest {
 
     @Test
     void shouldRejectLeafWhenCertificateIsRevoked() {
-        RevocationSource<OCSP> revoked = EvidenceRevocationSources.ocspPorCertificado(pki::ocspRevogado);
+        RevocationSource<OCSP> revoked = EvidenceRevocationSources.ocspPorCertificado(pki.respostasComSignatarioRevogado());
 
-        assertThat(validate(legitimateBaselineB(), policy, trust, revoked)).isEqualTo(SignatureExceptionCode.CERT_REVOKED.getCode());
+        Outcome outcome = outcome(legitimateBaselineB(), policy, trust, revoked);
+
+        assertThat(outcome.code()).isEqualTo(SignatureExceptionCode.CERT_REVOKED.getCode());
+        // a folha (REVOKED_NO_POE), não a AC (REVOKED_CA_NO_POE, mesmo código)
+        assertThat(outcome.diagnostics()).contains("/REVOKED_NO_POE");
     }
 
     @Test
     void shouldRejectBaselineBWhenRevocationIsUnavailable() {
-        assertThat(validate(legitimateBaselineB(), policy, trust, EvidenceRevocationSources.ocspPorCertificado(certificate -> null)))
-                .isEqualTo(SignatureExceptionCode.REVOCATION_STATUS_UNKNOWN.getCode());
+        Outcome outcome = outcome(legitimateBaselineB(), policy, trust,
+                EvidenceRevocationSources.ocspPorCertificado(pki.respostasSemRevogacaoDoSignatario()));
+
+        assertThat(outcome.code()).isEqualTo(SignatureExceptionCode.REVOCATION_STATUS_UNKNOWN.getCode());
+        // só a folha sem revogação: a AC sem resposta acrescentaria "revocation issuer" (mesmo código)
+        assertThat(outcome.diagnostics()).contains("No revocation data found for the certificate")
+                .doesNotContain("revocation issuer");
     }
 
     // ---------------------------------------------------------------------------------------------

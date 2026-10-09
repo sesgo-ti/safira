@@ -65,6 +65,10 @@ class PkixChainValidationStepTest {
         return SigningContext.builder().rawCertificateChain(chain).build();
     }
 
+    private static String diagnostics(StepResult<SigningContext> result) {
+        return ((StepResult.Failure<SigningContext>) result).diagnostics();
+    }
+
     private static SignatureExceptionCode code(StepResult<SigningContext> result) {
         assertThat(result).isInstanceOf(StepResult.Failure.class);
         return ((StepResult.Failure<SigningContext>) result).code();
@@ -95,16 +99,23 @@ class PkixChainValidationStepTest {
 
     @Test
     void shouldRejectRevokedSigner() throws Exception {
-        RevocationSource<OCSP> revoked = EvidenceRevocationSources.ocspPorCertificado(pki::ocspRevogado);
+        RevocationSource<OCSP> revoked = EvidenceRevocationSources.ocspPorCertificado(pki.respostasComSignatarioRevogado());
 
-        assertThat(code(step(revoked).execute(context(List.of(b64(pki.signatario()))))))
-                .isEqualTo(SignatureExceptionCode.CERT_REVOKED);
+        StepResult<SigningContext> result = step(revoked).execute(context(List.of(b64(pki.signatario()))));
+
+        assertThat(code(result)).isEqualTo(SignatureExceptionCode.CERT_REVOKED);
+        // a folha (REVOKED_NO_POE), não a AC (REVOKED_CA_NO_POE, mesmo código)
+        assertThat(diagnostics(result)).contains("/REVOKED_NO_POE");
     }
 
     @Test
     void shouldRejectWhenNoRevocationIsReachable() throws Exception {
-        assertThat(code(step(EvidenceRevocationSources.ocspPorCertificado(certificate -> null)).execute(context(List.of(b64(pki.signatario()))))))
-                .isEqualTo(SignatureExceptionCode.REVOCATION_STATUS_UNKNOWN);
+        StepResult<SigningContext> result = step(EvidenceRevocationSources.ocspPorCertificado(
+                pki.respostasSemRevogacaoDoSignatario())).execute(context(List.of(b64(pki.signatario()))));
+
+        assertThat(code(result)).isEqualTo(SignatureExceptionCode.REVOCATION_STATUS_UNKNOWN);
+        // só a folha sem revogação: a AC sem resposta acrescentaria "revocation issuer" (mesmo código)
+        assertThat(diagnostics(result)).contains("No revocation data found for the certificate").doesNotContain("revocation issuer");
     }
 
     @Test
@@ -153,7 +164,7 @@ class PkixChainValidationStepTest {
         PkiIcpSimulada a1 = PkiIcpSimulada.criar(PerfilSignatario.a3().comPolitica("2.16.76.1.2.1.1"));
         FonteDeConfianca trust = FonteDeTeste.com(a1.raiz(), a1.ac());
 
-        assertThat(code(step(trust, EvidenceRevocationSources.ocspPorCertificado(a1::ocspRevogado)).execute(context(List.of(b64(a1.signatario()))))))
+        assertThat(code(step(trust, EvidenceRevocationSources.ocspPorCertificado(a1.respostasComSignatarioRevogado())).execute(context(List.of(b64(a1.signatario()))))))
                 .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
     }
 

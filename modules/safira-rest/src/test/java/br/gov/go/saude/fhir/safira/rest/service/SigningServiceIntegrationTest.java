@@ -77,9 +77,13 @@ class SigningServiceIntegrationTest {
     @Test
     void shouldReturnCertRevokedWhenSignerIsRevoked() throws Exception {
         acervo(JadesSigningSystemTest.PKI.raiz(), JadesSigningSystemTest.PKI.ac());
-        OfflineRevocationConfig.responder = JadesSigningSystemTest.PKI::ocspRevogado;
+        OfflineRevocationConfig.responder = JadesSigningSystemTest.PKI.respostasComSignatarioRevogado();
 
-        assertThat(code(signingService.sign(body()))).isEqualTo("CERT.REVOKED");
+        PipelineResult<?> result = signingService.sign(body());
+
+        assertThat(code(result)).isEqualTo("CERT.REVOKED");
+        // a folha (REVOKED_NO_POE), não a AC (REVOKED_CA_NO_POE ou aceita, mesmo código)
+        assertThat(result.getExceptionDetails().issue().getFirst().diagnostics()).contains("/REVOKED_NO_POE");
     }
 
     @Test
