@@ -28,10 +28,15 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyStore;
+import java.security.PrivateKey;
+import java.security.SecureRandom;
+import java.security.Signature;
+import java.security.cert.CertificateException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -41,6 +46,7 @@ import java.time.Period;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
@@ -81,6 +87,8 @@ public final class RepositorioPkiSimulada {
     private static final String ALIAS_RAIZ = "raiz";
     private static final String ALIAS_AC = "ac";
     private static final String ALIAS_TSA = "tsa";
+    private static final List<String> PRIVADOS = List.of(SENHA, AUTORIDADES, SIGNATARIO, REVOGADO);
+    private static final SecureRandom DESAFIOS = new SecureRandom();
     private static final List<String> OBRIGATORIOS = List.of(MANIFESTO, SENHA, AUTORIDADES, RAIZ, AC, SIGNATARIO, REVOGADO);
 
     private static final Logger log = LoggerFactory.getLogger(RepositorioPkiSimulada.class);
@@ -218,37 +226,29 @@ public final class RepositorioPkiSimulada {
         if (!faltando.isEmpty()) {
             throw invalida(dir, "incompleta: faltam " + String.join(", ", faltando), null);
         }
-        Properties manifesto = new Properties();
-        char[] senha;
-        Material material;
-        try {
-            try (InputStream in = Files.newInputStream(dir.resolve(MANIFESTO))) {
-                manifesto.load(in);
-            }
-            if (!FORMATO.equals(manifesto.getProperty("formato"))) {
-                throw invalida(dir, "corrompida: " + MANIFESTO + " com formato desconhecido", null);
-            }
-            senha = Files.readString(dir.resolve(SENHA)).strip().toCharArray();
-            KeyStore autoridades = keyStore(dir, AUTORIDADES, senha);
-            Entidade raiz = entidade(dir, autoridades, AUTORIDADES, ALIAS_RAIZ, senha);
-            Entidade ac = entidade(dir, autoridades, AUTORIDADES, ALIAS_AC, senha);
-            Entidade tsa = entidade(dir, autoridades, AUTORIDADES, ALIAS_TSA, senha);
-            Entidade signatario = entidade(dir, keyStore(dir, SIGNATARIO, senha), SIGNATARIO,
-                    GeradorPkiSimulada.ALIAS_SIGNATARIO, senha);
-            Entidade revogado = entidade(dir, keyStore(dir, REVOGADO, senha), REVOGADO,
-                    GeradorPkiSimulada.ALIAS_REVOGADO, senha);
-            conferirPem(dir, RAIZ, raiz.certificado());
-            conferirPem(dir, AC, ac.certificado());
-            conferirEmissor(dir, AUTORIDADES, raiz.certificado(), raiz.certificado());
-            conferirEmissor(dir, AUTORIDADES, ac.certificado(), raiz.certificado());
-            conferirEmissor(dir, AUTORIDADES, tsa.certificado(), ac.certificado());
-            conferirEmissor(dir, SIGNATARIO, signatario.certificado(), ac.certificado());
-            conferirEmissor(dir, REVOGADO, revogado.certificado(), ac.certificado());
-            material = new Material(raiz, ac, signatario, revogado, tsa,
-                    new Date(Long.parseLong(manifesto.getProperty("revogado-em", ""))));
-        } catch (IOException | NumberFormatException e) {
-            throw invalida(dir, "corrompida: " + e.getMessage(), e);
+        for (String privado : PRIVADOS) {
+            conferirPermissoes(dir, privado);
         }
+        Properties manifesto = manifesto(dir);
+        char[] senha = senha(dir);
+        KeyStore autoridades = keyStore(dir, AUTORIDADES, senha);
+        Entidade raiz = entidade(dir, autoridades, AUTORIDADES, ALIAS_RAIZ, senha);
+        Entidade ac = entidade(dir, autoridades, AUTORIDADES, ALIAS_AC, senha);
+        Entidade tsa = entidade(dir, autoridades, AUTORIDADES, ALIAS_TSA, senha);
+        Entidade signatario = entidade(dir, keyStore(dir, SIGNATARIO, senha), SIGNATARIO,
+                GeradorPkiSimulada.ALIAS_SIGNATARIO, senha);
+        Entidade revogado = entidade(dir, keyStore(dir, REVOGADO, senha), REVOGADO,
+                GeradorPkiSimulada.ALIAS_REVOGADO, senha);
+        conferirPem(dir, RAIZ, raiz.certificado());
+        conferirPem(dir, AC, ac.certificado());
+        conferirVigencia(dir, RAIZ, raiz.certificado(), agora);
+        conferirVigencia(dir, AC, ac.certificado(), agora);
+        conferirEmissor(dir, AUTORIDADES, raiz.certificado(), raiz.certificado());
+        conferirEmissor(dir, AUTORIDADES, ac.certificado(), raiz.certificado());
+        conferirEmissor(dir, AUTORIDADES, tsa.certificado(), ac.certificado());
+        conferirEmissor(dir, SIGNATARIO, signatario.certificado(), ac.certificado());
+        conferirEmissor(dir, REVOGADO, revogado.certificado(), ac.certificado());
+        Material material = new Material(raiz, ac, signatario, revogado, tsa, revogadoEm(dir, manifesto));
 
         PkiIcpSimulada pki = PkiIcpSimulada.restaurar(material, VALIDADE_REVOGACAO);
         Situacao situacao = Situacao.REUTILIZADA;
@@ -310,6 +310,95 @@ public final class RepositorioPkiSimulada {
         keyStore.setKeyEntry(alias, chaves.getPrivate(), senha.toCharArray(), (Certificate[]) cadeia);
     }
 
+    private static Properties manifesto(Path dir) {
+        Properties manifesto = new Properties();
+        try (InputStream in = Files.newInputStream(dir.resolve(MANIFESTO))) {
+            manifesto.load(in);
+        } catch (IOException | IllegalArgumentException e) {
+            throw invalida(dir, "corrompida: " + MANIFESTO + " ilegível", e);
+        }
+        if (!FORMATO.equals(manifesto.getProperty("formato"))) {
+            throw invalida(dir, "corrompida: " + MANIFESTO + " com formato desconhecido", null);
+        }
+        return manifesto;
+    }
+
+    private static Date revogadoEm(Path dir, Properties manifesto) {
+        try {
+            return new Date(Long.parseLong(manifesto.getProperty("revogado-em", "")));
+        } catch (NumberFormatException e) {
+            throw invalida(dir, "corrompida: " + MANIFESTO + " sem revogado-em válido", e);
+        }
+    }
+
+    private static char[] senha(Path dir) {
+        try {
+            return Files.readString(dir.resolve(SENHA)).strip().toCharArray();
+        } catch (IOException e) {
+            throw invalida(dir, "corrompida: " + SENHA + " ilegível", e);
+        }
+    }
+
+    /**
+     * Material privado acessível a grupo ou outros impede a partida (como o ssh com chave aberta): a
+     * correção é do operador ({@code chmod 600}), não automática.
+     */
+    private static void conferirPermissoes(Path dir, String nome) {
+        Path arquivo = dir.resolve(nome);
+        if (!posix(dir)) {
+            return;
+        }
+        try {
+            Set<PosixFilePermission> permissoes = Files.getPosixFilePermissions(arquivo);
+            if (permissoes.stream().anyMatch(permissao -> !permissao.name().startsWith("OWNER_"))) {
+                throw new IllegalStateException("PKI simulada em " + dir + " insegura: " + nome + " com permissão "
+                        + PosixFilePermissions.toString(permissoes) + " (exigido rw-------). Corrija com: chmod 600 "
+                        + arquivo);
+            }
+        } catch (IOException e) {
+            throw invalida(dir, "corrompida: permissões de " + nome + " ilegíveis", e);
+        }
+    }
+
+    private static void conferirVigencia(Path dir, String nome, X509Certificate certificado, Instant agora) {
+        try {
+            certificado.checkValidity(Date.from(agora));
+        } catch (CertificateException e) {
+            throw invalida(dir, "inutilizável: " + nome + " vencido ou ainda não válido (validade "
+                    + certificado.getNotBefore().toInstant() + " a " + certificado.getNotAfter().toInstant() + ")", e);
+        }
+    }
+
+    /** Desafio assinado com a chave privada e verificado com o certificado da mesma entrada. */
+    private static void conferirPar(Path dir, String nome, String alias, X509Certificate certificado,
+                                    PrivateKey chave) {
+        String algoritmo = switch (chave.getAlgorithm()) {
+            case "RSA" -> "SHA256withRSA";
+            case "EC" -> "SHA256withECDSA";
+            default -> throw invalida(dir, "corrompida: " + nome + " com chave '" + alias + "' de algoritmo não suportado", null);
+        };
+        byte[] desafio = new byte[32];
+        DESAFIOS.nextBytes(desafio);
+        boolean confere;
+        try {
+            Signature assinatura = Signature.getInstance(algoritmo);
+            assinatura.initSign(chave);
+            assinatura.update(desafio);
+            byte[] assinado = assinatura.sign();
+            // pela chave pública: initVerify(Certificate) recusa keyUsage sem digitalSignature (raiz, AC)
+            assinatura.initVerify(certificado.getPublicKey());
+            assinatura.update(desafio);
+            confere = assinatura.verify(assinado);
+        } catch (GeneralSecurityException e) {
+            throw invalida(dir, "corrompida: " + nome + " com chave privada '" + alias
+                    + "' que não corresponde ao certificado", e);
+        }
+        if (!confere) {
+            throw invalida(dir, "corrompida: " + nome + " com chave privada '" + alias
+                    + "' que não corresponde ao certificado", null);
+        }
+    }
+
     private static KeyStore keyStore(Path dir, String nome, char[] senha) {
         try (InputStream in = Files.newInputStream(dir.resolve(nome))) {
             KeyStore keyStore = KeyStore.getInstance("PKCS12");
@@ -325,6 +414,7 @@ public final class RepositorioPkiSimulada {
             if (keyStore.getEntry(alias, new KeyStore.PasswordProtection(senha))
                     instanceof KeyStore.PrivateKeyEntry entrada
                     && entrada.getCertificate() instanceof X509Certificate certificado) {
+                conferirPar(dir, nome, alias, certificado, entrada.getPrivateKey());
                 return new Entidade(certificado, entrada.getPrivateKey());
             }
         } catch (GeneralSecurityException e) {

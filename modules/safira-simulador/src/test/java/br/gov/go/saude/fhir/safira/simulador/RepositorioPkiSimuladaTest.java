@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.security.KeyPair;
 import java.security.KeyStore;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
@@ -241,6 +242,73 @@ class RepositorioPkiSimuladaTest {
         for (Path pasta : List.of(temporario.resolve("a"), temporario.resolve("a").resolve("b"), aninhado)) {
             assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(pasta))).isEqualTo("rwx------");
         }
+    }
+
+    @Test
+    void shouldFailWhenPrivateKeyDoesNotMatchCertificate() throws Exception {
+        PkiPersistida pki = RepositorioPkiSimulada.abrir(diretorio());
+        String senha = Files.readString(pki.senha()).strip();
+        GeradorPkiSimulada.p12(pki.signatario(), GeradorPkiSimulada.ALIAS_SIGNATARIO,
+                new KeyPair(pki.pki().signatario().getPublicKey(), pki.pki().chavesRevogado().getPrivate()), senha,
+                pki.pki().signatario(), pki.pki().ac(), pki.pki().raiz());
+
+        assertThatThrownBy(() -> RepositorioPkiSimulada.abrir(diretorio()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("corrompida")
+                .hasMessageContaining("signatario.p12")
+                .hasMessageContaining("não corresponde");
+    }
+
+    @Test
+    void shouldFailWhenPrivateMaterialIsAccessibleByOthers() throws Exception {
+        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        PkiPersistida pki = RepositorioPkiSimulada.abrir(diretorio());
+        Files.setPosixFilePermissions(pki.senha(), PosixFilePermissions.fromString("rw-r--r--"));
+
+        assertThatThrownBy(() -> RepositorioPkiSimulada.abrir(diretorio()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("senha.txt")
+                .hasMessageContaining("rw-r--r--")
+                .hasMessageContaining("chmod 600");
+    }
+
+    @Test
+    void shouldFailWhenRootIsExpired() {
+        PkiPersistida pki = RepositorioPkiSimulada.abrir(diretorio());
+        Instant depois = pki.pki().raiz().getNotAfter().toInstant().plus(Duration.ofDays(1));
+
+        assertThatThrownBy(() -> RepositorioPkiSimulada.abrir(diretorio(), GeradorPkiSimulada.VALIDADE_FOLHA, depois,
+                caminho -> {
+                }))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("raiz.pem")
+                .hasMessageContaining("vencido");
+    }
+
+    @Test
+    void shouldFailWhenIntermediateCaIsExpired() {
+        PkiPersistida pki = RepositorioPkiSimulada.abrir(diretorio());
+        Instant depois = pki.pki().ac().getNotAfter().toInstant().plus(Duration.ofDays(1));
+
+        assertThatThrownBy(() -> RepositorioPkiSimulada.abrir(diretorio(), GeradorPkiSimulada.VALIDADE_FOLHA, depois,
+                caminho -> {
+                }))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("ac.pem")
+                .hasMessageContaining("vencido");
+    }
+
+    @Test
+    void shouldFailWithFixedMessageWhenManifestIsMalformed() throws Exception {
+        PkiPersistida pki = RepositorioPkiSimulada.abrir(diretorio());
+        Files.writeString(pki.diretorio().resolve("pki.properties"), "formato=1\nrevogado-em=\\uZZZZ\n");
+
+        assertThatThrownBy(() -> RepositorioPkiSimulada.abrir(diretorio()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("corrompida")
+                .hasMessageContaining("pki.properties")
+                .hasMessageNotContaining("Malformed")
+                .hasCauseInstanceOf(IllegalArgumentException.class);
     }
 
     private static void abortar(Path caminho) {
