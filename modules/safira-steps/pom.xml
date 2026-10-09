@@ -47,12 +47,6 @@
         </dependency>
 
         <dependency>
-            <groupId>br.gov.go.saude</groupId>
-            <artifactId>icpbrasil-truststore-autoconfigure</artifactId>
-            <version>${icpbrasil-truststore.version}</version>
-        </dependency>
-
-        <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcpkix-jdk18on</artifactId>
         </dependency>

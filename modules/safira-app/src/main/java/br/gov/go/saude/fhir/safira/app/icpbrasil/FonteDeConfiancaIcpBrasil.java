@@ -3,7 +3,7 @@
  * Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
  */
 
-package br.gov.go.saude.fhir.safira.steps.trust.icpbrasil;
+package br.gov.go.saude.fhir.safira.app.icpbrasil;
 
 import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;

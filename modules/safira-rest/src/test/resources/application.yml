@@ -1,17 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
 
-# Desativa cargas em background do trust-store: os beans são mockados nos testes e
-# chamadas concorrentes nos mocks corrompem o stubbing do Mockito.
-icpbrasil-truststore:
-  scheduling:
-    enabled: false
-  bootstrap:
-    enabled: false
-  filesystem:
-    base-dir: target/icpbrasil-truststore-test
-
-# Mesmo grupo readiness do application.yml principal (este arquivo o substitui nos testes).
+# Mesmo grupo readiness do application.yml do safira-app (a aplicação real).
 management:
   endpoints:
     web:

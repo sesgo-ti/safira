@@ -10,6 +10,7 @@ import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperti
 import br.gov.go.saude.fhir.safira.engine.domain.Step;
 import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
+import br.gov.go.saude.fhir.safira.jades.adapter.DestinationGuard;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.signing.CertificatePolicyStep;
 import br.gov.go.saude.fhir.safira.steps.signing.ContextValidationStep;
@@ -22,11 +23,8 @@ import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesAssembleStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesDataToSignStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesExtensionStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.TsaTokenVerificationStep;
-import br.gov.go.saude.fhir.safira.steps.trust.DownloadPolicyGuard;
 import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
-import br.gov.go.saude.fhir.safira.steps.trust.icpbrasil.FonteDeConfiancaIcpBrasil;
-import br.gov.go.saude.truststore.icpbrasil.config.TrustStoreConfig;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.ContentIntegrityStep;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.DssValidationStep;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.JwsStructureStep;
@@ -35,7 +33,6 @@ import br.gov.go.saude.fhir.safira.steps.validation.jades.SignerCertificateStep;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.TimestampValidationStep;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.ValidationOutcomeStep;
 import br.gov.go.saude.fhir.safira.steps.validation.jades.ValidationRequestContextStep;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -47,7 +44,8 @@ import java.util.List;
 
 /**
  * Registra os steps da política de assinatura 0.2.0 — única versão implementada. A composição
- * das pipelines fica no YAML ({@code safira.pipelines}).
+ * das pipelines fica no YAML ({@code safira.pipelines}). A porta {@link FonteDeConfianca} e o
+ * {@link DestinationGuard} são fornecidos pela aplicação; sem eles o contexto não sobe (falha fechada).
  */
 @AutoConfiguration
 @EnableConfigurationProperties(SafiraPolicyProperties.class)
@@ -61,24 +59,16 @@ public class SafiraStepsAutoConfiguration {
     }
 
     /**
-     * Fontes online do DSS (OCSP, CRL, AIA) com os timeouts de {@code safira.operational.verification}
-     * e destinos filtrados por {@code icpbrasil-truststore.download-policy.*}; sobrescrevível em
-     * testes por {@link CertificateVerifierFactory#offline}.
+     * Fontes online do DSS (OCSP, CRL) com os timeouts de {@code safira.operational.verification}
+     * e destinos filtrados pelo {@link DestinationGuard} da aplicação, obrigatório (sem ele o
+     * contexto não sobe); sobrescrevível em testes por {@link CertificateVerifierFactory#offline}.
      */
     @Bean
     @ConditionalOnMissingBean
     public CertificateVerifierFactory safiraCertificateVerifierFactory(SafiraOperationalConfigProperties operational,
-                                                                       TrustStoreConfig trustStoreConfig) {
+                                                                       DestinationGuard destinationGuard) {
         VerificationProps verification = operational.verification();
-        return CertificateVerifierFactory.online(verification.ocspTimeout(), verification.crlTimeout(),
-                DownloadPolicyGuard.of(trustStoreConfig.getDownloadPolicy()));
-    }
-
-    /** Porta de confiança sobre o acervo da icpbrasil-truststore; a lib entra só como carregadora. */
-    @Bean
-    @ConditionalOnMissingBean
-    public FonteDeConfianca safiraFonteDeConfianca(TrustMaterialSource trustMaterialSource) {
-        return new FonteDeConfiancaIcpBrasil(trustMaterialSource);
+        return CertificateVerifierFactory.online(verification.ocspTimeout(), verification.crlTimeout(), destinationGuard);
     }
 
     /** Verificadores do DSS por operação, com fontes reaproveitadas por geração do acervo. */

@@ -3,7 +3,7 @@
  * Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
  */
 
-package br.gov.go.saude.fhir.safira.rest.service;
+package br.gov.go.saude.fhir.safira.app.icpbrasil;
 
 import br.gov.go.saude.fhir.safira.jades.CertificateValidationService;
 import br.gov.go.saude.fhir.safira.jades.JadesSigningService;
@@ -51,7 +51,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Ignorado sem {@code -Dpfx.path} e {@code -Dpfx.password}; requer acesso à rede (ITI,
  * OCSP/CRL). Execução:
  * <pre>
- * ./mvnw -Pintegration-tests test -pl modules/safira-rest -am \
+ * ./mvnw -Pintegration-tests test -pl modules/safira-app -am \
  *     -Dtest=RealIcpBrasilDssOracleIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false \
  *     -Dpfx.path=/caminho/cert.pfx -Dpfx.password=senha
  * </pre>

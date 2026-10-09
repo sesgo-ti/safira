@@ -3,9 +3,11 @@
  * Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
  */
 
-package br.gov.go.saude.fhir.safira.rest.service;
+package br.gov.go.saude.fhir.safira.app.icpbrasil;
 
 import br.gov.go.saude.fhir.safira.engine.domain.PipelineResult;
+import br.gov.go.saude.fhir.safira.rest.service.JadesSigningSystemTest;
+import br.gov.go.saude.fhir.safira.rest.service.SigningService;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -14,7 +16,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.io.ByteArrayInputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
@@ -32,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>Ignorado sem {@code -Dpfx.path} e {@code -Dpfx.password}. Execução:
  * <pre>
- * ./mvnw -Pintegration-tests test -pl modules/safira-rest -am \
+ * ./mvnw -Pintegration-tests test -pl modules/safira-app -am \
  *     -Dtest=RealIcpBrasilA1IntegrationTest -Dsurefire.failIfNoSpecifiedTests=false \
  *     -Dpfx.path=/caminho/cert.pfx -Dpfx.password=senha
  * </pre>
@@ -68,8 +69,8 @@ class RealIcpBrasilA1IntegrationTest {
         String alias = firstKeyAlias(keyStore);
         String leaf = Base64.getEncoder().encodeToString(keyStore.getCertificate(alias).getEncoded());
 
-        String body = "{\"bundle\":" + example("bundle.json")
-                + ",\"provenance\":" + example("provenance.json")
+        String body = "{\"bundle\":" + JadesSigningSystemTest.example("bundle.json")
+                + ",\"provenance\":" + JadesSigningSystemTest.example("provenance.json")
                 + ",\"signerCryptoMaterial\":{\"type\":\"PKCS12\",\"contentBase64\":\"" + Base64.getEncoder().encodeToString(pfx)
                 + "\",\"password\":\"" + pfxPassword.replace("\\", "\\\\").replace("\"", "\\\"") + "\",\"alias\":\"" + alias + "\"}"
                 + ",\"certificateChain\":[\"" + leaf + "\"]"
@@ -81,10 +82,6 @@ class RealIcpBrasilA1IntegrationTest {
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getExceptionDetails().issue().getFirst().details().coding().getFirst().code())
                 .isEqualTo("CERT.NOT-ICP-BRASIL");
-    }
-
-    private static String example(String name) throws Exception {
-        return Files.readString(Path.of("src/test/resources/examples/politica-0.2.0/" + name), StandardCharsets.UTF_8);
     }
 
     private static String firstKeyAlias(KeyStore keyStore) throws Exception {

@@ -29,6 +29,14 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- TrustMaterialSource simulado; optional para não levar a lib a quem depende do simulador -->
+        <dependency>
+            <groupId>br.gov.go.saude</groupId>
+            <artifactId>icpbrasil-truststore-autoconfigure</artifactId>
+            <version>${icpbrasil-truststore.version}</version>
+            <optional>true</optional>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-autoconfigure</artifactId>
