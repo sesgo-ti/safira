@@ -16,9 +16,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
@@ -32,6 +36,7 @@ import java.time.Period;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 /**
@@ -83,7 +88,38 @@ public final class RepositorioPkiSimulada {
     /** Como {@link #abrir(Path)}, com a validade do signatário de uma PKI nova. */
     static PkiPersistida abrir(Path diretorio, Period validadeFolha) {
         Path dir = diretorio.toAbsolutePath().normalize();
-        return vazio(dir) ? gerar(dir, validadeFolha) : carregar(dir);
+        return travado(dir, () -> vazio(dir) ? gerar(dir, validadeFolha) : carregar(dir));
+    }
+
+    /** Trava ao lado do diretório (fora dele, para não contar como conteúdo nem sumir na geração). */
+    static Path arquivoTrava(Path dir) {
+        return dir.resolveSibling(dir.getFileName() + ".lock");
+    }
+
+    /** Executa com a trava exclusiva do diretório; outra instância abrindo-o ao mesmo tempo falha. */
+    private static PkiPersistida travado(Path dir, Supplier<PkiPersistida> acao) {
+        Path trava = arquivoTrava(dir);
+        try {
+            Files.createDirectories(trava.getParent());
+            try (FileChannel canal = FileChannel.open(trava, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+                FileLock exclusiva;
+                try {
+                    exclusiva = canal.tryLock();
+                } catch (OverlappingFileLockException e) {
+                    exclusiva = null;
+                }
+                if (exclusiva == null) {
+                    throw new IllegalStateException("Diretório da PKI simulada " + dir
+                            + " em uso por outra instância (trava " + trava + "). Aguarde a outra partida ou use "
+                            + "outro safira.simulador.diretorio.");
+                }
+                try (FileLock ignorada = exclusiva) {
+                    return acao.get();
+                }
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("Falha ao travar o diretório da PKI simulada " + dir, e);
+        }
     }
 
     private static boolean vazio(Path dir) {

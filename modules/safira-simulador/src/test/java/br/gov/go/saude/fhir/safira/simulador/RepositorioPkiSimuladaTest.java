@@ -12,16 +12,25 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.InputStream;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.KeyStore;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.Period;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -155,6 +164,48 @@ class RepositorioPkiSimuladaTest {
                 .isEqualTo(renovada.pki().signatario());
         assertThat(depois.situacao()).isEqualTo(Situacao.REUTILIZADA);
         assertThat(depois.pki().signatario()).isEqualTo(renovada.pki().signatario());
+    }
+
+    @Test
+    void shouldFailWhenDirectoryIsInUseByAnotherInstance() throws Exception {
+        Path trava = RepositorioPkiSimulada.arquivoTrava(diretorio().toAbsolutePath().normalize());
+
+        try (FileChannel canal = FileChannel.open(trava, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             FileLock ignorada = canal.lock()) {
+            assertThatThrownBy(() -> RepositorioPkiSimulada.abrir(diretorio()))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("em uso por outra instância")
+                    .hasMessageContaining(trava.toString());
+        }
+        assertThat(diretorio()).doesNotExist();
+        assertThat(RepositorioPkiSimulada.abrir(diretorio()).situacao()).isEqualTo(Situacao.GERADA);
+    }
+
+    @Test
+    void shouldNeverGenerateTwiceWhenOpenedConcurrently() throws Exception {
+        CountDownLatch largada = new CountDownLatch(1);
+        Callable<Object> abrir = () -> {
+            largada.await();
+            try {
+                return RepositorioPkiSimulada.abrir(diretorio()).situacao();
+            } catch (IllegalStateException e) {
+                return e.getMessage();
+            }
+        };
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Object> primeiro = executor.submit(abrir);
+            Future<Object> segundo = executor.submit(abrir);
+            largada.countDown();
+            List<Object> resultados = List.of(primeiro.get(), segundo.get());
+
+            assertThat(resultados).containsOnlyOnce(Situacao.GERADA);
+            assertThat(resultados).allSatisfy(resultado -> assertThat(resultado.toString())
+                    .matches("GERADA|REUTILIZADA|.*em uso por outra instância.*"));
+        } finally {
+            executor.shutdownNow();
+        }
+        assertThat(RepositorioPkiSimulada.abrir(diretorio()).situacao()).isEqualTo(Situacao.REUTILIZADA);
     }
 
     private static X509Certificate folha(Path p12, String alias) throws Exception {
