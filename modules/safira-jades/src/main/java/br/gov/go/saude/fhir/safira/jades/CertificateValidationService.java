@@ -17,11 +17,22 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Validação de um certificado avulso pelo EU DSS ({@link CertificateValidator}, política padrão
- * com extensão crítica desconhecida na folha como {@code FAIL}, instante atual): cadeia, validade e
- * revogação conforme o verificador recebido.
+ * Validação de um certificado avulso pelo EU DSS ({@link CertificateValidator}, política
+ * {@link StrictValidationPolicies}, instante atual): cadeia, validade, revogação e restrições do
+ * certificado do signatário conforme o verificador e a política recebidos.
  */
 public class CertificateValidationService {
+
+    private final StrictValidationPolicies policy;
+
+    /** Com a política versionada sem restrição de política de certificado. */
+    public CertificateValidationService() {
+        this(StrictValidationPolicies.padrao());
+    }
+
+    public CertificateValidationService(StrictValidationPolicies policy) {
+        this.policy = Objects.requireNonNull(policy, "policy não pode ser nulo");
+    }
 
     /**
      * @param certificate certificado a validar
@@ -41,6 +52,6 @@ public class CertificateValidationService {
         CertificateValidator validator = CertificateValidator.fromCertificate(new CertificateToken(certificate));
         validator.setCertificateVerifier(verifier);
         validator.setTokenExtractionStrategy(TokenExtractionStrategy.EXTRACT_CERTIFICATES_ONLY);
-        return validator.validate(StrictValidationPolicies.CERTIFICATE);
+        return validator.validate(policy.document());
     }
 }

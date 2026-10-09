@@ -24,10 +24,20 @@ import java.util.Objects;
  * e {@code SubIndication} — o modelo triádico que fundamenta o tratamento de garantia
  * indeterminada no pipeline de validação.
  *
- * <p>Usa a política padrão do DSS com extensão crítica desconhecida no certificado do signatário
- * como {@code FAIL} (RFC 5280 §4.2).
+ * <p>Usa a política {@link StrictValidationPolicies} recebida (a versionada sem restrição de
+ * política de certificado, no construtor sem argumentos).
  */
 public class JadesValidationService {
+
+    private final StrictValidationPolicies policy;
+
+    public JadesValidationService() {
+        this(StrictValidationPolicies.padrao());
+    }
+
+    public JadesValidationService(StrictValidationPolicies policy) {
+        this.policy = Objects.requireNonNull(policy, "policy não pode ser nulo");
+    }
 
     /**
      * Valida o documento JWS com o verificador fornecido, no nível {@code ARCHIVAL_DATA}
@@ -49,7 +59,7 @@ public class JadesValidationService {
         validator.setCertificateVerifier(verifier);
         validator.setValidationLevel(level);
         validator.setSignaturePolicyProvider(offlineSignaturePolicyProvider());
-        return validator.validateDocument(StrictValidationPolicies.SIGNATURE);
+        return validator.validateDocument(policy.document());
     }
 
     /**
