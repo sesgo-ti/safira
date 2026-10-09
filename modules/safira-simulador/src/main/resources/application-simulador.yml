@@ -4,6 +4,8 @@
 # -----------------------------------------------------------------------------
 # Aplicação do simulador — PKI própria no lugar do acervo ICP-Brasil (SEM VALOR LEGAL).
 # Mesmo pipeline da política 0.2.0 do safira-app; só a fonte de confiança muda.
+# Perfil "simulador", ativado por SimuladorApplication: o jar comum (biblioteca) no
+# classpath de outra aplicação não liga o modo simulação.
 #
 # Sem SAFIRA_SIMULACAO_TRUST_ANCHORS (e sem LCRs), a PKI é gerada na partida em
 # safira.simulador.diretorio (padrão: diretório temporário novo) com revogação e

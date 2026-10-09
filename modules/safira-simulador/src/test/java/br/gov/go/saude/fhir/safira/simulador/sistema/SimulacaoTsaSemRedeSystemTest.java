@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MvcResult;
@@ -35,6 +36,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * {@code TSA.UNAVAILABLE} sem abrir conexão alguma, mesmo com {@code tsa-url} apontando para um
  * servidor local que aceitaria a conexão.
  */
+@ActiveProfiles("simulador")
 @SpringBootTest
 class SimulacaoTsaSemRedeSystemTest {
 

@@ -22,6 +22,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -48,6 +49,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * inteira (inclusive a raiz simulada) no {@code x5c}, apresentada a um Safira em modo normal cuja
  * allowlist aponta para a AC simulada; e ativação parcial/indevida do modo simulação.
  */
+@ActiveProfiles("simulador")
 @SpringBootTest(properties = "safira.simulacao.enabled=false")
 @Import(ModoIcpBrasilDeTeste.class)
 class SimulacaoIsolamentoQaSystemTest {
@@ -98,6 +100,7 @@ class SimulacaoIsolamentoQaSystemTest {
     static void assinarEmModoSimulacao() throws Exception {
         try (ConfigurableApplicationContext simulacao = new SpringApplicationBuilder(SimuladorTestApplication.class)
                 .web(WebApplicationType.NONE)
+                .profiles("simulador")
                 .properties(ambiente())
                 .run()) {
             PipelineResult<?> result = simulacao.getBean(SigningService.class).sign(corpoComCadeiaCompleta());
@@ -129,6 +132,7 @@ class SimulacaoIsolamentoQaSystemTest {
     void shouldFailStartupWhenSimulationHasNoAnchorsOutsideSimulatorApplication() {
         assertThatThrownBy(() -> new SpringApplicationBuilder(SimuladorTestApplication.class)
                 .web(WebApplicationType.NONE)
+                .profiles("simulador")
                 .run().close())
                 .hasStackTraceContaining("safira.simulacao.trust-anchors");
     }
@@ -137,6 +141,7 @@ class SimulacaoIsolamentoQaSystemTest {
     void shouldFailStartupWhenSimulationAllowlistIssuerIsEmpty() {
         assertThatThrownBy(() -> new SpringApplicationBuilder(SimuladorTestApplication.class)
                 .web(WebApplicationType.NONE)
+                .profiles("simulador")
                 .properties(ambiente())
                 .run("--SAFIRA_SIMULACAO_ISSUER_SHA256=")
                 .close())
@@ -148,6 +153,7 @@ class SimulacaoIsolamentoQaSystemTest {
         try (ConfigurableApplicationContext parcial = new SpringApplicationBuilder(SimuladorTestApplication.class,
                 ModoIcpBrasilDeTeste.class)
                 .web(WebApplicationType.NONE)
+                .profiles("simulador")
                 .properties(ambiente())
                 .run("--safira.simulacao.enabled=false")) {
             PipelineResult<?> result = parcial.getBean(SigningService.class).sign(SimulacaoPki.signingBody(

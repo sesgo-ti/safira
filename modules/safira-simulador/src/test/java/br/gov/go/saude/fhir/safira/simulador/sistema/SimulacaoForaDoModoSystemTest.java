@@ -22,6 +22,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -40,6 +41,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * em modo normal, cujo acervo ({@link ModoIcpBrasilDeTeste}: outra raiz no lugar das raízes
  * ICP-Brasil) não contém a raiz simulada — mesmo com a allowlist apontando para a AC simulada.
  */
+@ActiveProfiles("simulador")
 @SpringBootTest(properties = "safira.simulacao.enabled=false")
 @Import(ModoIcpBrasilDeTeste.class)
 class SimulacaoForaDoModoSystemTest {
@@ -66,6 +68,7 @@ class SimulacaoForaDoModoSystemTest {
                 .toArray(String[]::new);
         try (ConfigurableApplicationContext simulacao = new SpringApplicationBuilder(SimuladorTestApplication.class)
                 .web(WebApplicationType.NONE)
+                .profiles("simulador")
                 .properties(propriedades)
                 .run()) {
             PipelineResult<?> result = simulacao.getBean(SigningService.class).sign(SimulacaoPki.signingBody(

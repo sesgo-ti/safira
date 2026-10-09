@@ -20,9 +20,13 @@ public class SimuladorApplication {
         aplicacao().run(args);
     }
 
-    /** A aplicação com o inicializador que gera a PKI simulada na partida. */
+    /** Perfil com a configuração da aplicação ({@code application-simulador.yml}). */
+    public static final String PERFIL = "simulador";
+
+    /** A aplicação no perfil {@link #PERFIL}, com o inicializador que gera a PKI simulada na partida. */
     public static SpringApplication aplicacao() {
         SpringApplication aplicacao = new SpringApplication(SimuladorApplication.class);
+        aplicacao.setAdditionalProfiles(PERFIL);
         aplicacao.addInitializers(new PkiGeradaNaPartida());
         return aplicacao;
     }

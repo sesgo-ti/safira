@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -32,9 +33,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
- * QA adversarial no modo simulação (application.yml do simulador): confiança cruzada com outra PKI e distinção entre
+ * QA adversarial no modo simulação (application-simulador.yml): confiança cruzada com outra PKI e distinção entre
  * artefatos simulados e reais. Testes {@code @Disabled("VULN-Sn")} documentam vulnerabilidades.
  */
+@ActiveProfiles("simulador")
 @SpringBootTest
 class SimulacaoAtaquesQaSystemTest {
 

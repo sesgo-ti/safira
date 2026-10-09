@@ -36,7 +36,7 @@ final class SimulacaoPki {
         }
     }
 
-    /** Variáveis {@code SAFIRA_SIMULACAO_*} lidas pelo application.yml do simulador (PKI em arquivos). */
+    /** Variáveis {@code SAFIRA_SIMULACAO_*} lidas pelo application-simulador.yml (PKI em arquivos). */
     static Map<String, String> ambiente() {
         Map<String, String> ambiente = new LinkedHashMap<>();
         ambiente.put("SAFIRA_SIMULACAO_TRUST_ANCHORS", PKI.raiz().toUri().toString());
