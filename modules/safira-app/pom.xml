@@ -56,13 +56,6 @@
         </dependency>
         <dependency>
             <groupId>br.gov.go.saude.fhir</groupId>
-            <artifactId>safira-jades</artifactId>
-            <version>${project.version}</version>
-            <type>test-jar</type>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>br.gov.go.saude.fhir</groupId>
             <artifactId>safira-testkit</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
