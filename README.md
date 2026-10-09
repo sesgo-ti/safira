@@ -28,7 +28,8 @@ Implementação da criação e da validação de assinaturas eletrônicas qualif
 | `safira-jades` | Integração com o EU DSS: JAdES-B-B, extensão para B-T e validação |
 | `safira-steps` | Steps das pipelines de assinatura e validação da política 0.2.0 |
 | `safira-simulador` | Modo simulação (raízes de confiança próprias, sem valor legal) e gerador de PKI simulada |
-| `safira-rest` | API REST (Spring Boot 4) — artefato de deploy |
+| `safira-rest` | Biblioteca da API REST (Spring Boot 4): controller e serviços registrados por auto-configuração, sem `main` |
+| `safira-app` | Aplicação de produção — artefato de deploy: `safira-rest` + adaptador do acervo ICP-Brasil (icpbrasil-truststore) e filtro de destino de rede |
 
 ## Pipelines
 
@@ -136,7 +137,7 @@ O startup falha com mensagem clara se as âncoras faltarem, estiverem ilegíveis
 
 ```bash
 ./mvnw -DskipTests package
-java -cp modules/safira-rest/target/safira-rest-*.jar \
+java -cp modules/safira-app/target/safira-app-*.jar \
     -Dloader.main=br.gov.go.saude.fhir.safira.simulador.GeradorPkiSimulada \
     org.springframework.boot.loader.launch.PropertiesLauncher \
     --saida /tmp/pki [--senha <senha>] [--politica 2.16.76.1.2.3.<n>] [--cpf <cpf>] [--validade-dias 365]
@@ -147,7 +148,7 @@ Sem `--senha`, a senha dos PKCS#12 é aleatória e impressa (aliases `signatario
 **2. Subir o serviço** com o trecho gerado:
 
 ```bash
-java -jar safira-rest.jar --spring.profiles.active=simulacao \
+java -jar safira-app.jar --spring.profiles.active=simulacao \
     --spring.config.additional-location=file:/tmp/pki/
 ```
 
@@ -158,7 +159,7 @@ SAFIRA_SIMULACAO_TRUST_ANCHORS=file:/tmp/pki/raiz.pem \
 SAFIRA_SIMULACAO_INTERMEDIATES=file:/tmp/pki/ac.pem \
 SAFIRA_SIMULACAO_CRLS=file:/tmp/pki/lcr-raiz.crl,file:/tmp/pki/lcr-ac.crl \
 SAFIRA_SIMULACAO_ISSUER_SHA256=<64 hex> \
-java -jar safira-rest.jar --spring.profiles.active=simulacao
+java -jar safira-app.jar --spring.profiles.active=simulacao
 ```
 
 **3. Assinar** com `POST /assinar`, `signerCryptoMaterial` `{"type":"PKCS12","contentBase64":"<signatario.p12 em Base64>","password":"<senha>","alias":"signatario"}`, `certificateChain` com o certificado do signatário (DER em Base64) e `strategy` `iat`; validar com `POST /validar`. Com `revogado.p12`, a assinatura é recusada com `CERT.REVOKED`.
@@ -169,11 +170,11 @@ java -jar safira-rest.jar --spring.profiles.active=simulacao
 ./mvnw verify
 ```
 
-O `package` gera o JAR executável do serviço em `modules/safira-rest/target/safira-rest-<versão>.jar`:
+O `package` gera o JAR executável do serviço em `modules/safira-app/target/safira-app-<versão>.jar` (o `safira-rest` é biblioteca e não tem `main`):
 
 ```bash
 ./mvnw -DskipTests package
-java -jar modules/safira-rest/target/safira-rest-*.jar
+java -jar modules/safira-app/target/safira-app-*.jar
 ```
 
 Relatório de cobertura (JaCoCo) por módulo em `modules/<módulo>/target/site/jacoco/index.html`.
@@ -183,7 +184,7 @@ Relatório de cobertura (JaCoCo) por módulo em `modules/<módulo>/target/site/j
 Marcados com `@Tag("integration")`: não rodam no build padrão e exigem rede (ITI, OCSP/CRL) e um PKCS#12 real. Como a política aceita apenas A3, A4, SE-S e SE-H, um certificado A1 é recusado pela pipeline (`CERT.NOT-ICP-BRASIL`) após a validação real da cadeia; o oráculo DSS valida um JAdES produzido com esse certificado fora da pipeline.
 
 ```bash
-./mvnw -Pintegration-tests test -pl modules/safira-rest -am \
+./mvnw -Pintegration-tests test -pl modules/safira-app -am \
     -Dtest='RealIcpBrasil*' -Dsurefire.failIfNoSpecifiedTests=false \
     -Dpfx.path=/caminho/cert.pfx -Dpfx.password=senha
 ```
