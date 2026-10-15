@@ -49,8 +49,7 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
-        <!-- Health e probes (/actuator/health/readiness): o serviço só fica
-             pronto depois que o acervo carrega (ver application.yml do safira-app). -->
+        <!-- Health e probes (/actuator/health/readiness). -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
