@@ -45,6 +45,7 @@ import java.time.Instant;
 import java.time.Period;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -113,8 +114,15 @@ public final class RepositorioPkiSimulada {
      */
     static PkiPersistida abrir(Path diretorio, Period validadeFolha, Instant agora, Consumer<Path> antesDePublicar) {
         Path dir = diretorio.toAbsolutePath().normalize();
-        return travado(dir, () -> vazio(dir) ? gerar(dir, validadeFolha, antesDePublicar)
-                : carregar(dir, agora, antesDePublicar));
+        // leitura de PKI existente e vigente: trava compartilhada (leitores em paralelo não conflitam)
+        Optional<PkiPersistida> lida = travado(dir, true,
+                () -> vazio(dir) ? Optional.empty() : carregar(dir, agora, antesDePublicar, false));
+        if (lida.isPresent()) {
+            return lida.get();
+        }
+        // gerar ou renovar: trava exclusiva, com o estado conferido de novo sob ela
+        return travado(dir, false, () -> Optional.of(vazio(dir) ? gerar(dir, validadeFolha, antesDePublicar)
+                : carregar(dir, agora, antesDePublicar, true).orElseThrow())).orElseThrow();
     }
 
     /** Trava ao lado do diretório (fora dele, para não contar como conteúdo nem sumir na geração). */
@@ -122,24 +130,30 @@ public final class RepositorioPkiSimulada {
         return dir.resolveSibling(dir.getFileName() + ".lock");
     }
 
-    /** Executa com a trava exclusiva do diretório; outra instância abrindo-o ao mesmo tempo falha. */
-    private static PkiPersistida travado(Path dir, Supplier<PkiPersistida> acao) {
+    /**
+     * Executa com a trava do diretório: compartilhada para ler uma PKI existente, exclusiva para gerar
+     * ou renovar. Quem não obtém a trava falha na hora (sem espera).
+     */
+    private static Optional<PkiPersistida> travado(Path dir, boolean compartilhada,
+                                                   Supplier<Optional<PkiPersistida>> acao) {
         Path trava = arquivoTrava(dir);
         try {
             criarDiretorioPrivado(trava.getParent());
-            try (FileChannel canal = FileChannel.open(trava, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
-                FileLock exclusiva;
+            try (FileChannel canal = FileChannel.open(trava, StandardOpenOption.CREATE, StandardOpenOption.READ,
+                    StandardOpenOption.WRITE)) {
+                FileLock obtida;
                 try {
-                    exclusiva = canal.tryLock();
+                    obtida = canal.tryLock(0, Long.MAX_VALUE, compartilhada);
                 } catch (OverlappingFileLockException e) {
-                    exclusiva = null;
+                    obtida = null;
                 }
-                if (exclusiva == null) {
+                if (obtida == null) {
                     throw new IllegalStateException("Diretório da PKI simulada " + dir
-                            + " em uso por outra instância (trava " + trava + "). Aguarde a outra partida ou use "
-                            + "outro safira.simulador.diretorio.");
+                            + " em uso por outra instância (trava " + trava + "): outra partida está gerando ou "
+                            + "renovando a PKI. Aguarde e repita, ou use outro diretório (--pki-dir na CLI, "
+                            + "safira.simulador.diretorio na configuração).");
                 }
-                try (FileLock ignorada = exclusiva) {
+                try (FileLock ignorada = obtida) {
                     return acao.get();
                 }
             }
@@ -221,7 +235,12 @@ public final class RepositorioPkiSimulada {
         }
     }
 
-    private static PkiPersistida carregar(Path dir, Instant agora, Consumer<Path> antesDePublicar) {
+    /**
+     * Carrega e confere a PKI existente. Signatário a renovar: renova só com {@code podeRenovar} (trava
+     * exclusiva); sem ela devolve vazio para o chamador repetir sob a trava exclusiva.
+     */
+    private static Optional<PkiPersistida> carregar(Path dir, Instant agora, Consumer<Path> antesDePublicar,
+                                                    boolean podeRenovar) {
         List<String> faltando = OBRIGATORIOS.stream().filter(nome -> !Files.isRegularFile(dir.resolve(nome))).toList();
         if (!faltando.isEmpty()) {
             throw invalida(dir, "incompleta: faltam " + String.join(", ", faltando), null);
@@ -253,6 +272,9 @@ public final class RepositorioPkiSimulada {
         PkiIcpSimulada pki = PkiIcpSimulada.restaurar(material, VALIDADE_REVOGACAO);
         Situacao situacao = Situacao.REUTILIZADA;
         if (pki.signatario().getNotAfter().toInstant().isBefore(agora.plus(ANTECEDENCIA_RENOVACAO))) {
+            if (!podeRenovar) {
+                return Optional.empty();
+            }
             pki.renovarSignatario(GeradorPkiSimulada.VALIDADE_FOLHA);
             // Grava ao lado (0600) e troca com rename atômico: interrupção mantém o signatario.p12 anterior.
             Path temporario = dir.resolve(SIGNATARIO + ".tmp");
@@ -270,20 +292,39 @@ public final class RepositorioPkiSimulada {
             }
             situacao = Situacao.FOLHA_RENOVADA;
         }
-        return montar(dir, pki, manifesto.getProperty("politica-oid", GeradorPkiSimulada.POLITICA_PADRAO), situacao);
+        return Optional.of(montar(dir, pki, manifesto.getProperty("politica-oid", GeradorPkiSimulada.POLITICA_PADRAO),
+                situacao));
     }
 
     /** Regrava as LCRs (validade curta) e devolve a PKI persistida. */
     private static PkiPersistida montar(Path dir, PkiIcpSimulada pki, String politicaOid, Situacao situacao) {
         try {
-            Files.write(dir.resolve(LCR_RAIZ), pki.lcrDaRaiz());
-            Files.write(dir.resolve(LCR_AC), pki.lcr());
+            gravarAtomico(dir.resolve(LCR_RAIZ), pki.lcrDaRaiz());
+            gravarAtomico(dir.resolve(LCR_AC), pki.lcr());
         } catch (IOException e) {
             throw new UncheckedIOException("Falha ao gravar as LCRs da PKI simulada em " + dir, e);
         }
         return new PkiPersistida(dir, dir.resolve(RAIZ), dir.resolve(AC), dir.resolve(SIGNATARIO),
                 dir.resolve(REVOGADO), dir.resolve(SENHA), politicaOid,
                 IcpBrasilCertificateProfile.sha256Hex(pki.ac()), pki, situacao);
+    }
+
+    /**
+     * Grava num temporário exclusivo e troca com rename atômico: leitores em paralelo (trava
+     * compartilhada) regravam as LCRs sem que alguém leia um arquivo pela metade.
+     */
+    private static void gravarAtomico(Path destino, byte[] conteudo) throws IOException {
+        Path temporario = Files.createTempFile(destino.getParent(), destino.getFileName() + ".", ".tmp");
+        try {
+            Files.write(temporario, conteudo);
+            if (Files.getFileStore(temporario).supportsFileAttributeView("posix")) {
+                // LCR é pública: mesma permissão de um arquivo comum (o temporário nasce 0600)
+                Files.setPosixFilePermissions(temporario, PosixFilePermissions.fromString("rw-r--r--"));
+            }
+            Files.move(temporario, destino, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            Files.deleteIfExists(temporario);
+        }
     }
 
     private static void gravarSignatario(Path destino, PkiIcpSimulada pki, String senha)

@@ -10,8 +10,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -40,6 +47,19 @@ class SimuladorPkiTest {
     }
 
     @Test
+    void shouldMentionPkiDirOptionWhenPkiIsInUse() throws Exception {
+        Path pki = diretorio.resolve("pki");
+        Path trava = pki.resolveSibling("pki.lock");
+        try (FileChannel canal = FileChannel.open(trava, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             FileLock ignorada = canal.lock()) {
+            Resultado resultado = Cli.executar("simulador", "pki", "--pki-dir", pki.toString());
+
+            assertThat(resultado.saida()).isEqualTo(CodigosDeSaida.USO);
+            assertThat(resultado.err()).contains("em uso").contains("--pki-dir");
+        }
+    }
+
+    @Test
     void shouldReuseSimulatedPkiOnSecondCall() {
         Path pki = diretorio.resolve("pki");
         Cli.executar("simulador", "pki", "--pki-dir", pki.toString());
@@ -48,5 +68,45 @@ class SimuladorPkiTest {
 
         assertThat(resultado.saida()).isZero();
         assertThat(resultado.json().get("situacao").asText()).isEqualTo("REUTILIZADA");
+    }
+
+    /** {@code safira simulador pki} num processo próprio (travas de arquivo valem entre processos). */
+    private static Process simuladorPkiEmProcesso(Path pki, Path saida) throws Exception {
+        String java = ProcessHandle.current().info().command().orElse(Path.of(System.getProperty("java.home"), "bin",
+                "java").toString());
+        return new ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), SafiraCli.class.getName(),
+                "simulador", "pki", "--pki-dir", pki.toString())
+                .redirectErrorStream(true)
+                .redirectOutput(saida.toFile())
+                .start();
+    }
+
+    @Test
+    void shouldLetParallelReadersShareExistingPki() throws Exception {
+        Path pki = diretorio.resolve("pki");
+        assertThat(Cli.executar("simulador", "pki", "--pki-dir", pki.toString()).saida()).isZero();
+        List<Process> processos = new ArrayList<>();
+        List<Path> saidas = new ArrayList<>();
+        try {
+            for (int i = 0; i < 5; i++) {
+                Path saida = diretorio.resolve("saida-" + i + ".txt");
+                saidas.add(saida);
+                processos.add(simuladorPkiEmProcesso(pki, saida));
+            }
+            List<Integer> codigos = new ArrayList<>();
+            for (Process processo : processos) {
+                assertThat(processo.waitFor(60, TimeUnit.SECONDS)).isTrue();
+                codigos.add(processo.exitValue());
+            }
+            List<String> textos = new ArrayList<>();
+            for (Path saida : saidas) {
+                textos.add(Files.readString(saida, StandardCharsets.UTF_8));
+            }
+
+            assertThat(textos).allSatisfy(texto -> assertThat(texto).doesNotContain("em uso"));
+            assertThat(codigos).containsOnly(0);
+        } finally {
+            processos.forEach(Process::destroyForcibly);
+        }
     }
 }
