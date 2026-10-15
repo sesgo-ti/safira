@@ -284,8 +284,14 @@ profile/arquivo externo/variável de ambiente, se preferir não versionar o valo
 ## 5. Subindo a aplicação
 
 ```bash
-./mvnw -pl modules/safira-rest -am spring-boot:run
+./mvnw install -pl modules/safira-rest -am -DskipTests
+./mvnw -f modules/safira-rest/pom.xml spring-boot:run
 ```
+
+O primeiro comando instala as dependências dos outros módulos no seu repositório
+Maven local; só precisa ser repetido quando elas mudarem, não a cada subida.
+(Rodar `spring-boot:run` direto com `-pl ... -am` falha com "Unable to find a
+suitable main class": é uma particularidade do Maven com múltiplos módulos.)
 
 Na primeira subida, a biblioteca `icpbrasil-truststore` baixa o acervo oficial de
 Autoridades Certificadoras do ITI antes de aceitar tráfego: isso exige rede e pode
