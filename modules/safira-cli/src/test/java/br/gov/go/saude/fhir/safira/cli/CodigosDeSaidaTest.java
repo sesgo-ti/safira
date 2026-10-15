@@ -55,7 +55,9 @@ class CodigosDeSaidaTest {
             "FORMAT.JWK-INVALID, VALIDACAO, 6",
             "FORMAT.CERT-PEM-INVALID, VALIDACAO, 6",
             "FORMAT.JWS-MALFORMED, ASSINATURA, 3",
-            "SYSTEM.MEMORY-EXHAUSTED, ASSINATURA, 1"
+            "SYSTEM.MEMORY-EXHAUSTED, ASSINATURA, 1",
+            "INTERNAL_ERROR, ASSINATURA, 1",
+            "INTERNAL_ERROR, VALIDACAO, 1"
     })
     void shouldMapIgCodesToExitCodes(String codigo, Operacao operacao, int saida) {
         assertThat(CodigosDeSaida.de(outcome("error", codigo), operacao)).isEqualTo(saida);

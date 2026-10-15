@@ -255,7 +255,7 @@ Alinhados aos do [hubsaude CLI](https://github.com/sesgo-ti/hubsaude-cli) (0/3/4
 | `3` | Erro de uso ou configuração: argumentos, arquivos, JSON, limites, política, allowlist; falha na partida (ex.: PKI simulada corrompida) | `FORMAT.*`¹, `POLICY.*`, `CONFIG.*` (exceto `TRUST-STORE-EMPTY`), `SECURITY.*` (exceto `SIGNATURE-VALIDATION-REPLAY` e `HASH-VALIDATION-FAILED`), `MIDDLEWARE.*`, `DEVICE.*`, `CRYPTO.KEY-INACCESSIBLE`, `CRYPTO.PIN-INVALID` |
 | `4` | Inconclusivo: repetir mais tarde | `VALIDATION.INDETERMINATE`, `VALIDATION.TRY-LATER`, `REVOCATION.*`, `CONFIG.TRUST-STORE-EMPTY`, `TSA.UNAVAILABLE`, `TSA.INVALID-RESPONSE`, `CACHE.*`, `NETWORK.*`, `SECURITY.HASH-VALIDATION-FAILED`, `SYSTEM.TIMEOUT`; código desconhecido, issue sem código, `OperationOutcome` sem erro e sem `VALIDATION.SUCCESS` |
 | `6` | Reprovação definitiva: assinatura inválida, revogado, vencido, não confiável | `CERT.*`, `CRYPTO.*` (demais), `VALIDATION.*` (demais), `TSA.*` (demais), `TEMPORAL.*`, `SECURITY.SIGNATURE-VALIDATION-REPLAY`; em `validar`, `FORMAT.JWS-MALFORMED`, `FORMAT.JADES-*`, `FORMAT.JWK-INVALID`, `FORMAT.CERT-PEM-INVALID` |
-| `1` | Erro interno inesperado | `SYSTEM.*` (exceto timeout), `STORAGE.*` |
+| `1` | Erro interno inesperado | `SYSTEM.*` (exceto timeout), `STORAGE.*`, `INTERNAL_ERROR` (exceção inesperada num step) |
 
 ¹ Em `validar`, os `FORMAT.*` que descrevem a assinatura recebida (JWS/JAdES) são reprovação (6).
 

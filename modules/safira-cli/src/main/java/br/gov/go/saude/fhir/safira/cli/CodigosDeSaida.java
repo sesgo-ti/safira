@@ -43,6 +43,9 @@ public final class CodigosDeSaida {
             SUCESSO_DA_VALIDACAO, "VALIDATION.INDETERMINATE", "VALIDATION.TRY-LATER", "CONFIG.TRUST-STORE-EMPTY",
             "TSA.UNAVAILABLE", "TSA.INVALID-RESPONSE", "SYSTEM.TIMEOUT", "SECURITY.HASH-VALIDATION-FAILED");
 
+    /** Código do {@code PipelineExecutor} para exceção inesperada de um step (fora do CodeSystem do IG). */
+    private static final String ERRO_INTERNO_DO_PIPELINE = "INTERNAL_ERROR";
+
     private static final Set<String> DE_USO = Set.of("CRYPTO.KEY-INACCESSIBLE", "CRYPTO.PIN-INVALID");
 
     /** Códigos {@code FORMAT.*} que, na validação, descrevem a assinatura recebida (reprovação). */
@@ -88,6 +91,9 @@ public final class CodigosDeSaida {
 
     /** Saída para o código de uma issue {@code error}/{@code fatal}. */
     static int paraCodigo(String codigo, Operacao operacao) {
+        if (ERRO_INTERNO_DO_PIPELINE.equals(codigo)) {
+            return ERRO_INTERNO;
+        }
         if (INCONCLUSIVOS.contains(codigo)) {
             return INCONCLUSIVO;
         }
