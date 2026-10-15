@@ -11,7 +11,8 @@ import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
 
 /**
- * Readiness da porta de confiança: DOWN enquanto não há acervo vigente, UP com a geração e as
+ * Readiness da porta de confiança: DOWN enquanto não há acervo vigente (inclusive sem raiz que o
+ * EU DSS consiga representar, quando lido pelos verificadores), UP com a geração e as
  * contagens (sem despejar certificados). Vive no {@code safira-rest} (registrado por
  * {@link SafiraHealthAutoConfiguration}) para que o {@code safira-steps} não dependa do Actuator.
  */
