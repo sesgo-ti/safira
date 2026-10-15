@@ -55,7 +55,7 @@ public final class LosslessJson {
             }
             return value;
         } catch (IOException e) {
-            throw new LosslessJsonException("JSON inválido: " + e.getMessage(), e);
+            throw new LosslessJsonException("JSON inválido.", e);
         }
     }
 

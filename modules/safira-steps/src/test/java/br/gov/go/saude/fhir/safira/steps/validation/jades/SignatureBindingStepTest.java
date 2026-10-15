@@ -13,7 +13,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.json.JsonValue.JsonString;
 import br.gov.go.saude.fhir.safira.engine.domain.json.LosslessJson;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
 import org.junit.jupiter.api.BeforeAll;
@@ -32,7 +32,7 @@ class SignatureBindingStepTest {
 
     @BeforeAll
     static void setUp() {
-        TestPki pki = TestPki.create();
+        PkiIcpSimulada pki = PkiIcpSimulada.criar();
         signed = SignedArtifactFixture.sign(pki, TestConfigs.policy(pki));
         valid = SignedArtifactFixture.validationContext(signed);
     }

@@ -5,6 +5,7 @@
 
 package br.gov.go.saude.fhir.safira.steps.policy;
 
+import java.util.List;
 import java.util.regex.Pattern;
 
 /**
@@ -19,6 +20,9 @@ public final class Policy020 {
     /** Identificador do algoritmo de canonicalização lossless (C8). */
     public static final String CANONICALIZATION_URI =
             "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/canonicalizacao/fhir-json-lossless/0.2.0";
+
+    /** Máximo de certificados na cadeia (folha + ACs), na assinatura e no {@code x5c}; caminhos ICP-Brasil têm 3 a 4 níveis. */
+    public static final int MAX_CHAIN_LENGTH = 10;
 
     /** OID de <em>Verification Signature</em> (ASTM E1762-95), único propósito admitido. */
     public static final String VERIFICATION_SIGNATURE_OID = "1.2.840.10065.1.12.1.5";
@@ -38,6 +42,20 @@ public final class Policy020 {
     /** {@code urn:uuid:} canônico (RFC 4122), inteiramente em minúsculas. */
     public static final Pattern LOWERCASE_UUID_URN = Pattern.compile(
             "^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$");
+
+    /**
+     * Steps obrigatórios, nesta ordem, do pipeline SIGNING da política (casos de uso de criação);
+     * conferidos na partida — o YAML pode acrescentar steps, nunca omitir ou reordenar estes.
+     */
+    public static final List<String> REQUIRED_SIGNING_STEPS = List.of(
+            "context-validation", "payload-validation", "pkix-chain-validation", "certificate-policy",
+            "framed-content-digest", "jades-data-to-sign", "crypto-signing", "jades-assemble",
+            "jades-extension", "tsa-token-verification", "fhir-signature");
+
+    /** Steps obrigatórios, nesta ordem, do pipeline VALIDATION da política (caso de uso de validação). */
+    public static final List<String> REQUIRED_VALIDATION_STEPS = List.of(
+            "validation-context", "signature-binding", "jws-structure", "content-integrity",
+            "signer-certificate", "dss-validation", "timestamp-validation", "validation-outcome");
 
     private Policy020() {
     }

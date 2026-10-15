@@ -5,20 +5,14 @@
 
 package br.gov.go.saude.fhir.safira.rest.service;
 
-import br.gov.go.saude.truststore.icpbrasil.model.RevocationEvidence;
-import br.gov.go.saude.truststore.icpbrasil.model.RevocationLookup;
-import br.gov.go.saude.truststore.icpbrasil.model.RevocationStatus;
-import br.gov.go.saude.truststore.icpbrasil.model.ValidationResult;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
-import br.gov.go.saude.truststore.icpbrasil.service.revocation.RevocationService;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -29,14 +23,10 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import java.nio.charset.StandardCharsets;
-import java.security.cert.X509Certificate;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -46,16 +36,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * serviços da lib icpbrasil-truststore (PKIX, acervo e revogação) substituídos pela PKI de teste.
  */
 @SpringBootTest
-class SignAndValidateSystemTest {
+@Import(OfflineRevocationConfig.class)
+public class SignAndValidateSystemTest {
 
     @MockitoBean
-    PkixCertificateValidator pkixCertificateValidator;
-
-    @MockitoBean
-    RevocationService revocationService;
-
-    @MockitoBean
-    TrustMaterialSource trustMaterialSource;
+    FonteDeConfianca fonteDeConfianca;
 
     @Autowired
     WebApplicationContext webApplicationContext;
@@ -72,13 +57,8 @@ class SignAndValidateSystemTest {
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
         var pki = JadesSigningSystemTest.PKI;
-        when(pkixCertificateValidator.validate(any(), anyCollection()))
-                .thenReturn(new ValidationResult.Valid(List.of(pki.leafCert), pki.caCert, List.of()));
-        when(trustMaterialSource.current()).thenReturn(Optional.of(TrustMaterial.of(List.of(pki.caCert))));
-        when(revocationService.lookup(any(), any())).thenAnswer(invocation -> {
-            byte[] der = pki.ocspGoodFor(invocation.getArgument(0, X509Certificate.class));
-            return new RevocationLookup(new RevocationStatus.Good("OCSP", der), new RevocationEvidence.OcspResponse(der));
-        });
+        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(pki.raiz(), pki.ac()));
+        OfflineRevocationConfig.reset();
     }
 
     private JsonNode signed() throws Exception {
@@ -92,11 +72,11 @@ class SignAndValidateSystemTest {
         return mapper.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8));
     }
 
-    static String validationBody(String signature, String bundle, String provenance) {
+    public static String validationBody(String signature, String bundle, String provenance) {
         return validationBody(signature, bundle, provenance, Instant.now().getEpochSecond());
     }
 
-    static String validationBody(String signature, String bundle, String provenance, long referenceTimestamp) {
+    public static String validationBody(String signature, String bundle, String provenance, long referenceTimestamp) {
         return "{\"signature\":" + signature + ",\"bundle\":" + bundle + ",\"provenance\":" + provenance
                 + ",\"referenceTimestamp\":" + referenceTimestamp
                 + ",\"policyIdentifierUri\":\"" + JadesSigningSystemTest.POLICY_URI + "\"}";
@@ -107,10 +87,13 @@ class SignAndValidateSystemTest {
     }
 
     private String validateAndGetCode(String body, int expectedStatus) throws Exception {
+        return validateAndGetIssue(body, expectedStatus).get("details").get("coding").get(0).get("code").asText();
+    }
+
+    private JsonNode validateAndGetIssue(String body, int expectedStatus) throws Exception {
         MvcResult result = validate(body);
         assertThat(result.getResponse().getStatus()).isEqualTo(expectedStatus);
-        return mapper.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8))
-                .get("issue").get(0).get("details").get("coding").get(0).get("code").asText();
+        return mapper.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8)).get("issue").get(0);
     }
 
     @Test
@@ -154,20 +137,36 @@ class SignAndValidateSystemTest {
     }
 
     @Test
-    void shouldRejectWhenRevocationIsInconclusive() throws Exception {
+    void shouldRejectWhenNoRevocationIsReachable() throws Exception {
         JsonNode signed = signed();
-        doReturn(RevocationLookup.inconclusive(new RevocationStatus.OcspUnavailable()))
-                .when(revocationService).lookup(any(), any());
+        OfflineRevocationConfig.responder = JadesSigningSystemTest.PKI.respostasSemRevogacaoDoSignatario();
 
-        assertThat(validateAndGetCode(validationBody(signed.get("signature").toString(),
-                JadesSigningSystemTest.example("bundle.json"), signed.get("provenance").toString()), 422))
-                .isEqualTo("REVOCATION.OCSP-UNAVAILABLE");
+        JsonNode issue = validateAndGetIssue(validationBody(signed.get("signature").toString(),
+                JadesSigningSystemTest.example("bundle.json"), signed.get("provenance").toString()), 422);
+
+        assertThat(issue.get("details").get("coding").get(0).get("code").asText()).isEqualTo("REVOCATION.STATUS-UNKNOWN");
+        // só a folha sem revogação: a AC sem resposta acrescentaria "revocation issuer" (mesmo código)
+        assertThat(issue.get("diagnostics").asText()).contains("No revocation data found for the certificate")
+                .doesNotContain("revocation issuer");
+    }
+
+    @Test
+    void shouldRejectWhenSignerIsRevoked() throws Exception {
+        JsonNode signed = signed();
+        OfflineRevocationConfig.responder = JadesSigningSystemTest.PKI.respostasComSignatarioRevogado();
+
+        JsonNode issue = validateAndGetIssue(validationBody(signed.get("signature").toString(),
+                JadesSigningSystemTest.example("bundle.json"), signed.get("provenance").toString()), 422);
+
+        assertThat(issue.get("details").get("coding").get(0).get("code").asText()).isEqualTo("CERT.REVOKED");
+        // a folha (REVOKED_NO_POE), não a AC (REVOKED_CA_NO_POE, mesmo código)
+        assertThat(issue.get("diagnostics").asText()).contains("/REVOKED_NO_POE");
     }
 
     @Test
     void shouldReturn422WhenTrustStoreIsNotLoaded() throws Exception {
         JsonNode signed = signed();
-        doReturn(Optional.empty()).when(trustMaterialSource).current();
+        doReturn(Optional.empty()).when(fonteDeConfianca).atual();
 
         assertThat(validateAndGetCode(validationBody(signed.get("signature").toString(),
                 JadesSigningSystemTest.example("bundle.json"), signed.get("provenance").toString()), 422))

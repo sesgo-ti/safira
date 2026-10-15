@@ -6,7 +6,7 @@
 package br.gov.go.saude.fhir.safira.steps.policy;
 
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.steps.certificate.CertificateType;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.ConfigViolation;
@@ -35,7 +35,7 @@ class SafiraPolicyPropertiesTest {
 
     @BeforeAll
     static void createTsaStore() throws Exception {
-        tsaStoreReference = "file:" + TsaTrustStoresTest.writePem(tempDir, TestPki.create().caCert);
+        tsaStoreReference = "file:" + TsaTrustStoresTest.writePem(tempDir, PkiIcpSimulada.criar().ac());
     }
 
     private static SafiraPolicyProperties properties(List<AcceptedCertificatePolicy> allowlist, TsaPolicies tsa) {

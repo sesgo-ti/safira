@@ -10,7 +10,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.StepResult;
 import br.gov.go.saude.fhir.safira.engine.domain.TimestampStrategy;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
@@ -33,15 +33,15 @@ class ContextValidationStepTest {
 
     @TempDir
     static Path tempDir;
-    private static TestPki pki;
+    private static PkiIcpSimulada pki;
     private static SafiraPolicyProperties policy;
     private static SafiraPolicyProperties policyWithTsa;
 
     @BeforeAll
     static void setUp() {
-        pki = TestPki.create();
+        pki = PkiIcpSimulada.criar();
         policy = TestConfigs.policy(pki);
-        policyWithTsa = TestConfigs.policy(pki, TestConfigs.tsaPolicies(tempDir, TestPki.TSA_POLICY_OID, 1, pki.caCert));
+        policyWithTsa = TestConfigs.policy(pki, TestConfigs.tsaPolicies(tempDir, PkiIcpSimulada.POLITICA_TSA, 1, pki.raiz()));
     }
 
     private static SigningContext.SigningContextBuilder valid() {

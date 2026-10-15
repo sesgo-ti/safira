@@ -8,40 +8,41 @@ package br.gov.go.saude.fhir.safira.steps.validation.jades;
 import br.gov.go.saude.fhir.safira.engine.domain.StepResult;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
+import br.gov.go.saude.fhir.safira.steps.support.FonteDeTeste;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
-import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ValidationRequestContextStepTest {
 
-    private static TestPki pki;
+    private static PkiIcpSimulada pki;
     private static SafiraPolicyProperties policy;
     private static ValidationContext valid;
 
     @BeforeAll
     static void setUp() {
-        pki = TestPki.create();
+        pki = PkiIcpSimulada.criar();
         policy = TestConfigs.policy(pki);
         valid = SignedArtifactFixture.validationContext(SignedArtifactFixture.sign(pki, policy));
     }
 
-    private static StepResult<ValidationContext> run(ValidationContext context, TrustMaterialSource trust) {
+    private static StepResult<ValidationContext> run(ValidationContext context, FonteDeConfianca trust) {
         return new ValidationRequestContextStep(policy, trust, Clock.systemUTC()).execute(context);
     }
 
-    private static TrustMaterialSource loaded() {
-        return () -> Optional.of(TrustMaterial.of(List.of(pki.caCert)));
+    private static FonteDeConfianca loaded() {
+        return FonteDeTeste.com(pki.raiz(), pki.ac());
     }
 
     private static SignatureExceptionCode code(StepResult<ValidationContext> result) {
@@ -90,5 +91,25 @@ class ValidationRequestContextStepTest {
     @Test
     void shouldRejectWhenTrustStoreIsNotLoaded() {
         assertThat(code(run(valid, Optional::empty))).isEqualTo(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY);
+    }
+
+    @Test
+    void shouldStoreAcervoSnapshotInContext() {
+        StepResult<ValidationContext> result = run(valid, loaded());
+
+        assertThat(result.context().getAttribute(ValidationKeys.ACERVO, AcervoDeConfianca.class)).isPresent();
+    }
+
+    @Test
+    void shouldQueryFonteOnlyOncePerExecution() {
+        AtomicInteger calls = new AtomicInteger();
+        FonteDeConfianca fonte = () -> {
+            calls.incrementAndGet();
+            return loaded().atual();
+        };
+
+        new ValidationRequestContextStep(policy, fonte, Clock.systemUTC()).execute(valid);
+
+        assertThat(calls).hasValue(1);
     }
 }

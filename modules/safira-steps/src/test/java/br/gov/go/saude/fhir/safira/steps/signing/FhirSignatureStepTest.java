@@ -13,10 +13,13 @@ import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
 import br.gov.go.saude.fhir.safira.steps.certificate.CertificateType;
 import br.gov.go.saude.fhir.safira.steps.certificate.SignerIdentity;
+import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -30,7 +33,17 @@ class FhirSignatureStepTest {
             + "\"recorded\":\"2026-01-01T00:00:00Z\",\"agent\":[{\"who\":{\"identifier\":{\"system\":\"urn:brasil:cpf\","
             + "\"value\":\"52998224725\"}}}],\"extension\":[{\"url\":\"u\",\"valueDecimal\":1.50}]}";
 
+    private static final AcervoDeConfianca ACERVO =
+            new AcervoDeConfianca("g1", List.of(PkiIcpSimulada.criar().raiz()), List.of());
+
     private static SigningContext context(String provenance) {
+        return semEvidenciaDoDss(provenance).toBuilder()
+                .attribute(SigningKeys.ACERVO, ACERVO)
+                .attribute(SigningKeys.CADEIA_APROVADA_DSS, true)
+                .build();
+    }
+
+    private static SigningContext semEvidenciaDoDss(String provenance) {
         return SigningContext.builder()
                 .provenanceJson(LosslessJson.parseObject(provenance))
                 .referenceTimestamp(IAT)
@@ -92,5 +105,21 @@ class FhirSignatureStepTest {
 
         assertThat(((StepResult.Failure<SigningContext>) result).code())
                 .isEqualTo(SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED);
+    }
+
+    @Test
+    void shouldFailWhenDssChainEvidenceIsMissing() {
+        StepResult<SigningContext> result = new FhirSignatureStep().execute(semEvidenciaDoDss(PROVENANCE));
+
+        assertThat(((StepResult.Failure<SigningContext>) result).code()).isEqualTo(SignatureExceptionCode.CONFIG_INVALID_PARAMETER);
+        assertThat(result.context().getSigningResult()).isNull();
+    }
+
+    @Test
+    void shouldFailWhenAcervoIsMissingDespiteChainMarker() {
+        StepResult<SigningContext> result = new FhirSignatureStep().execute(semEvidenciaDoDss(PROVENANCE).toBuilder()
+                .attribute(SigningKeys.CADEIA_APROVADA_DSS, true).build());
+
+        assertThat(((StepResult.Failure<SigningContext>) result).code()).isEqualTo(SignatureExceptionCode.CONFIG_INVALID_PARAMETER);
     }
 }

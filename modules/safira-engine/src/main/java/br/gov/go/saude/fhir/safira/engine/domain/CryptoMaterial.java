@@ -18,9 +18,21 @@ public sealed interface CryptoMaterial permits
 //    CryptoMaterial.RemoteMaterial
 {
 
-    record PemMaterial(String privateKey, String password) implements CryptoMaterial {}
-    
-    record Pkcs12Material(String contentBase64, String password, String alias) implements CryptoMaterial {}
+    /** Segredos (chave e senha) nunca aparecem em {@link #toString()}. */
+    record PemMaterial(String privateKey, String password) implements CryptoMaterial {
+        @Override
+        public String toString() {
+            return "PemMaterial[privateKey=***, password=***]";
+        }
+    }
+
+    /** Segredos (conteúdo e senha) nunca aparecem em {@link #toString()}. */
+    record Pkcs12Material(String contentBase64, String password, String alias) implements CryptoMaterial {
+        @Override
+        public String toString() {
+            return "Pkcs12Material[contentBase64=***, password=***, alias=" + alias + "]";
+        }
+    }
     
 //    record SmartcardMaterial(String pin, String identifier, Integer slotId, String tokenLabel) implements CryptoMaterial {}
 //

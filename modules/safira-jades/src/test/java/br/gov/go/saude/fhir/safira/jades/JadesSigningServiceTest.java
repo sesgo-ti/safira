@@ -5,10 +5,10 @@
 
 package br.gov.go.saude.fhir.safira.jades;
 
-import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifiers;
-import br.gov.go.saude.fhir.safira.jades.adapter.EvidenceRevocationSources;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki.LeafProfile;
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
+import br.gov.go.saude.fhir.safira.testkit.EvidenceRevocationSources;
+import br.gov.go.saude.fhir.safira.testkit.PerfilSignatario;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import eu.europa.esig.dss.enumerations.Indication;
@@ -16,16 +16,15 @@ import eu.europa.esig.dss.enumerations.SignatureLevel;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 import eu.europa.esig.dss.validation.reports.Reports;
 import eu.europa.esig.jades.JAdESUtils;
-import org.bouncycastle.asn1.ASN1Sequence;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.security.Signature;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,28 +39,28 @@ class JadesSigningServiceTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String POLICY_URI = "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0";
-    private static final long REFERENCE_TIMESTAMP = 1755000000L;
+    private static final long REFERENCE_TIMESTAMP = Instant.now().getEpochSecond();
 
-    private static TestPki pki;
+    private static PkiIcpSimulada pki;
     private static JadesSigningService service;
     private static String jws;
     private static byte[] payload;
 
     @BeforeAll
     static void signOnce() throws Exception {
-        pki = TestPki.create();
+        pki = PkiIcpSimulada.criar();
         service = new JadesSigningService();
 
         payload = MessageDigest.getInstance("SHA-256")
                 .digest("conteudo-canonicalizado-de-teste".getBytes(StandardCharsets.UTF_8));
 
         JadesSigningSession session = service.newSession(new JadesSigningService.Request(
-                pki.chain(), payload, REFERENCE_TIMESTAMP, POLICY_URI));
+                pki.cadeia(), payload, REFERENCE_TIMESTAMP, POLICY_URI));
 
         byte[] dataToSign = service.dataToSign(session);
 
         Signature signer = Signature.getInstance("SHA256withRSA");
-        signer.initSign(pki.leafKeys.getPrivate());
+        signer.initSign(pki.chavesSignatario().getPrivate());
         signer.update(dataToSign);
 
         jws = service.sign(session, signer.sign());
@@ -101,7 +100,7 @@ class JadesSigningServiceTest {
         JsonNode header = decodeProtectedHeader(jws);
 
         String expected = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(MessageDigest.getInstance("SHA-256").digest(pki.leafCert.getEncoded()));
+                .encodeToString(MessageDigest.getInstance("SHA-256").digest(pki.signatario().getEncoded()));
         assertThat(header.get("x5t#S256").asText()).isEqualTo(expected);
     }
 
@@ -109,11 +108,13 @@ class JadesSigningServiceTest {
     void shouldCarryFullChainInX5cWithStandardBase64() throws Exception {
         JsonNode header = decodeProtectedHeader(jws);
 
-        assertThat(header.get("x5c")).hasSize(2);
+        assertThat(header.get("x5c")).hasSize(3);
         assertThat(header.get("x5c").get(0).asText())
-                .isEqualTo(Base64.getEncoder().encodeToString(pki.leafCert.getEncoded()));
+                .isEqualTo(Base64.getEncoder().encodeToString(pki.signatario().getEncoded()));
         assertThat(header.get("x5c").get(1).asText())
-                .isEqualTo(Base64.getEncoder().encodeToString(pki.caCert.getEncoded()));
+                .isEqualTo(Base64.getEncoder().encodeToString(pki.ac().getEncoded()));
+        assertThat(header.get("x5c").get(2).asText())
+                .isEqualTo(Base64.getEncoder().encodeToString(pki.raiz().getEncoded()));
     }
 
     @Test
@@ -123,10 +124,11 @@ class JadesSigningServiceTest {
 
     @Test
     void shouldBeClassifiedAsJadesBaselineBByDss() {
-        CommonCertificateVerifier verifier = CertificateVerifiers.create(
-                List.of(pki.caCert),
-                EvidenceRevocationSources.ocspFromEvidence(List.of(pki.ocspGoodFor(pki.leafCert))),
-                EvidenceRevocationSources.crlFromEvidence(List.of(pki.crl())));
+        CommonCertificateVerifier verifier = CertificateVerifierFactory.offline(
+                        EvidenceRevocationSources.ocspFromEvidence(List.of(pki.ocspBom(pki.signatario()),
+                                pki.ocspBom(pki.ac()))),
+                        EvidenceRevocationSources.crlFromEvidence(List.of(pki.lcr())))
+                .create(CertificateVerifierFactory.acervo(List.of(pki.raiz()), List.of(pki.ac())), List.of());
 
         Reports reports = new JadesValidationService().validate(jws, verifier);
         String signatureId = reports.getSimpleReport().getFirstSignatureId();
@@ -137,22 +139,40 @@ class JadesSigningServiceTest {
 
     @Test
     void shouldRejectNonRsaSigningCertificate() {
-        TestPki ec = TestPki.create(LeafProfile.a3().withKey("EC", 0));
+        PkiIcpSimulada ec = PkiIcpSimulada.criar(PerfilSignatario.a3().comChave("EC", 0));
 
         assertThatThrownBy(() -> service.newSession(new JadesSigningService.Request(
-                ec.chain(), payload, REFERENCE_TIMESTAMP, POLICY_URI)))
+                ec.cadeia(), payload, REFERENCE_TIMESTAMP, POLICY_URI)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void shouldTranscodeEcdsaConcatToDerSequence() {
-        byte[] rs = new byte[64];
-        new SecureRandom().nextBytes(rs);
+    void shouldAcceptSignatureValueWhenProducedByLeafKey() throws Exception {
+        byte[] data = "dados-a-assinar".getBytes(StandardCharsets.US_ASCII);
 
-        byte[] der = EcdsaSignatureFormats.concatToDer(rs);
+        assertThat(service.isValidSignatureValue(data, rs256(data), pki.signatario())).isTrue();
+    }
 
-        assertThat(der[0]).isEqualTo((byte) 0x30);
-        assertThat(ASN1Sequence.getInstance(der).size()).isEqualTo(2);
+    @Test
+    void shouldRejectSignatureValueWhenDataToSignDiffers() throws Exception {
+        byte[] data = "dados-a-assinar".getBytes(StandardCharsets.US_ASCII);
+        byte[] other = "outros-dados".getBytes(StandardCharsets.US_ASCII);
+
+        assertThat(service.isValidSignatureValue(other, rs256(data), pki.signatario())).isFalse();
+    }
+
+    @Test
+    void shouldRejectSignatureValueWhenSignerCertificateIsAnother() throws Exception {
+        byte[] data = "dados-a-assinar".getBytes(StandardCharsets.US_ASCII);
+
+        assertThat(service.isValidSignatureValue(data, rs256(data), pki.ac())).isFalse();
+    }
+
+    private static byte[] rs256(byte[] data) throws Exception {
+        Signature signer = Signature.getInstance("SHA256withRSA");
+        signer.initSign(pki.chavesSignatario().getPrivate());
+        signer.update(data);
+        return signer.sign();
     }
 
     private static JsonNode decodeProtectedHeader(String jwsJson) throws Exception {

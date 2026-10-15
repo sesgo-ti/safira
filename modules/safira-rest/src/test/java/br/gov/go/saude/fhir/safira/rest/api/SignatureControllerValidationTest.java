@@ -16,6 +16,9 @@ import org.springframework.web.context.WebApplicationContext;
 
 import java.time.Instant;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -53,6 +56,18 @@ class SignatureControllerValidationTest {
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(content().contentTypeCompatibleWith("application/fhir+json"))
                 .andExpect(jsonPath(CODE).value("FORMAT.SIGNATURE-MISSING"));
+    }
+
+    @Test
+    void shouldOmitNullMembersInOperationOutcome() throws Exception {
+        mockMvc.perform(post("/validar").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bundle\":{},\"provenance\":{},\"referenceTimestamp\":" + Instant.now().getEpochSecond()
+                                + ",\"policyIdentifierUri\":\"" + POLICY_URI + "\"}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.id").doesNotExist())
+                .andExpect(jsonPath("$.issue[0].location").doesNotExist())
+                .andExpect(jsonPath("$.issue[0].details.coding[0].display").doesNotExist())
+                .andExpect(content().string(not(containsString("null"))));
     }
 
     @Test

@@ -42,9 +42,10 @@ Reports are in scope for:
 
 Out of scope: issues exclusively in test code, documentation, or dependencies that have no known exploit.
 
-Certificate catalogue, PKIX and revocation are provided by
+The ICP-Brasil certificate catalogue (trusted roots and intermediate CAs) is loaded by
 [icpbrasil-truststore](https://github.com/sesgo-ti/icpbrasil-truststore); report issues in that
-library to its maintainers following its own `SECURITY.md`.
+library to its maintainers following its own `SECURITY.md`. Certificate path validation (PKIX),
+revocation (OCSP/CRL) and timestamp verification are performed by the EU DSS inside Safira.
 
 ### Disclosure policy
 

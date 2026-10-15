@@ -40,6 +40,10 @@ import java.util.Set;
  * JWS JSON, payload attached de 32 bytes, protected header fechado da política 0.2.0 e
  * identificação exata do nível local (JAdES-B-B ou JAdES-B-T).
  *
+ * <p>O nível aqui é a forma estrita do IG ({@code header} ausente ou {@code etsiU/sigTst} único) e é
+ * pré-requisito do {@code dss-validation}, que escolhe as âncoras TSA de B-T antes de chamar o DSS;
+ * o nível efetivo da assinatura continua sendo confirmado pelo DSS ({@code getSignatureFormat}).
+ *
  * <p>Escreve {@code certificateChain} ({@code x5c}) e os atributos {@link ValidationKeys#JADES_LEVEL},
  * {@link ValidationKeys#IAT}, {@link ValidationKeys#PAYLOAD} e {@link ValidationKeys#SIGNATURE_TEXT}.
  */
@@ -149,9 +153,10 @@ public class JwsStructureStep implements ValidationStep {
         if (!Policy020.JWS_ALGORITHM.equals(header.string("alg").orElse(null))) {
             return fail(SignatureExceptionCode.VALIDATION_UNSUPPORTED_ALGORITHM, "'alg' deve ser RS256.", context);
         }
-        if (!(header.get("iat").get() instanceof JsonNumber iat) || !iat.lexical().matches("[1-9]\\d{0,18}")) {
+        // Até 11 dígitos (≤ ano 5138): cabe em long sem estouro e cobre qualquer NumericDate plausível.
+        if (!(header.get("iat").get() instanceof JsonNumber iat) || !iat.lexical().matches("[1-9]\\d{0,10}")) {
             return fail(SignatureExceptionCode.TEMPORAL_IAT_INVALID,
-                    "'iat' deve ser NumericDate inteiro positivo, sem fração nem expoente.", context);
+                    "'iat' deve ser NumericDate inteiro positivo de até 11 dígitos, sem fração nem expoente.", context);
         }
         if (!SIG_P_ID.equals(LosslessJson.write(header.get("sigPId").get()))) {
             return fail(SignatureExceptionCode.POLICY_SIGNATURE_POLICY_ID_INVALID,
@@ -168,6 +173,11 @@ public class JwsStructureStep implements ValidationStep {
         List<JsonValue> items = header.array("x5c").map(JsonArray::items).orElse(List.of());
         if (items.isEmpty()) {
             return fail(SignatureExceptionCode.CERT_CHAIN_INCOMPLETE, "'x5c' deve ser um array não vazio.", context);
+        }
+        // Limite estrutural do JWS (mesmo teto da assinatura), aplicado antes de decodificar qualquer certificado
+        if (items.size() > Policy020.MAX_CHAIN_LENGTH) {
+            return fail(SignatureExceptionCode.FORMAT_JWS_MALFORMED,
+                    "'x5c' excede o limite de " + Policy020.MAX_CHAIN_LENGTH + " certificados.", context);
         }
         Set<String> seen = new HashSet<>();
         for (int i = 0; i < items.size(); i++) {

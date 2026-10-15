@@ -10,7 +10,9 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.json.JsonValue.JsonObject;
 import br.gov.go.saude.fhir.safira.engine.domain.json.LosslessJson;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
+import br.gov.go.saude.fhir.safira.testkit.TsaHttpLocal;
+import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
 import org.junit.jupiter.api.AfterAll;
@@ -20,6 +22,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Base64;
 
@@ -31,16 +34,16 @@ class JwsStructureStepTest {
 
     @TempDir
     static Path tempDir;
-    private static TestPki pki;
-    private static TestPki.FakeTsa tsa;
+    private static PkiIcpSimulada pki;
+    private static TsaHttpLocal tsa;
     private static String bb;
     private static String bt;
 
     @BeforeAll
     static void setUp() {
-        pki = TestPki.create();
-        tsa = pki.startFakeTsa();
-        var policy = TestConfigs.policy(pki, TestConfigs.tsaPolicies(tempDir, TestPki.TSA_POLICY_OID, 1, pki.caCert));
+        pki = PkiIcpSimulada.criar();
+        tsa = pki.iniciarTsaHttp();
+        var policy = TestConfigs.policy(pki, TestConfigs.tsaPolicies(tempDir, PkiIcpSimulada.POLITICA_TSA, 1, pki.raiz()));
         bb = jwsOf(SignedArtifactFixture.sign(pki, policy).signatureJson());
         bt = jwsOf(SignedArtifactFixture.sign(pki, policy, Instant.now().getEpochSecond(), tsa).signatureJson());
     }
@@ -85,7 +88,7 @@ class JwsStructureStepTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.context().getAttribute(ValidationKeys.JADES_LEVEL, JadesLevel.class)).contains(JadesLevel.B_B);
-        assertThat(result.context().getCertificateChain().orElseThrow()).containsExactly(pki.leafCert, pki.caCert);
+        assertThat(result.context().getCertificateChain().orElseThrow()).containsExactly(pki.cadeia().toArray(X509Certificate[]::new));
     }
 
     @Test
@@ -147,11 +150,39 @@ class JwsStructureStepTest {
     }
 
     @Test
+    void shouldNotEchoBodyFragmentInDiagnosticsWhenJwsIsInvalidJson() {
+        StepResult<ValidationContext> result = run("{\"payload\": SEGREDO_PHI}");
+
+        assertThat(code(result)).isEqualTo(SignatureExceptionCode.FORMAT_JWS_MALFORMED);
+        assertThat(((StepResult.Failure<ValidationContext>) result).diagnostics()).doesNotContain("SEGREDO_PHI");
+    }
+
+    @Test
+    void shouldRejectChainLongerThanSigningLimitBeforeDecodingCertificates() {
+        String h = header(bb);
+        String x5c = LosslessJson.write(LosslessJson.parseObject(h).get("x5c").orElseThrow());
+        String lixo = "[" + "\"AAAA\",".repeat(Policy020.MAX_CHAIN_LENGTH) + "\"AAAA\"]";
+
+        assertThat(code(run(withHeader(bb, h.replace(x5c, lixo)))))
+                .isEqualTo(SignatureExceptionCode.FORMAT_JWS_MALFORMED);
+    }
+
+    @Test
+    void shouldNotRejectByLimitWhenChainHasExactlyTheLimit() {
+        String h = header(bb);
+        String x5c = LosslessJson.write(LosslessJson.parseObject(h).get("x5c").orElseThrow());
+        String lixo = "[" + "\"AAAA\",".repeat(Policy020.MAX_CHAIN_LENGTH - 1) + "\"AAAA\"]";
+
+        assertThat(code(run(withHeader(bb, h.replace(x5c, lixo)))))
+                .isEqualTo(SignatureExceptionCode.CERT_INVALID_FORMAT);
+    }
+
+    @Test
     void shouldRejectChainWhoseIssuerHasSameNameButOtherKey() throws Exception {
         // Toda PKI de teste usa o mesmo DN de CA: só a assinatura distingue o emissor verdadeiro
         String h = header(bb);
-        String realCa = Base64.getEncoder().encodeToString(pki.caCert.getEncoded());
-        String otherCa = Base64.getEncoder().encodeToString(TestPki.create().caCert.getEncoded());
+        String realCa = Base64.getEncoder().encodeToString(pki.ac().getEncoded());
+        String otherCa = Base64.getEncoder().encodeToString(PkiIcpSimulada.criar().ac().getEncoded());
 
         assertThat(code(run(withHeader(bb, h.replace(realCa, otherCa)))))
                 .isEqualTo(SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED);

@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class SigningRequestParserTest {
 
     private static final SafiraOperationalConfigProperties OPS =
-            new SafiraOperationalConfigProperties(null, null, null, null, null);
+            new SafiraOperationalConfigProperties(null, null);
 
     private static String body(String bundle, String timestamp, String material) {
         return "{\"bundle\":" + bundle + ","

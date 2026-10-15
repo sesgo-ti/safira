@@ -11,6 +11,9 @@ import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepRegistry;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.List;
 import java.util.function.Function;
 
@@ -19,6 +22,7 @@ import java.util.function.Function;
  * curto-circuitando na primeira falha ou exceção técnica.
  */
 public class PipelineExecutor {
+    private static final Logger log = LoggerFactory.getLogger(PipelineExecutor.class);
     private final StepRegistry stepRegistry;
 
     public PipelineExecutor(StepRegistry stepRegistry) {
@@ -74,8 +78,11 @@ public class PipelineExecutor {
                         OperationOutcome.createSignatureError(severity, "exception", ec.getCode(), ec.getDisplay(), ex.getDiagnostics())
             );
             } catch (Exception ex) {
+                // A mensagem da exceção é interna (JVM, bibliotecas): fica no log, nunca no OperationOutcome.
+                log.error("Erro inesperado no step {} da pipeline {} ({})", step.getName(), politicsVersion, operation, ex);
                 return new PipelineResult.Failure<>(
-                        OperationOutcome.createSignatureError("fatal", "exception", "INTERNAL_ERROR", "Ocorreu um erro interno inesperado: " + ex.getMessage(), ex.getMessage())
+                        OperationOutcome.createSignatureError("fatal", "exception", "INTERNAL_ERROR",
+                                "Ocorreu um erro interno inesperado.", "Erro interno no passo " + step.getName() + ".")
                 );
             }
         }

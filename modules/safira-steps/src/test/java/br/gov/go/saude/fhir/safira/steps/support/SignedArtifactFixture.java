@@ -14,7 +14,9 @@ import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
 import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
+import br.gov.go.saude.fhir.safira.testkit.TsaHttpLocal;
 import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.signing.CertificatePolicyStep;
@@ -22,26 +24,36 @@ import br.gov.go.saude.fhir.safira.steps.signing.CryptoSigningStep;
 import br.gov.go.saude.fhir.safira.steps.signing.FhirSignatureStep;
 import br.gov.go.saude.fhir.safira.steps.signing.FramedContentDigestStep;
 import br.gov.go.saude.fhir.safira.steps.signing.PkixChainValidationStep;
+import br.gov.go.saude.fhir.safira.steps.signing.SigningKeys;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesAssembleStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesDataToSignStep;
 import br.gov.go.saude.fhir.safira.steps.signing.jades.JadesExtensionStep;
-import br.gov.go.saude.truststore.icpbrasil.model.ValidationResult;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
+import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
+import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
+import br.gov.go.saude.fhir.safira.steps.validation.jades.ValidationKeys;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 
+import java.security.cert.X509Certificate;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * Artefato assinado real (Signature, Bundle, Provenance) produzido pelos steps de assinatura da
  * política 0.2.0 com a PKI de teste — insumo dos testes de validação.
  */
 public final class SignedArtifactFixture {
+
+    /** Snapshot do acervo que a fonte informada entrega agora. */
+    public static AcervoDeConfianca acervo(FonteDeConfianca source) {
+        return source.atual().orElseThrow();
+    }
+
+    /** Contexto com o snapshot que {@code validation-context} guardaria para essa fonte. */
+    public static ValidationContext comAcervo(ValidationContext context, FonteDeConfianca source) {
+        return context.toBuilder().attribute(ValidationKeys.ACERVO, acervo(source)).build();
+    }
 
     public static final String U1 = "urn:uuid:3fa85f64-5717-4562-b3fc-2c963f66afa6";
     public static final String U2 = "urn:uuid:9b2b8c1e-2f4a-4d5b-8c6d-7e8f9a0b1c2d";
@@ -53,7 +65,7 @@ public final class SignedArtifactFixture {
 
     public static final String PROVENANCE = "{\"resourceType\":\"Provenance\",\"target\":[{\"reference\":\"" + U2
             + "\"},{\"reference\":\"" + U1 + "\"}],\"recorded\":\"2026-01-10T10:05:00-03:00\","
-            + "\"agent\":[{\"who\":{\"identifier\":{\"system\":\"urn:brasil:cpf\",\"value\":\"" + TestPki.TEST_CPF + "\"}}}]}";
+            + "\"agent\":[{\"who\":{\"identifier\":{\"system\":\"urn:brasil:cpf\",\"value\":\"" + PkiIcpSimulada.CPF + "\"}}}]}";
 
     private SignedArtifactFixture() {
     }
@@ -62,31 +74,55 @@ public final class SignedArtifactFixture {
      * @param iat instante de referência da assinatura
      * @param tsa TSA local para o resultado {@code tsa}; nulo produz JAdES-B-B
      */
-    public static SigningResult sign(TestPki pki, SafiraPolicyProperties policy, long iat, TestPki.FakeTsa tsa) {
-        PkixCertificateValidator validator = mock(PkixCertificateValidator.class);
-        when(validator.validate(any(), anyCollection()))
-                .thenReturn(new ValidationResult.Valid(List.of(pki.leafCert), pki.caCert, List.of()));
+    public static SigningResult sign(PkiIcpSimulada pki, SafiraPolicyProperties policy, long iat, TsaHttpLocal tsa) {
+        return sign(pki, policy, iat, tsa, true);
+    }
+
+    /**
+     * Assina sem a validação PKIX da cadeia, para produzir artefatos que o lado
+     * da assinatura recusaria (certificado do signatário inválido) e exercitar a validação.
+     */
+    public static SigningResult signSemVerificarCadeia(PkiIcpSimulada pki, SafiraPolicyProperties policy) {
+        return sign(pki, policy, Instant.now().getEpochSecond(), null, false);
+    }
+
+    private static SigningResult sign(PkiIcpSimulada pki, SafiraPolicyProperties policy, long iat, TsaHttpLocal tsa,
+                                      boolean verificarCadeia) {
+        VerificadoresDss verifiers = new VerificadoresDss(
+                FonteDeTeste.com(pki.raiz(), pki.ac()),
+                CertificateVerifierFactory.offline(pki.fonteOcsp(), null));
         try {
             SigningContext context = SigningContext.builder()
                     .bundleJson(LosslessJson.parseObject(BUNDLE))
                     .provenanceJson(LosslessJson.parseObject(PROVENANCE))
-                    .rawCertificateChain(List.of(Base64.getEncoder().encodeToString(pki.leafCert.getEncoded())))
-                    .cryptoMaterial(new CryptoMaterial.PemMaterial(pki.leafKeyPemBase64(), null))
+                    .rawCertificateChain(List.of(Base64.getEncoder().encodeToString(pki.signatario().getEncoded())))
+                    .cryptoMaterial(new CryptoMaterial.PemMaterial(pki.chavePrivadaSignatarioPemBase64(), null))
                     .referenceTimestamp(iat)
                     .strategy(tsa == null ? TimestampStrategy.IAT : TimestampStrategy.TSA)
                     .policyIdentifierUri(Policy020.POLICY_URI)
                     .operationalConfig(TestConfigs.operational(tsa == null ? null : tsa.url()))
                     .build();
+            List<Step<SigningContext>> verificacoes = new ArrayList<>();
+            if (verificarCadeia) {
+                verificacoes.add(new PkixChainValidationStep(verifiers, policy));
+            } else {
+                // simula a evidência do pkix-chain-validation pulado
+                context = context.toBuilder().certificateChain(pki.cadeia().toArray(X509Certificate[]::new))
+                        .attribute(SigningKeys.ACERVO, acervo(FonteDeTeste.com(pki.raiz(), pki.ac())))
+                        .attribute(SigningKeys.CADEIA_APROVADA_DSS, true)
+                        .build();
+            }
+            verificacoes.add(new CertificatePolicyStep(policy));
             List<Step<SigningContext>> steps = List.of(
-                    new PkixChainValidationStep(validator),
-                    new CertificatePolicyStep(policy),
                     new FramedContentDigestStep(),
                     new JadesDataToSignStep(),
                     new CryptoSigningStep(),
                     new JadesAssembleStep(),
                     new JadesExtensionStep(new JadesExtensionService(), policy),
                     new FhirSignatureStep());
-            for (Step<SigningContext> step : steps) {
+            List<Step<SigningContext>> todos = new ArrayList<>(verificacoes);
+            todos.addAll(steps);
+            for (Step<SigningContext> step : todos) {
                 StepResult<SigningContext> result = step.execute(context);
                 if (!result.isSuccess()) {
                     throw new IllegalStateException("Falha ao assinar no step " + step.getName() + ": "
@@ -100,7 +136,7 @@ public final class SignedArtifactFixture {
         }
     }
 
-    public static SigningResult sign(TestPki pki, SafiraPolicyProperties policy) {
+    public static SigningResult sign(PkiIcpSimulada pki, SafiraPolicyProperties policy) {
         return sign(pki, policy, Instant.now().getEpochSecond(), null);
     }
 

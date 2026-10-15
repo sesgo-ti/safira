@@ -8,7 +8,7 @@ package br.gov.go.saude.fhir.safira.steps.support;
 import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties;
 import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties.SecurityLimitsProps;
 import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties.VerificationProps;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.steps.certificate.CertificateType;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
@@ -32,26 +32,23 @@ public final class TestConfigs {
 
     public static SafiraOperationalConfigProperties operational(String tsaUrl) {
         return new SafiraOperationalConfigProperties(
-                new VerificationProps(3600, 3600, 20, 20, 20, 3, 2, tsaUrl, null, null),
-                null,
-                new SecurityLimitsProps(1000, 52428800, 10, 1751328000L, 4102444800L),
-                null,
-                null);
+                new VerificationProps(20, 20, 20, tsaUrl),
+                new SecurityLimitsProps(1000, 52428800));
     }
 
     public static SafiraOperationalConfigProperties operational() {
         return operational(null);
     }
 
-    /** Allowlist com a política A3 do {@link TestPki} emitida pela CA da PKI de teste. */
-    public static SafiraPolicyProperties policy(TestPki pki) {
+    /** Allowlist com as políticas A3 e SE-S emitidas pela AC da {@link PkiIcpSimulada}. */
+    public static SafiraPolicyProperties policy(PkiIcpSimulada pki) {
         return policy(pki, null);
     }
 
-    public static SafiraPolicyProperties policy(TestPki pki, TsaPolicies tsa) {
+    public static SafiraPolicyProperties policy(PkiIcpSimulada pki, TsaPolicies tsa) {
         return new SafiraPolicyProperties(
-                List.of(new AcceptedCertificatePolicy("2.16.76.1.2.3.1", CertificateType.A3, pki.issuerSha256()),
-                        new AcceptedCertificatePolicy("2.16.76.1.2.201.1", CertificateType.SE_S, pki.issuerSha256())),
+                List.of(new AcceptedCertificatePolicy("2.16.76.1.2.3.1", CertificateType.A3, pki.emissorSha256()),
+                        new AcceptedCertificatePolicy("2.16.76.1.2.201.1", CertificateType.SE_S, pki.emissorSha256())),
                 tsa,
                 new TemporalPolicy(1751328000L));
     }

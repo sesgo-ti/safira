@@ -20,7 +20,7 @@
     <artifactId>safira-rest</artifactId>
     <packaging>jar</packaging>
     <name>Safira :: REST</name>
-    <description>Spring Boot REST API consuming the Safira Engine.</description>
+    <description>Biblioteca da API REST do Safira (controllers e serviços registrados por auto-configuração).</description>
 
     <dependencies>
         <dependency>
@@ -49,6 +49,12 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
+        <!-- Health e probes (/actuator/health/readiness). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -65,18 +71,31 @@
         <!-- PKI de teste e TSA local compartilhadas pelo módulo safira-jades -->
         <dependency>
             <groupId>br.gov.go.saude.fhir</groupId>
-            <artifactId>safira-jades</artifactId>
+            <artifactId>safira-testkit</artifactId>
             <version>${project.version}</version>
-            <type>test-jar</type>
             <scope>test</scope>
         </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <!-- test-jar: compartilha os auxiliares dos testes de sistema com as aplicações e seus testes -->
             <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                        <configuration>
+                            <excludes>
+                                <exclude>application.yml</exclude>
+                                <exclude>br/gov/go/saude/fhir/safira/rest/SafiraRestTestApplication*</exclude>
+                            </excludes>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
