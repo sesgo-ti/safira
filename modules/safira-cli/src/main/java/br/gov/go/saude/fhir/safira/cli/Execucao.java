@@ -52,7 +52,7 @@ final class Execucao {
             err.println("Erro: " + e.getMessage());
             return CodigosDeSaida.USO;
         } catch (RuntimeException e) {
-            err.println("Erro: falha na partida do Safira (modo " + opcoes.modo.nome() + "): " + causaRaiz(e));
+            err.println("Erro: falha na partida do Safira (modo " + opcoes.modo.nome() + "): " + FalhaDePartida.mensagem(e));
             detalhar(opcoes, err, e);
             return CodigosDeSaida.USO;
         }
@@ -111,13 +111,5 @@ final class Execucao {
             e.printStackTrace(err);
             err.flush();
         }
-    }
-
-    private static String causaRaiz(Throwable e) {
-        Throwable causa = e;
-        while (causa.getCause() != null && causa.getCause() != causa) {
-            causa = causa.getCause();
-        }
-        return causa.getMessage() != null ? causa.getMessage() : causa.getClass().getSimpleName();
     }
 }

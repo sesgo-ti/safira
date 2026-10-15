@@ -157,6 +157,23 @@ class SafiraCliEntradaTest {
     }
 
     @Test
+    void shouldReportMalformedAllowlistWithoutInternalClassNames() throws Exception {
+        Path config = Cli.escrever(diretorio.resolve("allowlist.yml"), """
+                safira:
+                  policy:
+                    accepted-certificate-policies: "2.16.76.1.2.3.1"
+                """);
+
+        Resultado resultado = Cli.executar("validar", "--modo", "icpbrasil", "--config", config.toString(),
+                "--signature", bundle.toString(), "--bundle", bundle.toString(), "--provenance", provenance.toString());
+
+        assertThat(resultado.saida()).isEqualTo(CodigosDeSaida.USO);
+        assertThat(resultado.err()).startsWith("Erro: falha na partida")
+                .contains("safira.policy.accepted-certificate-policies")
+                .doesNotContain("SafiraPolicyProperties").doesNotContain("$").doesNotContain("converter");
+    }
+
+    @Test
     void shouldRejectPkiDirectoryOutsideSimulationMode() {
         Resultado resultado = Cli.executar("validar", "--modo", "icpbrasil", "--pki-dir", pki.toString(),
                 "--signature", bundle.toString(), "--bundle", bundle.toString(), "--provenance", provenance.toString());

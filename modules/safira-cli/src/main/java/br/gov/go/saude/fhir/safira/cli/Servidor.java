@@ -250,7 +250,7 @@ final class Servidor implements Runnable {
                 return CodigosDeSaida.SUCESSO;
             } catch (RuntimeException e) {
                 spec.commandLine().getErr().println("Erro: falha na partida do servidor (modo "
-                        + opcaoModo.modo.nome() + "): " + e.getMessage());
+                        + opcaoModo.modo.nome() + "): " + FalhaDePartida.mensagem(e));
                 spec.commandLine().getErr().flush();
                 return CodigosDeSaida.USO;
             }
