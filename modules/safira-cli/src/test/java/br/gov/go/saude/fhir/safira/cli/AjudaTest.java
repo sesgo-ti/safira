@@ -33,7 +33,8 @@ class AjudaTest {
             Resultado resultado = Cli.executar(argumentos);
 
             assertThat(resultado.saida()).isZero();
-            assertThat(resultado.out()).contains(esperado).contains("--help");
+            assertThat(resultado.out()).contains(esperado).contains("--help").startsWith("Uso: ")
+                    .contains("Mostra esta ajuda e sai.").doesNotContain("Usage").doesNotContain("Show this help");
         }
     }
 

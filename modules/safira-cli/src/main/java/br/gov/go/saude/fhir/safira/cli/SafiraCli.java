@@ -27,9 +27,9 @@ import java.util.Properties;
  * <p>Códigos de saída ({@link CodigosDeSaida}): 0 sucesso/válido; 3 uso/configuração; 4 inconclusivo;
  * 6 reprovação definitiva; 1 erro interno. O stdout recebe só o JSON de resultado.
  */
-// INHERIT: --help/-h e --version/-V valem em todos os subcomandos
+// INHERIT: --help/-h, --version/-V e os textos em português (safira-cli-mensagens) valem em todos os subcomandos
 @Command(name = "safira", mixinStandardHelpOptions = true, versionProvider = SafiraCli.Versao.class,
-        scope = ScopeType.INHERIT,
+        scope = ScopeType.INHERIT, resourceBundle = "safira-cli-mensagens",
         subcommands = {Assinar.class, Validar.class, Servidor.class, Simulador.class, HelpCommand.class},
         description = "Assina e valida Bundles FHIR (JAdES, política 0.2.0) no modo ICP-Brasil ou simulação e controla "
                 + "o servidor local da API.",
