@@ -70,6 +70,60 @@ Quem escolhe um valor é cada aplicação consumidora: o **Safira** optou por
 ambiente de produção típico, mas isso não é "o default da lib". É só o valor que o
 Safira decidiu usar quando ninguém sobrescreve `SAFIRA_TRUSTSTORE_DIR`.
 
+## Raiz de confiança personalizada
+
+Tudo acima descreve o caminho padrão: confiar na hierarquia ICP-Brasil, via acervo
+baixado do ITI. O Safira também permite **substituir inteiramente** essa fonte de
+confiança por uma hierarquia própria, para integradores que assinam com
+certificados fora da ICP-Brasil (por exemplo, uma AC interna da própria
+organização).
+
+A property é `safira.trust.custom-roots-dir`, apontando para um diretório com os
+certificados públicos das raízes confiáveis (`.pem`, `.cer`, `.crt` ou `.der`):
+
+```yaml
+safira:
+  trust:
+    custom-roots-dir: /caminho/para/raizes-personalizadas
+```
+
+**É substituição, não soma**: com essa property configurada, nenhuma cadeia
+ancorada no acervo ICP-Brasil é aceita, só nas raízes desse diretório. Um
+certificado genuíno da ICP-Brasil passaria a ser rejeitado por falta de âncora,
+da mesma forma que qualquer outro certificado fora das raízes configuradas. Não
+há, hoje, suporte a somar as duas fontes de confiança.
+
+O mecanismo é o mesmo que a própria lib usa para permitir sobrescrita: o Safira
+registra um bean próprio de `TrustMaterialSource` (via
+`CustomTrustAnchorConfig`), condicionado à presença dessa property
+(`@ConditionalOnProperty`). Como beans de configuração do próprio app são
+processados antes da auto-configuração da lib, o bean padrão dela
+(`@ConditionalOnMissingBean(TrustMaterialSource.class)`) recua sozinho quando o
+personalizado já existe. Sem a property, nada muda.
+
+Como o acervo ICP-Brasil deixa de ser consultado para validação de cadeia nesse
+modo, normalmente faz sentido também desligar o download/agendamento dele, para
+não depender de conectividade com o ITI à toa:
+
+```yaml
+icpbrasil-truststore:
+  bootstrap:
+    enabled: false
+  scheduling:
+    enabled: false
+```
+
+Isso é uma decisão manual, não automática: configurar `custom-roots-dir` não
+desliga `bootstrap`/`scheduling` sozinho, porque desligá-los tem efeito nos
+clientes internos da lib (OCSP/CRL/AIA) independente da fonte de confiança
+escolhida, e essa decisão cabe a cada ambiente.
+
+Por fim, lembre que a allowlist (`safira.policy.accepted-certificate-policies`)
+continua obrigatória e precisa do `issuer-sha256` da **nova** raiz (ou AC
+intermediária imediata), não da ICP-Brasil: veja o
+[guia de configuração e execução](guia-configuracao-e-execucao.md) para como
+extrair esse valor de um certificado.
+
 ## Atualização automática
 
 Um agendador (`TrustStoreScheduler`) verifica periodicamente (default: a cada 2h,
