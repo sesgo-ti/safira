@@ -14,7 +14,10 @@ import picocli.CommandLine.ParameterException;
 import picocli.CommandLine.ScopeType;
 import picocli.CommandLine.Spec;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
+import java.util.Properties;
 
 /**
  * Linha de comando do Safira: {@code safira assinar} e {@code safira validar} sobre os serviços do
@@ -59,13 +62,32 @@ public final class SafiraCli implements Runnable {
         System.exit(linhaDeComando().setOut(new PrintWriter(System.out, true)).execute(args));
     }
 
-    /** Versão do jar (manifesto); em desenvolvimento, sem versão. */
+    /** Versão do artefato (gravada pelo Maven em {@value #RECURSO}; senão, do manifesto). */
     static final class Versao implements IVersionProvider {
+
+        static final String RECURSO = "/safira-cli-versao.properties";
 
         @Override
         public String[] getVersion() {
-            String versao = SafiraCli.class.getPackage().getImplementationVersion();
+            String versao = doRecurso();
+            if (versao == null) {
+                versao = SafiraCli.class.getPackage().getImplementationVersion();
+            }
             return new String[] {"safira " + (versao != null ? versao : "(desenvolvimento)")};
+        }
+
+        private static String doRecurso() {
+            try (InputStream in = SafiraCli.class.getResourceAsStream(RECURSO)) {
+                if (in == null) {
+                    return null;
+                }
+                Properties propriedades = new Properties();
+                propriedades.load(in);
+                String versao = propriedades.getProperty("versao");
+                return versao == null || versao.isBlank() || versao.startsWith("${") ? null : versao.strip();
+            } catch (IOException e) {
+                return null;
+            }
         }
     }
 }

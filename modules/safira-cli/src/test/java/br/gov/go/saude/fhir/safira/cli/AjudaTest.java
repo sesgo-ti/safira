@@ -12,7 +12,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** {@code --help}, {@code -h} e {@code help <comando>} em todos os subcomandos: saída 0 e as opções. */
+/** {@code --help}, {@code -h} e {@code help <comando>} em todos os subcomandos (saída 0 e as opções) e {@code --version}. */
 class AjudaTest {
 
     @ParameterizedTest
@@ -43,5 +43,13 @@ class AjudaTest {
 
         assertThat(resultado.saida()).isZero();
         assertThat(resultado.out()).contains("--estrategia");
+    }
+
+    @Test
+    void shouldShowArtifactVersion() {
+        Resultado resultado = Cli.executar("--version");
+
+        assertThat(resultado.saida()).isZero();
+        assertThat(resultado.out().strip()).matches("safira \\d+\\.\\d+\\.\\d+\\S*");
     }
 }

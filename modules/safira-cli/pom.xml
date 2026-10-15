@@ -68,6 +68,16 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- só a versão do artefato é filtrada: os YAML usam ${...} do Spring -->
+            <resource>
+                <directory>src/main/resources-filtrados</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
         <plugins>
             <!-- Nenhum teste grava no ~ real nem acessa o ITI: PKI simulada e acervo em target/ -->
             <plugin>
