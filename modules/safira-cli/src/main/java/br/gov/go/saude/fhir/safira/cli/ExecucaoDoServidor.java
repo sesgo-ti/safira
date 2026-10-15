@@ -8,6 +8,7 @@ package br.gov.go.saude.fhir.safira.cli;
 import br.gov.go.saude.fhir.safira.app.SafiraApplication;
 import br.gov.go.saude.fhir.safira.simulador.SimuladorApplication;
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.event.ContextClosedEvent;
@@ -130,6 +131,11 @@ final class ExecucaoDoServidor {
             }
         });
         try {
+            if (!(contexto instanceof WebServerApplicationContext)) {
+                // sem servidor web a prontidão nunca responderia: recusa na partida em vez de esperar o timeout
+                throw new IllegalStateException("o servidor exige aplicação web: spring.main.web-application-type "
+                        + "não pode ser 'none' (revise o --config)");
+            }
             ContextoSafira.exigirFonteUnica(contexto, modo);
         } catch (RuntimeException e) {
             contexto.close();

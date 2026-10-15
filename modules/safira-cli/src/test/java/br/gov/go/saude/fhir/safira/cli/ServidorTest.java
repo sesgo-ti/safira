@@ -169,6 +169,19 @@ class ServidorTest {
     }
 
     @Test
+    void shouldRefuseNonWebApplicationTypeAtStartup() throws Exception {
+        Path config = Cli.escrever(diretorio.resolve("sem-web.yml"), "spring:\n  main:\n    web-application-type: none\n");
+        Instant inicio = Instant.now();
+
+        Resultado resultado = iniciar("--config", config.toString(), "--timeout", "30");
+
+        assertThat(resultado.saida()).isEqualTo(CodigosDeSaida.USO);
+        assertThat(resultado.err()).contains("web-application-type");
+        assertThat(Duration.between(inicio, Instant.now())).isLessThan(Duration.ofSeconds(25));
+        await().atMost(Duration.ofSeconds(15)).until(() -> servidoresFilhos().isEmpty());
+    }
+
+    @Test
     void shouldReportStartupFailureWithoutStackTrace() throws Exception {
         Path config = Cli.escrever(diretorio.resolve("gerencia.yml"), "management:\n  server:\n    address: 0.0.0.0\n");
 
