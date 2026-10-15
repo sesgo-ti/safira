@@ -135,7 +135,8 @@ public final class CertificateVerifierFactory {
      * Novo verificador sobre o acervo, com âncoras extras desta chamada.
      *
      * @param acervo       fontes de {@link #acervo}
-     * @param extraTrusted âncoras adicionais (ex.: trust store TSA da política); pode ser vazia
+     * @param extraTrusted âncoras adicionais (ex.: trust store TSA da política, cuja carga já recusa certificado
+     *                     que o DSS não representa); pode ser vazia
      */
     public CommonCertificateVerifier create(Acervo acervo, Collection<X509Certificate> extraTrusted) {
         CommonCertificateVerifier verifier = new CommonCertificateVerifier(true);

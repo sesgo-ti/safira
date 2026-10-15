@@ -6,6 +6,7 @@
 package br.gov.go.saude.fhir.safira.steps.policy;
 
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
+import br.gov.go.saude.fhir.safira.testkit.CertificadosIcpBrasilReais;
 import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.steps.certificate.CertificateType;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.AcceptedCertificatePolicy;
@@ -134,6 +135,15 @@ class SafiraPolicyPropertiesTest {
     @Test
     void shouldRejectUnreadableTsaTrustStore() {
         var policy = new TsaPolicy("1.2.3.4.5", 1L, new TrustStoreRef("file:/nao/existe.pem"));
+
+        assertThat(codes(properties(List.of(A3), tsa(policy)).violations(true)))
+                .containsExactly(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY);
+    }
+
+    @Test
+    void shouldRejectTsaTrustStoreWhenCertificateIsUnsupportedByDss() throws Exception {
+        String reference = "file:" + TsaTrustStoresTest.writePem(tempDir, CertificadosIcpBrasilReais.raizV7());
+        var policy = new TsaPolicy("1.2.3.4.5", 1L, new TrustStoreRef(reference));
 
         assertThat(codes(properties(List.of(A3), tsa(policy)).violations(true)))
                 .containsExactly(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY);

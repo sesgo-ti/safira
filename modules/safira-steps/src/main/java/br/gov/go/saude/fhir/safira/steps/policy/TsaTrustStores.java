@@ -5,6 +5,8 @@
 
 package br.gov.go.saude.fhir.safira.steps.policy;
 
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -34,7 +36,8 @@ public final class TsaTrustStores {
     }
 
     /**
-     * @throws IllegalArgumentException referência ausente, ilegível ou sem certificados
+     * @throws IllegalArgumentException referência ausente, ilegível, sem certificados ou com certificado que o
+     *                                  EU DSS não representa (erro de configuração da política)
      */
     public static List<X509Certificate> load(String reference) {
         if (reference == null || reference.isBlank()) {
@@ -45,7 +48,13 @@ public final class TsaTrustStores {
                     .generateCertificates(in);
             List<X509Certificate> anchors = new ArrayList<>();
             for (Certificate certificate : parsed) {
-                anchors.add((X509Certificate) certificate);
+                X509Certificate anchor = (X509Certificate) certificate;
+                if (CertificateVerifierFactory.token(anchor).isEmpty()) {
+                    throw new IllegalArgumentException("Trust store TSA com certificado não suportado pelo EU DSS"
+                            + " (algoritmo " + anchor.getSigAlgOID() + "; subject: "
+                            + anchor.getSubjectX500Principal().getName() + "): " + reference);
+                }
+                anchors.add(anchor);
             }
             if (anchors.isEmpty()) {
                 throw new IllegalArgumentException("Trust store TSA sem certificados: " + reference);

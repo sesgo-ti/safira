@@ -5,6 +5,7 @@
 
 package br.gov.go.saude.fhir.safira.steps.policy;
 
+import br.gov.go.saude.fhir.safira.testkit.CertificadosIcpBrasilReais;
 import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -61,5 +62,15 @@ class TsaTrustStoresTest {
     void shouldRejectMissingClasspathResource() {
         assertThatThrownBy(() -> TsaTrustStores.load("classpath:nao-existe.pem"))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void shouldRejectBundleWhenCertificateIsUnsupportedByDss(@TempDir Path dir) throws Exception {
+        Path file = writePem(dir, PkiIcpSimulada.criar().tsa(), CertificadosIcpBrasilReais.raizV7());
+
+        assertThatThrownBy(() -> TsaTrustStores.load("file:" + file))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("1.3.6.1.4.1.44588.2.1")
+                .hasMessageContaining("Autoridade Certificadora Raiz Brasileira v7");
     }
 }
