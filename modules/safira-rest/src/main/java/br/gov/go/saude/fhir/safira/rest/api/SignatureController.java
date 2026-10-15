@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.util.List;
 
 @RestController
 public class SignatureController {
@@ -115,11 +116,12 @@ public class SignatureController {
                         e.getCode().getCode(), e.getCode().getDisplay(), e.getMessage()));
     }
 
+    /** URIs das políticas suportadas: array JSON de strings, em ordem (não é recurso FHIR). */
     @GetMapping("/versoes")
-    public ResponseEntity<String> versionsSupported() {
+    public ResponseEntity<List<String>> versionsSupported() {
         return ResponseEntity
                 .ok()
-                .contentType(FHIR_JSON)
-                .body(versionsService.getVersionsSupported().toString());
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(versionsService.getVersionsSupported().stream().sorted().toList());
     }
 }

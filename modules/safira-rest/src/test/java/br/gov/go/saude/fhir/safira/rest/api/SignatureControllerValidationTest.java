@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -96,6 +97,7 @@ class SignatureControllerValidationTest {
     void shouldListOnlyPolicy020() throws Exception {
         mockMvc.perform(get("/versoes"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("[" + POLICY_URI + "]"));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(content().json("[\"" + POLICY_URI + "\"]", JsonCompareMode.STRICT));
     }
 }

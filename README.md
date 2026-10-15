@@ -83,11 +83,11 @@ Resposta `200` com `OperationOutcome` `VALIDATION.SUCCESS` ou `422` com o códig
 
 ### `GET /versoes`
 
-Políticas suportadas.
+Políticas suportadas: array JSON de URIs (`application/json`), por exemplo `["https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0"]`.
 
 ### Health
 
-`GET /actuator/health/readiness` e `GET /actuator/health/liveness` (Spring Boot Actuator; só o endpoint `health` é exposto). A readiness só fica `UP` depois que o acervo ICP-Brasil carrega na partida, então orquestradores e o [hubsaude-cli](https://github.com/sesgo-ti/hubsaude-cli) aguardam por ela antes de enviar requisições. Se o acervo não carrega (rede, proxy ou ITI indisponível), o serviço encerra na partida.
+`GET /actuator/health/readiness` e `GET /actuator/health/liveness` (Spring Boot Actuator; só o endpoint `health` é exposto). A readiness só fica `UP` depois que o acervo ICP-Brasil carrega na partida e tem ao menos uma raiz que o EU DSS consegue usar (certificados que o DSS não representa, como a raiz v7, são ignorados com aviso no log), então orquestradores e o [hubsaude-cli](https://github.com/sesgo-ti/hubsaude-cli) aguardam por ela antes de enviar requisições. Se o acervo não carrega (rede, proxy ou ITI indisponível), o serviço encerra na partida.
 
 ## Configuração
 
