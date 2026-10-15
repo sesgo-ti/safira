@@ -10,6 +10,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.OperationOutcome;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
+import br.gov.go.saude.fhir.safira.testkit.CertificadosIcpBrasilReais;
 import br.gov.go.saude.fhir.safira.testkit.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.testkit.PerfilSignatario;
 import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
@@ -23,6 +24,7 @@ import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TsaPolicy
 import br.gov.go.saude.fhir.safira.steps.support.FonteDeTeste;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
+import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
 import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import eu.europa.esig.dss.model.x509.revocation.ocsp.OCSP;
@@ -37,6 +39,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -242,6 +245,28 @@ class DssAndOutcomeStepsTest {
 
             assertThat(code(result)).isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
         }
+    }
+
+    @Test
+    void shouldAcceptSignerWhenAcervoAlsoHasRootUnsupportedByDss() {
+        AcervoDeConfianca comV7 = new AcervoDeConfianca("v7", List.of(CertificadosIcpBrasilReais.raizV7(), pki.raiz()),
+                List.of(pki.ac()));
+        FonteDeConfianca fonte = () -> Optional.of(comV7);
+        DssValidationStep step = new DssValidationStep(new VerificadoresDss(fonte,
+                CertificateVerifierFactory.offline(good(), null)), policy);
+
+        assertThat(step.execute(SignedArtifactFixture.comAcervo(bb, fonte)).isSuccess()).isTrue();
+    }
+
+    @Test
+    void shouldFailClosedWhenAcervoHasNoRootUsableByDss() {
+        FonteDeConfianca soV7 = () -> Optional.of(new AcervoDeConfianca("v7", List.of(CertificadosIcpBrasilReais.raizV7()),
+                List.of(pki.ac())));
+        DssValidationStep step = new DssValidationStep(new VerificadoresDss(soV7,
+                CertificateVerifierFactory.offline(good(), null)), policy);
+
+        assertThat(code(step.execute(SignedArtifactFixture.comAcervo(bb, soV7))))
+                .isEqualTo(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY);
     }
 
     @Test

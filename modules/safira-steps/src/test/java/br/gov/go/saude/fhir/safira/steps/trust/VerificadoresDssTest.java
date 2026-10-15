@@ -7,12 +7,18 @@ package br.gov.go.saude.fhir.safira.steps.trust;
 
 import br.gov.go.saude.fhir.safira.jades.CertificateValidationService;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
+import br.gov.go.saude.fhir.safira.testkit.CertificadosIcpBrasilReais;
 import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 import eu.europa.esig.dss.validation.reports.CertificateReports;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -187,6 +193,46 @@ class VerificadoresDssTest {
             rodando.set(false);
             executor.shutdownNow();
             executor.awaitTermination(10, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void shouldHideAcervoWhenNoRootIsUsableByDss() {
+        AcervoDeConfianca soV7 = new AcervoDeConfianca("g1", List.of(CertificadosIcpBrasilReais.raizV7()), List.of(pki.ac()));
+
+        assertThat(verificadores(new AtomicReference<>(soV7)).acervoAtual()).isEmpty();
+    }
+
+    @Test
+    void shouldKeepUsableRootsWhenAcervoHasCertificateUnsupportedByDss() {
+        X509Certificate v7 = CertificadosIcpBrasilReais.raizV7();
+        AcervoDeConfianca misto = new AcervoDeConfianca("g1", List.of(v7, pki.raiz()), List.of(v7, pki.ac(), pki.tsa()));
+        VerificadoresDss verificadores = verificadores(new AtomicReference<>(misto));
+
+        AcervoDeConfianca atual = verificadores.acervoAtual().orElseThrow();
+
+        assertThat(cadeiaConfiavel(pki, verificadores.paraOperacao(atual, List.of()))).isTrue();
+        assertThat(verificadores.ehAncora(atual, pki.raiz())).isTrue();
+        assertThat(verificadores.ehAncora(atual, v7)).isFalse();
+    }
+
+    @Test
+    void shouldWarnAboutIgnoredCertificateOncePerGeneration() {
+        AcervoDeConfianca misto = new AcervoDeConfianca("g1", List.of(CertificadosIcpBrasilReais.raizV7(), pki.raiz()),
+                List.of(pki.ac()));
+        VerificadoresDss verificadores = verificadores(new AtomicReference<>(misto));
+        Logger logger = (Logger) LoggerFactory.getLogger(CertificateVerifierFactory.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            for (int i = 0; i < 3; i++) {
+                verificadores.paraOperacao(verificadores.acervoAtual().orElseThrow(), List.of());
+            }
+
+            assertThat(appender.list).filteredOn(evento -> evento.getLevel() == Level.WARN).hasSize(1);
+        } finally {
+            logger.detachAppender(appender);
         }
     }
 }

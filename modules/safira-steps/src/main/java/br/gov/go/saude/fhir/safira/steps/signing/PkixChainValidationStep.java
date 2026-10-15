@@ -11,6 +11,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
 import br.gov.go.saude.fhir.safira.jades.CertificateValidationService;
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.steps.dss.DssOutcomes;
 import br.gov.go.saude.fhir.safira.steps.dss.PoliticaDeValidacaoDss;
 import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
@@ -108,11 +109,17 @@ public class PkixChainValidationStep implements SigningStep {
             return fail(SignatureExceptionCode.CONFIG_INVALID_PARAMETER,
                     "safira.policy.accepted-certificate-policies não tem OID de política válido.", context);
         }
-        CommonCertificateVerifier verifier = verifiers.paraOperacao(acervo.get(), List.of());
         X509Certificate leaf = certificates.getFirst();
+        Optional<CertificateToken> leafToken = CertificateVerifierFactory.token(leaf);
+        if (leafToken.isEmpty()) {
+            return fail(SignatureExceptionCode.CERT_UNSUPPORTED_ALGORITHM,
+                    "O algoritmo de assinatura do certificado do signatário (" + leaf.getSigAlgOID()
+                            + ") não é suportado pelo EU DSS.", context);
+        }
+        CommonCertificateVerifier verifier = verifiers.paraOperacao(acervo.get(), List.of());
         CertificateReports reports = validationService.get().validate(leaf, certificates.subList(1, certificates.size()),
                 verifier);
-        String id = new CertificateToken(leaf).getDSSIdAsString();
+        String id = leafToken.get().getDSSIdAsString();
         SimpleCertificateReport report = reports.getSimpleReport();
         CertificateWrapper subject = reports.getDiagnosticData().getUsedCertificateById(id);
         List<CertificateWrapper> issuers = subject.getCertificateChain();

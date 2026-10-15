@@ -105,8 +105,7 @@ public class SafiraStepsAutoConfiguration {
     }
 
     @Bean
-    public List<Step<?>> safiraAllSteps(FonteDeConfianca fonteDeConfianca,
-                                        VerificadoresDss verificadores,
+    public List<Step<?>> safiraAllSteps(VerificadoresDss verificadores,
                                         SafiraPolicyProperties policyProperties,
                                         TspSourceFactory tspSources,
                                         Clock clock) {
@@ -126,7 +125,8 @@ public class SafiraStepsAutoConfiguration {
         steps.add(new FhirSignatureStep());
 
         // Validação — política 0.2.0 (EU DSS decide cadeia, revogação e carimbo sobre o acervo ICP-Brasil)
-        steps.add(new ValidationRequestContextStep(policyProperties, fonteDeConfianca, clock));
+        // snapshot pelos verificadores: acervo sem raiz representável pelo DSS = indisponível
+        steps.add(new ValidationRequestContextStep(policyProperties, verificadores::acervoAtual, clock));
         steps.add(new SignatureBindingStep());
         steps.add(new JwsStructureStep());
         steps.add(new ContentIntegrityStep());

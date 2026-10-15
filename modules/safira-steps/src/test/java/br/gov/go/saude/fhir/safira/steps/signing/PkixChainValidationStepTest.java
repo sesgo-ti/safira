@@ -9,6 +9,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.StepResult;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
+import br.gov.go.saude.fhir.safira.testkit.CertificadosIcpBrasilReais;
 import br.gov.go.saude.fhir.safira.testkit.EvidenceRevocationSources;
 import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.testkit.PerfilSignatario;
@@ -220,5 +221,24 @@ class PkixChainValidationStepTest {
 
         assertThat(code(step.execute(context(List.of(b64(pki.signatario()))))))
                 .isEqualTo(SignatureExceptionCode.CONFIG_INVALID_PARAMETER);
+    }
+
+    @Test
+    void shouldValidateChainWhenAcervoAndSuppliedChainHaveRootUnsupportedByDss() throws Exception {
+        X509Certificate v7 = CertificadosIcpBrasilReais.raizV7();
+        FonteDeConfianca comV7 = () -> Optional.of(new AcervoDeConfianca("v7", List.of(v7, pki.raiz()), List.of(pki.ac())));
+
+        StepResult<SigningContext> result = step(comV7, pki.fonteOcsp())
+                .execute(context(List.of(b64(pki.signatario()), b64(v7))));
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void shouldRejectLeafUnsupportedByDss() throws Exception {
+        StepResult<SigningContext> result = step(pki.fonteOcsp())
+                .execute(context(List.of(b64(CertificadosIcpBrasilReais.raizV7()))));
+
+        assertThat(code(result)).isEqualTo(SignatureExceptionCode.CERT_UNSUPPORTED_ALGORITHM);
     }
 }

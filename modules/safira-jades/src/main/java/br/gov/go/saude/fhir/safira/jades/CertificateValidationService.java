@@ -5,6 +5,7 @@
 
 package br.gov.go.saude.fhir.safira.jades;
 
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import eu.europa.esig.dss.enumerations.TokenExtractionStrategy;
 import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
@@ -46,7 +47,7 @@ public class CertificateValidationService {
         Objects.requireNonNull(verifier, "verifier não pode ser nulo");
         if (!candidates.isEmpty()) {
             CommonCertificateSource supplied = new CommonCertificateSource();
-            candidates.forEach(candidate -> supplied.addCertificate(new CertificateToken(candidate)));
+            candidates.forEach(candidate -> CertificateVerifierFactory.token(candidate).ifPresent(supplied::addCertificate));
             verifier.addAdjunctCertSources(supplied);
         }
         CertificateValidator validator = CertificateValidator.fromCertificate(new CertificateToken(certificate));

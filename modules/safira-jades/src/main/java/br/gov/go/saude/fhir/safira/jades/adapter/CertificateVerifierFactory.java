@@ -5,6 +5,7 @@
 
 package br.gov.go.saude.fhir.safira.jades.adapter;
 
+import eu.europa.esig.dss.model.DSSException;
 import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.model.x509.revocation.crl.CRL;
 import eu.europa.esig.dss.model.x509.revocation.ocsp.OCSP;
@@ -14,10 +15,17 @@ import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 import eu.europa.esig.dss.spi.x509.CommonCertificateSource;
 import eu.europa.esig.dss.spi.x509.CommonTrustedCertificateSource;
 import eu.europa.esig.dss.spi.x509.revocation.RevocationSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 import java.util.Collection;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Fábrica do {@link CommonCertificateVerifier} central do Safira: o EU DSS decide cadeia,
@@ -44,6 +52,8 @@ public final class CertificateVerifierFactory {
 
     /** Teto do corpo de resposta OCSP/CRL: comporta as maiores LCRs das ACs ICP-Brasil. */
     public static final int MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
+
+    private static final Logger log = LoggerFactory.getLogger(CertificateVerifierFactory.class);
 
     private static final String OCSP_CONTENT_TYPE = "application/ocsp-request";
 
@@ -86,15 +96,39 @@ public final class CertificateVerifierFactory {
     }
 
     /**
-     * Converte o acervo para o DSS; reaproveitável enquanto o acervo não mudar.
+     * Converte o acervo para o DSS; reaproveitável enquanto o acervo não mudar. Certificados que o
+     * DSS não representa são ignorados com um WARN cada (o resto do acervo segue valendo); sem
+     * nenhuma raiz representável o acervo não é {@linkplain Acervo#utilizavel() utilizável}.
      *
      * @param roots raízes confiáveis
      * @param cas   ACs candidatas à cadeia (não confiáveis por si)
      */
     public static Acervo acervo(Collection<X509Certificate> roots, Collection<X509Certificate> cas) {
         CommonTrustedCertificateSource trusted = new CommonTrustedCertificateSource();
-        roots.forEach(root -> trusted.addCertificate(new CertificateToken(root)));
-        return new Acervo(trusted, List.copyOf(cas));
+        roots.forEach(root -> representavel(root, "raiz").ifPresent(trusted::addCertificate));
+        List<X509Certificate> usableCas = cas.stream()
+                .filter(ca -> representavel(ca, "intermediária").isPresent())
+                .toList();
+        return new Acervo(trusted, usableCas);
+    }
+
+    private static Optional<CertificateToken> representavel(X509Certificate certificate, String papel) {
+        Optional<CertificateToken> token = token(certificate);
+        if (token.isEmpty()) {
+            log.warn("Certificado {} do acervo ignorado: o EU DSS não suporta o algoritmo de assinatura {} "
+                            + "(subject: {}; SHA-256: {})", papel, certificate.getSigAlgOID(),
+                    certificate.getSubjectX500Principal().getName(), sha256(certificate));
+        }
+        return token;
+    }
+
+    private static String sha256(X509Certificate certificate) {
+        try {
+            return HexFormat.of().withUpperCase()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(certificate.getEncoded()));
+        } catch (NoSuchAlgorithmException | CertificateEncodingException e) {
+            return "indisponível";
+        }
     }
 
     /**
@@ -113,13 +147,25 @@ public final class CertificateVerifierFactory {
             verifier.setTrustedCertSources(acervo.trusted(), extra);
         }
         CommonCertificateSource adjunct = new CommonCertificateSource();
-        acervo.cas().forEach(ca -> adjunct.addCertificate(new CertificateToken(ca)));
+        acervo.cas().forEach(ca -> token(ca).ifPresent(adjunct::addCertificate));
         verifier.setAdjunctCertSources(adjunct);
         verifier.setOcspSource(ocspSource);
         verifier.setCrlSource(crlSource);
         verifier.setAIASource(null);
         verifier.setCheckRevocationForUntrustedChains(false);
         return verifier;
+    }
+
+    /**
+     * Token do DSS para o certificado, ou vazio quando o DSS não o representa (ex.: algoritmo de
+     * assinatura desconhecido, como o da raiz ICP-Brasil v7).
+     */
+    public static Optional<CertificateToken> token(X509Certificate certificate) {
+        try {
+            return Optional.of(new CertificateToken(certificate));
+        } catch (IllegalArgumentException | DSSException e) {
+            return Optional.empty();
+        }
     }
 
     /** Data loaders das fontes online, na ordem OCSP e CRL (vazio quando offline). */
@@ -139,6 +185,11 @@ public final class CertificateVerifierFactory {
 
         public Acervo {
             cas = List.copyOf(cas);
+        }
+
+        /** Se há ao menos uma raiz representável pelo DSS; sem ela, o acervo é indisponível. */
+        public boolean utilizavel() {
+            return !trusted.getCertificates().isEmpty();
         }
     }
 }

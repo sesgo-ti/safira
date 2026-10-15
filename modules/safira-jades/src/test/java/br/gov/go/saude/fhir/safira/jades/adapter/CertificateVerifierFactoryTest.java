@@ -5,14 +5,22 @@
 
 package br.gov.go.saude.fhir.safira.jades.adapter;
 
+import br.gov.go.saude.fhir.safira.jades.CertificateValidationService;
+import br.gov.go.saude.fhir.safira.testkit.CertificadosIcpBrasilReais;
 import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.service.crl.OnlineCRLSource;
 import eu.europa.esig.dss.service.ocsp.OnlineOCSPSource;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
+import java.security.cert.X509Certificate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -119,5 +127,59 @@ class CertificateVerifierFactoryTest {
         assertThat(verifier.getAIASource()).isNull();
         assertThat(verifier.getOcspSource()).isNull();
         assertThat(verifier.getCrlSource()).isNull();
+    }
+
+    @Test
+    void shouldIgnoreCertificatesUnsupportedByDssWhenAcervoIsBuilt() {
+        X509Certificate v7 = CertificadosIcpBrasilReais.raizV7();
+        Logger logger = (Logger) LoggerFactory.getLogger(CertificateVerifierFactory.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            CertificateVerifierFactory.Acervo acervo = CertificateVerifierFactory.acervo(List.of(v7, pki.raiz()),
+                    List.of(v7, pki.ac()));
+            CommonCertificateVerifier verifier = CertificateVerifierFactory.offline(null, null).create(acervo, List.of());
+
+            assertThat(acervo.utilizavel()).isTrue();
+            assertThat(verifier.getTrustedCertSources().getCertificates()).containsExactly(new CertificateToken(pki.raiz()));
+            assertThat(verifier.getAdjunctCertSources().getCertificates()).containsExactly(new CertificateToken(pki.ac()));
+            assertThat(new CertificateValidationService().validate(pki.signatario(), List.of(), verifier)
+                    .getDiagnosticData().getUsedCertificateById(new CertificateToken(pki.signatario()).getDSSIdAsString())
+                    .isTrustedChain()).isTrue();
+            assertThat(appender.list)
+                    .filteredOn(evento -> evento.getLevel() == Level.WARN)
+                    .extracting(ILoggingEvent::getFormattedMessage)
+                    .hasSize(2)
+                    .allSatisfy(mensagem -> assertThat(mensagem)
+                            .contains("Autoridade Certificadora Raiz Brasileira v7")
+                            .contains("5657E70580EB678983F3ED7DFCE091D84CAE6549389A47FCCDA8D0E4DC2CF576"));
+        } finally {
+            logger.detachAppender(appender);
+        }
+    }
+
+    @Test
+    void shouldNotBeUsableWhenNoRootIsSupportedByDss() {
+        CertificateVerifierFactory.Acervo acervo = CertificateVerifierFactory.acervo(
+                List.of(CertificadosIcpBrasilReais.raizV7()), List.of(pki.ac()));
+
+        assertThat(acervo.utilizavel()).isFalse();
+    }
+
+    @Test
+    void shouldIgnoreCandidatesUnsupportedByDssWhenValidatingCertificate() {
+        CommonCertificateVerifier verifier = CertificateVerifierFactory.offline(null, null).create(acervo(), List.of());
+
+        assertThat(new CertificateValidationService()
+                .validate(pki.signatario(), List.of(CertificadosIcpBrasilReais.raizV7(), pki.ac()), verifier)
+                .getDiagnosticData().getUsedCertificateById(new CertificateToken(pki.signatario()).getDSSIdAsString())
+                .isTrustedChain()).isTrue();
+    }
+
+    @Test
+    void shouldTellWhetherDssRepresentsCertificate() {
+        assertThat(CertificateVerifierFactory.token(CertificadosIcpBrasilReais.raizV7())).isEmpty();
+        assertThat(CertificateVerifierFactory.token(pki.raiz())).contains(new CertificateToken(pki.raiz()));
     }
 }

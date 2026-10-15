@@ -6,13 +6,13 @@
 package br.gov.go.saude.fhir.safira.steps.dss;
 
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.steps.policy.PolicyViolation;
 import eu.europa.esig.dss.diagnostic.CertificateWrapper;
 import eu.europa.esig.dss.enumerations.Indication;
 import eu.europa.esig.dss.enumerations.SubIndication;
 import eu.europa.esig.dss.i18n.MessageTag;
 import eu.europa.esig.dss.jaxb.object.Message;
-import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.simplereport.SimpleReport;
 import eu.europa.esig.dss.simplereport.jaxb.XmlTimestamp;
 import eu.europa.esig.dss.validation.reports.Reports;
@@ -140,7 +140,8 @@ public final class DssOutcomes {
     }
 
     private static boolean isAnchor(CertificateWrapper certificate, List<X509Certificate> anchors) {
-        return anchors.stream().anyMatch(anchor -> new CertificateToken(anchor).getDSSIdAsString().equals(certificate.getId()));
+        return anchors.stream().anyMatch(anchor -> CertificateVerifierFactory.token(anchor)
+                .map(token -> token.getDSSIdAsString().equals(certificate.getId())).orElse(false));
     }
 
     /**

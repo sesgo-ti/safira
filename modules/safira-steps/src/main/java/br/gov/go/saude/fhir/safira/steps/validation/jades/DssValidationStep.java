@@ -11,6 +11,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationStep;
 import br.gov.go.saude.fhir.safira.jades.JadesValidationService;
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.steps.dss.DssOutcomes;
 import br.gov.go.saude.fhir.safira.steps.dss.PoliticaDeValidacaoDss;
 import br.gov.go.saude.fhir.safira.steps.policy.PolicyViolation;
@@ -28,7 +29,6 @@ import eu.europa.esig.dss.enumerations.Indication;
 import eu.europa.esig.dss.enumerations.SignatureLevel;
 import eu.europa.esig.dss.enumerations.SubIndication;
 import eu.europa.esig.dss.jaxb.object.Message;
-import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.simplereport.SimpleReport;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 import eu.europa.esig.dss.validation.reports.Reports;
@@ -104,7 +104,7 @@ public class DssValidationStep implements ValidationStep {
         }
 
         Optional<AcervoDeConfianca> acervo = context.getAttribute(ValidationKeys.ACERVO, AcervoDeConfianca.class);
-        if (acervo.isEmpty()) {
+        if (acervo.isEmpty() || !verifiers.utilizavel(acervo.get())) {
             return fail(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY, "Acervo ICP-Brasil indisponível.", context);
         }
         if (validationService.isEmpty()) {
@@ -158,7 +158,8 @@ public class DssValidationStep implements ValidationStep {
         }
         String rootId = chain.getLast().getId();
         return acervo.raizes().stream()
-                .filter(raiz -> new CertificateToken(raiz).getDSSIdAsString().equals(rootId))
+                .filter(raiz -> CertificateVerifierFactory.token(raiz)
+                        .map(token -> token.getDSSIdAsString().equals(rootId)).orElse(false))
                 .anyMatch(raiz -> verifiers.ehAncora(acervo, raiz));
     }
 

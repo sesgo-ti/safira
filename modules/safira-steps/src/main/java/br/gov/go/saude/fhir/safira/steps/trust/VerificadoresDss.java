@@ -7,7 +7,6 @@ package br.gov.go.saude.fhir.safira.steps.trust;
 
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
 import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory.Acervo;
-import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 
 import java.security.cert.X509Certificate;
@@ -22,7 +21,8 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <p>Cada operação captura o acervo da fonte uma única vez ({@link #acervoAtual()}) e recebe
  * verificadores novos presos àquele snapshot. As fontes do DSS de uma geração são montadas uma
- * vez, publicadas por troca atômica e nunca alteradas; mudar a geração monta outras, sem afetar verificadores já entregues.
+ * vez (certificados que o DSS não representa são ignorados com aviso nessa montagem), publicadas
+ * por troca atômica e nunca alteradas; mudar a geração monta outras, sem afetar verificadores já entregues.
  */
 public class VerificadoresDss {
 
@@ -38,9 +38,18 @@ public class VerificadoresDss {
         this.factory = Objects.requireNonNull(factory, "factory");
     }
 
-    /** Acervo vigente da fonte; o chamador o guarda e o reusa durante toda a operação. */
+    /**
+     * Acervo vigente da fonte; o chamador o guarda e o reusa durante toda a operação. Vazio também
+     * quando nenhuma raiz da geração é representável pelo DSS (fail-closed).
+     */
     public Optional<AcervoDeConfianca> acervoAtual() {
-        return fonte.atual();
+        return fonte.atual().filter(this::utilizavel);
+    }
+
+    /** Se ao menos uma raiz do snapshot é representável pelo DSS; sem ela, o acervo é indisponível. */
+    public boolean utilizavel(AcervoDeConfianca acervo) {
+        Objects.requireNonNull(acervo, "acervo");
+        return fontes(acervo).utilizavel();
     }
 
     /**
@@ -60,7 +69,9 @@ public class VerificadoresDss {
     public boolean ehAncora(AcervoDeConfianca acervo, X509Certificate certificado) {
         Objects.requireNonNull(acervo, "acervo");
         Objects.requireNonNull(certificado, "certificado");
-        return fontes(acervo).trusted().isTrusted(new CertificateToken(certificado));
+        return CertificateVerifierFactory.token(certificado)
+                .map(token -> fontes(acervo).trusted().isTrusted(token))
+                .orElse(false);
     }
 
     private Acervo fontes(AcervoDeConfianca acervo) {
