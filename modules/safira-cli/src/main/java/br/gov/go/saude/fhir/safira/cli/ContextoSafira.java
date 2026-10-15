@@ -37,6 +37,9 @@ public final class ContextoSafira implements AutoCloseable {
 
     static final String NOME_DA_CONFIGURACAO = "safira-cli";
 
+    /** Stack trace no log (stderr) só com {@code --verbose}: {@code %nopex} omite a exceção, {@code %ex} a mostra. */
+    static final String CONVERSAO_DE_EXCECAO = "LOG_EXCEPTION_CONVERSION_WORD";
+
     private final ConfigurableApplicationContext aplicacao;
 
     private ContextoSafira(ConfigurableApplicationContext aplicacao) {
@@ -63,6 +66,8 @@ public final class ContextoSafira implements AutoCloseable {
         if (config != null && !Files.isRegularFile(config)) {
             throw new FalhaDeUso("Arquivo de configuração não encontrado: " + config);
         }
+        // lida pelo logback.xml; propriedade de sistema porque o Spring Boot não sobrescreve a de uma partida anterior
+        System.setProperty(CONVERSAO_DE_EXCECAO, verbose ? "%ex" : "%nopex");
         SpringApplication aplicacao = new SpringApplication(SafiraCliAplicacao.class);
         aplicacao.setWebApplicationType(WebApplicationType.NONE);
         aplicacao.setBannerMode(Banner.Mode.OFF);

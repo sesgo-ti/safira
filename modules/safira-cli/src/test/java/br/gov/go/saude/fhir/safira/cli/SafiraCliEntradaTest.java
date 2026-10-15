@@ -6,10 +6,12 @@
 package br.gov.go.saude.fhir.safira.cli;
 
 import br.gov.go.saude.fhir.safira.cli.Cli.Resultado;
+import br.gov.go.saude.fhir.safira.engine.domain.PipelineExecutor;
 import br.gov.go.saude.fhir.safira.simulador.AvisoSimulacaoAdvice;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -173,6 +175,26 @@ class SafiraCliEntradaTest {
         assertThat(detalhado.out()).isEmpty();
         assertThat(detalhado.err()).contains("\tat ");
         assertThat(stdoutDoProcesso.toString(StandardCharsets.UTF_8)).doesNotContain("\tat ").doesNotContain("Exception");
+    }
+
+    private String logDeErroComExcecao(boolean verbose) {
+        ByteArrayOutputStream stderr = new ByteArrayOutputStream();
+        comSaidasDoProcesso(() -> {
+            try (ContextoSafira contexto = ContextoSafira.iniciar(Modo.SIMULACAO, pki, null, verbose)) {
+                LoggerFactory.getLogger(PipelineExecutor.class).error("Erro inesperado no step",
+                        new IllegalArgumentException("causa interna"));
+            }
+            return null;
+        }, new ByteArrayOutputStream(), stderr);
+        return stderr.toString(StandardCharsets.UTF_8);
+    }
+
+    @Test
+    void shouldLogOnlyShortMessageWithoutStackTraceWhenNotVerbose() {
+        assertThat(logDeErroComExcecao(false)).contains("Erro inesperado no step").doesNotContain("\tat ")
+                .doesNotContain("IllegalArgumentException");
+        assertThat(logDeErroComExcecao(true)).contains("Erro inesperado no step").contains("\tat ");
+        assertThat(logDeErroComExcecao(false)).doesNotContain("\tat ");
     }
 
     @Test

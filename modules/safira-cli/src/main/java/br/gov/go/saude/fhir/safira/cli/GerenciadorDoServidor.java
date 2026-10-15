@@ -45,7 +45,7 @@ final class GerenciadorDoServidor {
     private static final Duration TIMEOUT_DA_SONDA = Duration.ofSeconds(2);
     private static final Duration TIMEOUT_FORCADO = Duration.ofSeconds(10);
     private static final Duration ESPERA_DO_INICIO = Duration.ofSeconds(2);
-    private static final int LINHAS_DO_LOG = 20;
+    private static final String PREFIXO_DO_ERRO = "Erro: ";
 
     /** Falha com o código de saída da CLI. */
     static final class FalhaDoServidor extends RuntimeException {
@@ -297,7 +297,7 @@ final class GerenciadorDoServidor {
             if (!processo.isAlive()) {
                 EstadoDoServidor.remover(dir);
                 throw new FalhaDoServidor("O servidor terminou durante a partida (saída " + processo.exitValue()
-                        + "). Fim do log (" + estado.log() + "):\n" + fimDoLog(estado.log()), CodigosDeSaida.USO);
+                        + ")." + causaNoLog(estado.log()) + " Log completo: " + estado.log(), CodigosDeSaida.USO);
             }
             if (pronto(estado.porta())) {
                 return;
@@ -357,12 +357,21 @@ final class GerenciadorDoServidor {
         return "http://" + ExecucaoDoServidor.LOOPBACK + ":" + porta;
     }
 
-    private static String fimDoLog(Path log) {
+    /**
+     * Última mensagem curta do filho ({@code Erro: ...}, escrita pela CLI) no log; o log do Spring, com
+     * stack traces, fica só no arquivo.
+     */
+    private static String causaNoLog(Path log) {
         try {
             List<String> linhas = Files.readAllLines(log);
-            return String.join("\n", linhas.subList(Math.max(0, linhas.size() - LINHAS_DO_LOG), linhas.size()));
+            for (int i = linhas.size() - 1; i >= 0; i--) {
+                if (linhas.get(i).startsWith(PREFIXO_DO_ERRO)) {
+                    return " Causa: " + linhas.get(i).substring(PREFIXO_DO_ERRO.length()).strip().replaceAll("\\.$", "") + ".";
+                }
+            }
+            return "";
         } catch (IOException | UncheckedIOException e) {
-            return "(log ilegível)";
+            return "";
         }
     }
 

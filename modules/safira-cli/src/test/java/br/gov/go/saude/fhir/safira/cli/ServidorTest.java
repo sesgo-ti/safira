@@ -146,6 +146,17 @@ class ServidorTest {
     }
 
     @Test
+    void shouldReportStartupFailureWithoutStackTrace() throws Exception {
+        Path config = Cli.escrever(diretorio.resolve("gerencia.yml"), "management:\n  server:\n    address: 0.0.0.0\n");
+
+        Resultado resultado = iniciar("--config", config.toString());
+
+        assertThat(resultado.saida()).isEqualTo(CodigosDeSaida.USO);
+        assertThat(resultado.err()).contains("terminou durante a partida").contains("servidor.log")
+                .doesNotContain("\tat ").doesNotContain("Exception");
+    }
+
+    @Test
     void shouldReportStatusAsJson() {
         long pid = iniciar().json().get("pid").asLong();
 

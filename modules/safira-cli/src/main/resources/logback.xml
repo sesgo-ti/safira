@@ -3,13 +3,14 @@
   SPDX-License-Identifier: Apache-2.0
   Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
 
-  CLI: todo log vai para o stderr; o stdout é reservado ao JSON de resultado.
+  CLI: todo log vai para o stderr; o stdout é reservado ao JSON de resultado. Stack trace só com
+  verbose: a CLI define LOG_EXCEPTION_CONVERSION_WORD (%nopex sem a opção verbose, %ex com ela).
 -->
 <configuration>
     <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
         <target>System.err</target>
         <encoder>
-            <pattern>%-5level %logger{36} - %msg%n</pattern>
+            <pattern>%-5level %logger{36} - %msg%n${LOG_EXCEPTION_CONVERSION_WORD:-%nopex}</pattern>
         </encoder>
     </appender>
 
