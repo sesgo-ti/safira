@@ -235,7 +235,7 @@ class PkixChainValidationStepTest {
     }
 
     @Test
-    void shouldRejectLeafUnsupportedByDss() throws Exception {
+    void shouldRejectLeafWhenDssCannotRepresentIt() throws Exception {
         StepResult<SigningContext> result = step(pki.fonteOcsp())
                 .execute(context(List.of(b64(CertificadosIcpBrasilReais.raizV7()))));
 

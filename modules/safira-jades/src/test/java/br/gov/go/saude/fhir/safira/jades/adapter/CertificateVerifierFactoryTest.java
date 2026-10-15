@@ -178,7 +178,7 @@ class CertificateVerifierFactoryTest {
     }
 
     @Test
-    void shouldTellWhetherDssRepresentsCertificate() {
+    void shouldReportRepresentabilityWhenCertificateUsesUnsupportedAlgorithm() {
         assertThat(CertificateVerifierFactory.token(CertificadosIcpBrasilReais.raizV7())).isEmpty();
         assertThat(CertificateVerifierFactory.token(pki.raiz())).contains(new CertificateToken(pki.raiz()));
     }
