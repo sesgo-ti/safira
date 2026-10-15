@@ -32,7 +32,7 @@
         <!-- Acervo ICP-Brasil: download do ITI, cache e agendamento (só a aplicação conhece a lib) -->
         <dependency>
             <groupId>br.gov.go.saude</groupId>
-            <artifactId>icpbrasil-truststore-autoconfigure</artifactId>
+            <artifactId>icpbrasil-truststore-spring-boot-starter</artifactId>
             <version>${icpbrasil-truststore.version}</version>
         </dependency>
 

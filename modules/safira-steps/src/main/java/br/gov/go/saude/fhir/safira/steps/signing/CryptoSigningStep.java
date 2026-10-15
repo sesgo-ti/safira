@@ -78,7 +78,7 @@ public class CryptoSigningStep implements SigningStep {
 
     private static final String PEM_ALIAS = "signatario";
 
-    // Instância própria: o provider não é registrado na JVM (a icpbrasil-truststore 0.0.2 também não o registra).
+    // Instância própria: o provider não é registrado na JVM (a icpbrasil-truststore também não o registra).
     private static final Provider BOUNCY_CASTLE = new BouncyCastleProvider();
 
     private static final SecureRandom RANDOM = new SecureRandom();
