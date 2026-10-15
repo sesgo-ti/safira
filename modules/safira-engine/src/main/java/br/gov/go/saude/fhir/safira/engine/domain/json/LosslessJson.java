@@ -14,6 +14,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.json.JsonValue.JsonString;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
+import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.core.StreamReadFeature;
 
 import java.io.IOException;
@@ -31,8 +32,14 @@ import java.util.Map;
  */
 public final class LosslessJson {
 
+    /**
+     * Sem teto próprio de tamanho de string (o padrão do Jackson é 20 MB): os chamadores já limitam o
+     * documento (corpo da API e arquivos da CLI), e uma string nunca excede o documento; assim só esse
+     * limite decide ({@code SECURITY.BUNDLE-SIZE-LIMIT-EXCEEDED}), nunca um falso JSON inválido.
+     */
     private static final JsonFactory FACTORY = JsonFactory.builder()
             .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+            .streamReadConstraints(StreamReadConstraints.builder().maxStringLength(Integer.MAX_VALUE).build())
             .build();
 
     private static final char[] HEX = "0123456789abcdef".toCharArray();

@@ -104,4 +104,13 @@ class LosslessJsonTest {
         assertThatThrownBy(() -> LosslessJson.parse("{\"nome\": SEGREDO_PHI}"))
                 .isInstanceOfSatisfying(LosslessJsonException.class, e -> assertThat(e.getMessage()).doesNotContain("SEGREDO_PHI"));
     }
+
+    @Test
+    void shouldAcceptStringLongerThanJacksonDefaultLimitWhenDocumentIsBounded() {
+        String longa = "a".repeat(25 * 1024 * 1024);
+
+        JsonObject objeto = LosslessJson.parseObject("{\"data\":\"" + longa + "\"}");
+
+        assertThat(objeto.string("data")).contains(longa);
+    }
 }
