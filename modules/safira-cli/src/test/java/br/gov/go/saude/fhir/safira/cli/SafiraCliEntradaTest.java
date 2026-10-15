@@ -18,6 +18,7 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -130,6 +131,29 @@ class SafiraCliEntradaTest {
 
         assertThat(nenhuma.saida()).isEqualTo(CodigosDeSaida.USO);
         assertThat(duas.saida()).isEqualTo(CodigosDeSaida.USO);
+    }
+
+    @Test
+    void shouldReportPicocliErrorsInPortugueseWithoutDuplicatedPrefix() {
+        Resultado semSenha = Cli.executar("assinar", "--modo", "simulacao", "--bundle", bundle.toString(),
+                "--provenance", provenance.toString(), "--p12", "a.p12", "--estrategia", "iat");
+        Resultado semBundle = Cli.executar("validar", "--modo", "simulacao", "--signature", bundle.toString(),
+                "--provenance", provenance.toString());
+        Resultado modoInvalido = Cli.executar("validar", "--modo", "xyz", "--signature", bundle.toString(),
+                "--bundle", bundle.toString(), "--provenance", provenance.toString());
+        Resultado duasSenhas = Cli.executar("assinar", "--modo", "simulacao", "--bundle", bundle.toString(),
+                "--provenance", provenance.toString(), "--p12", "a.p12", "--estrategia", "iat",
+                "--senha-arquivo", "s.txt", "--senha-env", "SENHA");
+
+        assertThat(List.of(semSenha, semBundle, modoInvalido, duasSenhas)).allSatisfy(resultado -> {
+            assertThat(resultado.saida()).isEqualTo(CodigosDeSaida.USO);
+            assertThat(resultado.err()).startsWith("Erro: ").doesNotContain("Error").doesNotContain("Missing")
+                    .doesNotContain("Invalid value").doesNotContain("mutually exclusive");
+        });
+        assertThat(semSenha.err()).contains("--senha-arquivo");
+        assertThat(semBundle.err()).contains("obrigatória").contains("--bundle");
+        assertThat(modoInvalido.err()).contains("--modo").contains("modo desconhecido 'xyz'");
+        assertThat(duasSenhas.err()).contains("--senha-arquivo").contains("--senha-env");
     }
 
     @Test

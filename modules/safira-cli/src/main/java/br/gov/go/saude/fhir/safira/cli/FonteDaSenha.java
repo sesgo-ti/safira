@@ -56,7 +56,7 @@ final class FonteDaSenha {
             if (valor == null) {
                 throw new FalhaDeUso("A variável de ambiente " + variavel + " não está definida.");
             }
-            return limitada(valor.getBytes(StandardCharsets.UTF_8), "a variável " + variavel);
+            return limitada(valor.getBytes(StandardCharsets.UTF_8), "na variável " + variavel);
         }
         return doStdin();
     }
@@ -72,7 +72,7 @@ final class FonteDaSenha {
         } catch (IOException e) {
             throw new FalhaDeUso("Não foi possível ler o arquivo de senha " + arquivo + ".");
         }
-        return limitada(semQuebraFinal(conteudo), "o arquivo de senha");
+        return limitada(semQuebraFinal(conteudo), "no arquivo de senha");
     }
 
     private void avisarSeExposto(PrintWriter avisos) {
@@ -97,14 +97,14 @@ final class FonteDaSenha {
             }
             for (; lido != -1 && lido != '\n'; lido = in.read()) {
                 if (linha.size() > TAMANHO_MAXIMO) {
-                    throw excedida("o stdin");
+                    throw excedida("no stdin");
                 }
                 linha.write(lido);
             }
         } catch (IOException e) {
             throw new FalhaDeUso("Não foi possível ler a senha do stdin.");
         }
-        return limitada(semQuebraFinal(linha.toByteArray()), "o stdin");
+        return limitada(semQuebraFinal(linha.toByteArray()), "no stdin");
     }
 
     private static String limitada(byte[] senha, String origem) {
@@ -115,7 +115,7 @@ final class FonteDaSenha {
     }
 
     private static FalhaDeUso excedida(String origem) {
-        return new FalhaDeUso("A senha em " + origem + " excede " + TAMANHO_MAXIMO + " bytes.");
+        return new FalhaDeUso("A senha " + origem + " excede " + TAMANHO_MAXIMO + " bytes.");
     }
 
     private static byte[] semQuebraFinal(byte[] texto) {

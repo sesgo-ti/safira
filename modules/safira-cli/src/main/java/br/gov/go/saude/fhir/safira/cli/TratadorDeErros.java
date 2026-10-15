@@ -15,6 +15,9 @@ import picocli.CommandLine.UnmatchedArgumentException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Tratamento de erros do picocli: erro de uso sai com 3 e exceção inesperada com 1, sempre no stderr.
@@ -35,11 +38,44 @@ final class TratadorDeErros implements IParameterExceptionHandler, IExecutionExc
                 err.println("A senha nunca é aceita como argumento: use --senha-arquivo, --senha-env ou --senha-stdin.");
             }
         } else {
-            err.println("Erro: " + ex.getMessage());
+            err.println("Erro: " + traduzir(ex.getMessage()));
         }
         err.println("Use '" + linha.getCommandSpec().qualifiedName() + " --help' para ver as opções.");
         err.flush();
         return CodigosDeSaida.USO;
+    }
+
+    /** Mensagens do picocli (em inglês, às vezes com prefixo {@code Error: }) traduzidas; as demais ficam como estão. */
+    private static final List<Map.Entry<Pattern, String>> TRADUCOES = List.of(
+            Map.entry(Pattern.compile("Missing required argument \\(specify one of these\\): (.*)", Pattern.DOTALL),
+                    "informe uma destas opções: $1"),
+            Map.entry(Pattern.compile("Missing required argument\\(s\\): (.*)", Pattern.DOTALL),
+                    "argumento obrigatório ausente: $1"),
+            Map.entry(Pattern.compile("Missing required options?: (.*)", Pattern.DOTALL), "opção obrigatória ausente: $1"),
+            Map.entry(Pattern.compile("Missing required parameter for option '([^']*)'.*", Pattern.DOTALL),
+                    "falta o valor da opção $1"),
+            Map.entry(Pattern.compile("Expected parameter for option '([^']*)'.*", Pattern.DOTALL),
+                    "falta o valor da opção $1"),
+            Map.entry(Pattern.compile("Invalid value for option '([^']*)': (.*)", Pattern.DOTALL),
+                    "valor inválido para a opção $1: $2"),
+            Map.entry(Pattern.compile("(.*) are mutually exclusive \\(specify only one\\)", Pattern.DOTALL),
+                    "as opções $1 são mutuamente exclusivas (informe só uma)"),
+            Map.entry(Pattern.compile("option '([^']*)' \\([^)]*\\) should be specified only once.*", Pattern.DOTALL),
+                    "a opção $1 deve ser informada uma única vez"));
+
+    /** Mensagem do picocli em português, sem o prefixo {@code Error: } (a CLI já escreve {@code Erro: }). */
+    static String traduzir(String mensagem) {
+        String texto = mensagem == null ? "" : mensagem.strip();
+        if (texto.startsWith("Error: ")) {
+            texto = texto.substring("Error: ".length());
+        }
+        for (Map.Entry<Pattern, String> traducao : TRADUCOES) {
+            Matcher casamento = traducao.getKey().matcher(texto);
+            if (casamento.matches()) {
+                return casamento.replaceFirst(traducao.getValue());
+            }
+        }
+        return texto;
     }
 
     /**

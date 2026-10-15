@@ -57,7 +57,8 @@ class FonteDaSenhaTest {
     void shouldRejectPasswordFileAboveLimit() throws Exception {
         FonteDaSenha fonte = arquivo(LONGA, "rw-------");
 
-        assertThatThrownBy(() -> ler(fonte)).isInstanceOf(FalhaDeUso.class).hasMessageContaining("1024");
+        assertThatThrownBy(() -> ler(fonte)).isInstanceOf(FalhaDeUso.class).hasMessageContaining("1024")
+                .hasMessageContaining("no arquivo de senha").hasMessageNotContaining("em o ");
     }
 
     @Test
