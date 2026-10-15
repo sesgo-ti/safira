@@ -100,7 +100,7 @@ final class GerenciadorDoServidor {
     Map<String, Object> iniciar(Partida partida) {
         Path dir = partida.diretorio();
         try (EstadoDoServidor.Trava trava = travar(dir)) {
-            Optional<EstadoDoServidor> anterior = EstadoDoServidor.ler(dir);
+            Optional<EstadoDoServidor> anterior = lerOuDescartar(dir);
             if (anterior.isPresent()) {
                 EstadoDoServidor estado = anterior.get();
                 if (estado.processo().isPresent()) {
@@ -134,7 +134,7 @@ final class GerenciadorDoServidor {
     /** Encerra o servidor (SIGTERM, depois forçado após o timeout) e limpa o estado; sem servidor, nada a fazer. */
     Map<String, Object> parar(Modo modo, Path dir, Duration timeout) {
         try (EstadoDoServidor.Trava trava = travar(dir)) {
-            Optional<EstadoDoServidor> lido = EstadoDoServidor.ler(dir);
+            Optional<EstadoDoServidor> lido = lerOuDescartar(dir);
             if (lido.isEmpty()) {
                 return parado(modo);
             }
@@ -154,7 +154,17 @@ final class GerenciadorDoServidor {
 
     /** Status do modo; estado órfão é limpo (se nenhuma outra operação estiver em andamento). */
     Map<String, Object> status(Modo modo, Path dir) {
-        Optional<EstadoDoServidor> lido = EstadoDoServidor.ler(dir);
+        Optional<EstadoDoServidor> lido;
+        try {
+            lido = EstadoDoServidor.ler(dir);
+        } catch (EstadoDoServidor.Ilegivel e) {
+            EstadoDoServidor.travar(dir).ifPresent(trava -> {
+                try (EstadoDoServidor.Trava posse = trava) {
+                    lerOuDescartar(dir);
+                }
+            });
+            return parado(modo);
+        }
         if (lido.isEmpty()) {
             return parado(modo);
         }
@@ -166,11 +176,27 @@ final class GerenciadorDoServidor {
         if (trava.isPresent()) {
             try (EstadoDoServidor.Trava posse = trava.get()) {
                 // relido sob a trava: um iniciar pode ter acabado de gravar um estado novo
-                EstadoDoServidor.ler(dir).filter(atual -> atual.processo().isEmpty())
+                lerOuDescartar(dir).filter(atual -> atual.processo().isEmpty())
                         .ifPresent(orfao -> limparOrfao(dir, orfao));
             }
         }
         return parado(modo);
+    }
+
+    /**
+     * Estado de {@code dir}; ilegível é tratado como órfão (sem PID confiável não há o que encerrar):
+     * o arquivo é removido com aviso e nenhum processo é tocado. Só sob a trava de operação.
+     */
+    private Optional<EstadoDoServidor> lerOuDescartar(Path dir) {
+        try {
+            return EstadoDoServidor.ler(dir);
+        } catch (EstadoDoServidor.Ilegivel e) {
+            EstadoDoServidor.remover(dir);
+            err.println("AVISO: " + e.getMessage() + "; tratado como órfão e removido (nenhum processo foi "
+                    + "encerrado; se um servidor ainda ocupar a porta, encerre-o manualmente).");
+            err.flush();
+            return Optional.empty();
+        }
     }
 
     private static EstadoDoServidor.Trava travar(Path dir) {

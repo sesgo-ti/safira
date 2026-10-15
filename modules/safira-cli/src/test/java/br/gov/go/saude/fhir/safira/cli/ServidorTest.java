@@ -248,6 +248,35 @@ class ServidorTest {
     }
 
     @Test
+    void shouldDiscardCorruptedStateAsOrphanWithoutKillingAnyProcess() throws Exception {
+        Process alheio = new ProcessBuilder("sleep", "60").start();
+        try {
+            Files.createDirectories(arquivoDeEstado().getParent());
+            List<Resultado> resultados = new ArrayList<>();
+            for (String comando : List.of("status", "parar", "iniciar")) {
+                // ilegível: pid de um processo vivo, mas modo e porta corrompidos
+                Files.writeString(arquivoDeEstado(), "pid=" + alheio.pid() + "\nmodo=\u0000lixo\nporta=abc\n");
+                resultados.add(switch (comando) {
+                    case "status" -> status();
+                    case "parar" -> Cli.executar("servidor", "parar", "--modo", "simulacao", "--estado-dir",
+                            estado.toString());
+                    default -> iniciar();
+                });
+                assertThat(alheio.isAlive()).isTrue();
+            }
+
+            assertThat(resultados).allSatisfy(resultado -> {
+                assertThat(resultado.saida()).isZero();
+                assertThat(resultado.err()).contains("AVISO").contains("ilegível").contains("removido");
+            });
+            assertThat(resultados.get(0).json().get("estado").asText()).isEqualTo("PARADO");
+            assertThat(resultados.get(2).json().get("estado").asText()).isEqualTo("UP");
+        } finally {
+            alheio.destroyForcibly();
+        }
+    }
+
+    @Test
     void shouldNotKillReusedPidWhenProcessStartIsUnknown() throws Exception {
         Process alheio = new ProcessBuilder("sleep", "60").start();
         try {

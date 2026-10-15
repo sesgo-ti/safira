@@ -64,7 +64,15 @@ record EstadoDoServidor(Modo modo, long pid, int porta, Instant inicioDoProcesso
         return dir;
     }
 
-    /** Estado gravado em {@code dir}, se houver; estado ilegível é erro (nunca se perde um servidor de vista). */
+    /** Arquivo de estado presente, mas ilegível (truncado, lixo, campos inválidos). */
+    static final class Ilegivel extends RuntimeException {
+
+        Ilegivel(Path arquivo) {
+            super("Estado do servidor ilegível em " + arquivo);
+        }
+    }
+
+    /** Estado gravado em {@code dir}, se houver. */
     static Optional<EstadoDoServidor> ler(Path dir) {
         Path arquivo = dir.resolve(ARQUIVO);
         if (!Files.isRegularFile(arquivo)) {
@@ -79,8 +87,7 @@ record EstadoDoServidor(Modo modo, long pid, int porta, Instant inicioDoProcesso
                     instante(propriedades, "iniciadoEm"),
                     propriedades.getProperty("log") != null ? Path.of(propriedades.getProperty("log")) : null));
         } catch (IOException | RuntimeException e) {
-            throw new FalhaDeUso("Estado do servidor ilegível em " + arquivo + "; se nenhum servidor estiver em "
-                    + "execução, remova o arquivo.");
+            throw new Ilegivel(arquivo);
         }
     }
 
