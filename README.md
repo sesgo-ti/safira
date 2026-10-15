@@ -339,29 +339,29 @@ java -jar $J servidor status --modo simulacao
 
 ## Integração com o hubsaude CLI
 
-Contrato estável para o [hubsaude CLI](https://github.com/sesgo-ti/hubsaude-cli) provisionar e comandar o Safira como componente local (como faz com o validador e o simulador). O hubsaude usa a mesma `java` do seu JRE provisionado; o Safira não exige nada além do JAR.
+Contrato estável para o [hubsaude CLI](https://github.com/sesgo-ti/hubsaude-cli) provisionar e comandar o Safira como componente local. O hubsaude **invoca a CLI do Safira por comando** (`java -jar`, com a `java` do seu JRE provisionado): `assinar` e `validar` funcionam **sem serviço rodando**, e o servidor local (`servidor iniciar|parar|status`) é **opcional**, para quem quer a API REST.
 
-**Artefato por release:** `safira-cli-X.Y.Z-exec.jar` (um único JAR, os dois modos) e o SHA-256 em `safira-cli-X.Y.Z-exec.jar.sha256` (só o hash em hexadecimal; gerado e conferido no `package` do `safira-cli`). Conferência manual: `shasum -a 256 safira-cli-X.Y.Z-exec.jar`. Entrada sugerida para o `release.json` do hubsaude (mesmo formato dos demais componentes):
+**Artefato por release:** `hubsaude-safira-X.Y.Z.jar`, o JAR executável da `safira-cli` (`safira-cli-X.Y.Z-exec.jar` renomeado; um único JAR com a CLI e os dois servidores, `icpbrasil` e `simulacao`), publicado com `checksums.txt` na release `hubsaude-safira-vX.Y.Z` de `sesgo-ti/hubsaude` (ver [Release](#release)). Entrada para o `release.json` do hubsaude (mesmo formato dos demais componentes):
 
 ```json
 "safira": {
-  "url": "https://github.com/sesgo-ti/safira/releases/download/safira-vX.Y.Z/safira-cli-X.Y.Z-exec.jar",
+  "url": "https://github.com/sesgo-ti/hubsaude/releases/download/hubsaude-safira-vX.Y.Z/hubsaude-safira-X.Y.Z.jar",
   "version": "X.Y.Z",
-  "tag": "safira-vX.Y.Z",
-  "sha256": "<conteúdo de safira-cli-X.Y.Z-exec.jar.sha256>"
+  "tag": "hubsaude-safira-vX.Y.Z",
+  "sha256": "<hash de hubsaude-safira-X.Y.Z.jar em checksums.txt>"
 }
 ```
 
-**Comandos** (`--modo icpbrasil|simulacao`; `simulacao` não exige certificado ICP-Brasil nem rede):
+**Comandos** (`--modo icpbrasil|simulacao`; `simulacao` não exige certificado ICP-Brasil, rede nem allowlist; em `icpbrasil`, a allowlist institucional vai por `--config`):
 
-| hubsaude | Safira |
+| hubsaude | Safira (`J=hubsaude-safira-X.Y.Z.jar`) |
 |---|---|
-| `hubsaude safira assinar ...` | `java -jar safira-cli.jar assinar ... --modo M` |
-| `hubsaude safira validar ...` | `java -jar safira-cli.jar validar ... --modo M` |
-| `hubsaude safira start` | `java -jar safira-cli.jar servidor iniciar --modo M [--porta P] [--ociosidade D]` |
-| `hubsaude safira status` | `java -jar safira-cli.jar servidor status --modo M` |
-| `hubsaude safira stop` | `java -jar safira-cli.jar servidor parar --modo M` |
-| `hubsaude safira pki` | `java -jar safira-cli.jar simulador pki` |
+| `hubsaude signature sign ...` | `java -jar $J assinar ... --modo M [--config allowlist.yml]` |
+| `hubsaude signature verify ...` | `java -jar $J validar ... --modo M [--config allowlist.yml]` |
+| `hubsaude safira start` (opcional) | `java -jar $J servidor iniciar --modo M [--porta P] [--ociosidade D] [--config allowlist.yml]` |
+| `hubsaude safira status` | `java -jar $J servidor status [--modo M]` |
+| `hubsaude safira stop` | `java -jar $J servidor parar --modo M` |
+| `hubsaude safira pki` | `java -jar $J simulador pki` |
 
 **Variáveis:** `HUBSAUDE_SAFIRA_PORT` → `--porta P` (equivale a `SAFIRA_PORT`; padrão 8080 `icpbrasil` e 8081 `simulacao`); `HUBSAUDE_IDLE_TIMEOUT` → `--ociosidade` (equivale a `SAFIRA_IDLE_TIMEOUT`; formatos `90s`, `30m`, `2h` ou ISO-8601). O hubsaude deve passar como argumento (a CLI não lê as variáveis `HUBSAUDE_*`). Diretórios de estado e acervo: `SAFIRA_SERVIDOR_DIR`, `SAFIRA_TRUSTSTORE_DIR`, `SAFIRA_SIMULADOR_DIRETORIO` (ou `--estado-dir`, `--pki-dir`).
 
@@ -391,7 +391,7 @@ Relatório de cobertura (JaCoCo) por módulo em `modules/<módulo>/target/site/j
 
 ## Release
 
-Uma tag `vX.Y.Z` em commit da `main` dispara o workflow `release.yml`, que fixa a versão do pom a partir da tag, roda `./mvnw verify` e publica `hubsaude-safira-X.Y.Z.jar` com `checksums.txt` na release `hubsaude-safira-vX.Y.Z` de `sesgo-ti/hubsaude`. É de lá que o [hubsaude-cli](https://github.com/sesgo-ti/hubsaude-cli) provisiona o Safira, depois que a versão entra no manifesto dele.
+Uma tag `vX.Y.Z` em commit da `main` dispara o workflow `release.yml`, que fixa a versão do pom a partir da tag, roda `./mvnw verify` e publica `hubsaude-safira-X.Y.Z.jar` com `checksums.txt` na release `hubsaude-safira-vX.Y.Z` de `sesgo-ti/hubsaude`. O asset é o JAR executável da `safira-cli` (`modules/safira-cli/target/safira-cli-X.Y.Z-exec.jar`, conferido como fat jar do Spring Boot com `Start-Class` da CLI): a CLI e os servidores `icpbrasil` e `simulacao` num só arquivo. É de lá que o [hubsaude-cli](https://github.com/sesgo-ti/hubsaude-cli) provisiona o Safira, depois que a versão entra no manifesto dele (ver [Integração com o hubsaude CLI](#integração-com-o-hubsaude-cli)). Republicar a mesma versão com os mesmos bytes é no-op; com bytes diferentes, falha.
 
 ```bash
 git tag -a v0.2.0 -m "safira 0.2.0"
