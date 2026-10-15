@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
+
+# ---------------------------------------------------------------------------
+# Profile de SIMULAÇÃO: NUNCA ativar em produção.
+#
+# Substitui a âncora de confiança (acervo ICP-Brasil) e a verificação de revogação
+# (OCSP/CRL) por uma PKI fictícia GERADA DO ZERO A CADA SUBIDA (ver SimuladorConfig,
+# em br.gov.go.saude.fhir.safira.rest.simulador), nenhuma chave fixa, nada commitado.
+# A allowlist de política (safira.policy.accepted-certificate-policies) também é
+# montada em Java nesse profile, não aqui, porque o SHA-256 da CA muda a cada subida.
+#
+# Ative com: ./mvnw -pl modules/safira-rest -am spring-boot:run \
+#   -Dspring-boot.run.profiles=simulado
+#
+# Veja docs/simulacao-sem-certificado-real.md para o passo a passo completo.
+# ---------------------------------------------------------------------------
+
+icpbrasil-truststore:
+  # Desativa o download real do acervo ICP-Brasil: a âncora de confiança usada é a
+  # PKI fictícia do simulador, não o acervo do ITI.
+  bootstrap:
+    enabled: false
+  scheduling:
+    enabled: false
+  filesystem:
+    base-dir: /tmp/safira-simulado-${user.name}/truststore
