@@ -146,6 +146,29 @@ class ServidorTest {
     }
 
     @Test
+    void shouldExposeOnlyHealthEvenWhenConfigOpensAllActuatorEndpoints() throws Exception {
+        Path config = Cli.escrever(diretorio.resolve("exposto.yml"), """
+                management:
+                  endpoints:
+                    web:
+                      exposure:
+                        include: "*"
+                  endpoint:
+                    env:
+                      enabled: true
+                      show-values: always
+                """);
+
+        Resultado resultado = iniciar("--config", config.toString());
+
+        assertThat(resultado.saida()).isZero();
+        assertThat(prontidao()).isEqualTo(200);
+        assertThat(statusHttp("/actuator/env")).isEqualTo(404);
+        assertThat(statusHttp("/actuator/beans")).isEqualTo(404);
+        assertThat(statusHttp("/actuator/configprops")).isEqualTo(404);
+    }
+
+    @Test
     void shouldReportStartupFailureWithoutStackTrace() throws Exception {
         Path config = Cli.escrever(diretorio.resolve("gerencia.yml"), "management:\n  server:\n    address: 0.0.0.0\n");
 
@@ -307,6 +330,13 @@ class ServidorTest {
 
         assertThat(status().json().get("estado").asText()).isEqualTo("PARADO");
         assertThat(arquivoDeEstado()).doesNotExist();
+    }
+
+    private int statusHttp(String caminho) throws Exception {
+        try (HttpClient cliente = HttpClient.newHttpClient()) {
+            return cliente.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + porta + caminho)).build(),
+                    HttpResponse.BodyHandlers.discarding()).statusCode();
+        }
     }
 
     private int prontidao() throws Exception {

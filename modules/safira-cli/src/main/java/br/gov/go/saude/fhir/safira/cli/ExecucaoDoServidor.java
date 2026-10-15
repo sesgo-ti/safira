@@ -49,6 +49,11 @@ final class ExecucaoDoServidor {
                 // management.server.address do usuário).
                 "--management.server.port=",
                 "--server.port=" + porta,
+                // só o health, mesmo que --config ou o ambiente (MANAGEMENT_ENDPOINTS_*) abram outros endpoints
+                "--management.endpoints.web.exposure.include=health",
+                "--management.endpoints.access.default=none",
+                "--management.endpoint.health.access=read-only",
+                "--spring.jmx.enabled=false",
                 "--safira.simulacao.enabled=" + modo.simulacao(),
                 "--spring.autoconfigure.exclude=" + String.join(",", modo.excluidas()),
                 "--logging.level.root=INFO",
