@@ -7,7 +7,8 @@
 # SAFIRA_TRUSTSTORE_DIR é persistente entre execuções. Sem rede, cada comando espera o timeout
 # do download (CLI: 30 s, uma tentativa; --timeout-acervo 30..300). Sem acervo, a operação não
 # aborta a partida: o pipeline devolve CONFIG.TRUST-STORE-EMPTY e a CLI sai com 4 (inconclusivo).
-# Sem agendamento em background.
+# Sem agendamento em background (assinar/validar). O 'safira servidor' usa o application.yml do
+# safira-app e mantém o agendador do acervo, por ser de longa duração.
 # -----------------------------------------------------------------------------
 icpbrasil-truststore:
   storage:
