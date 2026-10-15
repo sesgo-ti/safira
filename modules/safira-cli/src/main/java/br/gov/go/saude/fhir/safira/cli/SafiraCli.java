@@ -7,9 +7,11 @@ package br.gov.go.saude.fhir.safira.cli;
 
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.HelpCommand;
 import picocli.CommandLine.IVersionProvider;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.ParameterException;
+import picocli.CommandLine.ScopeType;
 import picocli.CommandLine.Spec;
 
 import java.io.PrintWriter;
@@ -22,8 +24,10 @@ import java.io.PrintWriter;
  * <p>Códigos de saída ({@link CodigosDeSaida}): 0 sucesso/válido; 3 uso/configuração; 4 inconclusivo;
  * 6 reprovação definitiva; 1 erro interno. O stdout recebe só o JSON de resultado.
  */
+// INHERIT: --help/-h e --version/-V valem em todos os subcomandos
 @Command(name = "safira", mixinStandardHelpOptions = true, versionProvider = SafiraCli.Versao.class,
-        subcommands = {Assinar.class, Validar.class, Servidor.class, Simulador.class},
+        scope = ScopeType.INHERIT,
+        subcommands = {Assinar.class, Validar.class, Servidor.class, Simulador.class, HelpCommand.class},
         description = "Assina e valida Bundles FHIR (JAdES, política 0.2.0) no modo ICP-Brasil ou simulação e controla "
                 + "o servidor local da API.",
         exitCodeListHeading = "%nCódigos de saída:%n",
