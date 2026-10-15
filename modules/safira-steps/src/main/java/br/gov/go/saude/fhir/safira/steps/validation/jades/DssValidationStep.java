@@ -81,6 +81,14 @@ public class DssValidationStep implements ValidationStep {
     public StepResult<ValidationContext> execute(ValidationContext context) {
         String jws = context.getAttribute(ValidationKeys.JWS_JSON, String.class).orElseThrow();
         JadesLevel level = context.getAttribute(ValidationKeys.JADES_LEVEL, JadesLevel.class).orElseThrow();
+        // o DSS descarta em silêncio o certificado do x5c que não representa: a cadeia avaliada não seria a do x5c
+        List<X509Certificate> x5c = context.getCertificateChain().orElse(List.of());
+        for (int i = 0; i < x5c.size(); i++) {
+            if (CertificateVerifierFactory.token(x5c.get(i)).isEmpty()) {
+                return fail(SignatureExceptionCode.CERT_UNSUPPORTED_ALGORITHM, "O algoritmo de assinatura de x5c[" + i
+                        + "] (" + x5c.get(i).getSigAlgOID() + ") não é suportado pelo EU DSS.", context);
+            }
+        }
 
         List<X509Certificate> tsaAnchors = List.of();
         TsaPolicy tsaPolicy = null;

@@ -36,6 +36,7 @@ import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.DERTaggedObject;
 import org.bouncycastle.asn1.DERUTF8String;
 import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.CertificatePolicies;
 import org.bouncycastle.asn1.x509.Extension;
@@ -45,6 +46,7 @@ import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.asn1.x509.PolicyInformation;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
+import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -54,6 +56,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.io.ByteArrayOutputStream;
+import java.io.OutputStream;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -357,6 +361,12 @@ class QaValidacaoAtaquesTest {
     /** Certificado com identidade CPF ICP-Brasil (SERIALNUMBER e SAN otherName 2.16.76.1.3.1). */
     private static X509Certificate certificate(KeyPair subject, X509Certificate issuer, PrivateKey issuerKey, String cpf,
                                                long notBefore, long notAfter, String policyOid, int keyUsage, boolean ca) {
+        return certificate(subject, issuer, issuerKey, cpf, notBefore, notAfter, policyOid, keyUsage, ca, "SHA256withRSA");
+    }
+
+    private static X509Certificate certificate(KeyPair subject, X509Certificate issuer, PrivateKey issuerKey, String cpf,
+                                               long notBefore, long notAfter, String policyOid, int keyUsage, boolean ca,
+                                               String signatureAlgorithm) {
         try {
             X500Name subjectName = new X500Name("CN=Atacante:" + cpf + ",SERIALNUMBER=" + cpf);
             X500Name issuerName = issuer == null ? subjectName : X500Name.getInstance(issuer.getSubjectX500Principal().getEncoded());
@@ -374,7 +384,7 @@ class QaValidacaoAtaquesTest {
             builder.addExtension(Extension.subjectAlternativeName, false,
                     new GeneralNames(new GeneralName(GeneralName.otherName, new DERSequence(otherName))));
             return new JcaX509CertificateConverter().getCertificate(
-                    builder.build(new JcaContentSignerBuilder("SHA256withRSA").build(issuerKey)));
+                    builder.build(new JcaContentSignerBuilder(signatureAlgorithm).build(issuerKey)));
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
@@ -384,6 +394,39 @@ class QaValidacaoAtaquesTest {
                                                   int keyUsage, boolean ca) {
         return certificate(keys, pki.ac(), pki.chavesAc().getPrivate(), PkiIcpSimulada.CPF, notBefore, notAfter, policyOid,
                 keyUsage, ca);
+    }
+
+    /**
+     * Certificado com o nome e a chave de {@code original} (assina {@code original} no encadeamento do
+     * {@code x5c}), mas assinado com o algoritmo da raiz ICP-Brasil v7, que o EU DSS não representa.
+     */
+    private static X509Certificate gemeoComAlgoritmoDesconhecido(X509Certificate original) {
+        ContentSigner semAlgoritmoConhecido = new ContentSigner() {
+            private final ByteArrayOutputStream tbs = new ByteArrayOutputStream();
+
+            @Override
+            public AlgorithmIdentifier getAlgorithmIdentifier() {
+                return new AlgorithmIdentifier(new ASN1ObjectIdentifier("1.3.6.1.4.1.44588.2.1"));
+            }
+
+            @Override
+            public OutputStream getOutputStream() {
+                return tbs;
+            }
+
+            @Override
+            public byte[] getSignature() {
+                return new byte[64];
+            }
+        };
+        try {
+            return new JcaX509CertificateConverter().getCertificate(new JcaX509v3CertificateBuilder(
+                    original.getSubjectX500Principal(), BigInteger.valueOf(SERIAL.incrementAndGet()),
+                    original.getNotBefore(), original.getNotAfter(), original.getSubjectX500Principal(),
+                    original.getPublicKey()).build(semAlgoritmoConhecido));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** Artefato B-B assinado por outra chave/cadeia, com {@code who} igual ao CPF de teste. */
@@ -545,6 +588,27 @@ class QaValidacaoAtaquesTest {
 
         assertThat(validate(artifact(sign(header(chain, Long.toString(iat))).json(), iat)))
                 .isIn(SignatureExceptionCode.CERT_CHAIN_INCOMPLETE.getCode(), SignatureExceptionCode.CERT_CHAIN_VALIDATION_FAILED.getCode());
+    }
+
+    @Test
+    void shouldRejectLeafWhenIssuerSignedItWithAlgorithmUnsupportedByDss() {
+        KeyPair keys = rsa(2048);
+        // SHA512/224withRSA: o JCA verifica o encadeamento, o EU DSS não representa o certificado
+        X509Certificate leaf = certificate(keys, pki.ac(), pki.chavesAc().getPrivate(), PkiIcpSimulada.CPF,
+                pki.inicioValidade(), pki.fimValidade(), "2.16.76.1.2.3.1", KeyUsage.digitalSignature, false,
+                "SHA512(224)withRSA");
+
+        assertThat(validate(signedBy(keys, List.of(leaf, pki.ac(), pki.raiz()), now() - 5)))
+                .isEqualTo(SignatureExceptionCode.CERT_UNSUPPORTED_ALGORITHM.getCode());
+    }
+
+    @Test
+    void shouldRejectX5cWhenAppendedCertificateUsesAlgorithmUnsupportedByDss() {
+        long iat = now() - 5;
+        List<X509Certificate> chain = List.of(pki.signatario(), pki.ac(), pki.raiz(), gemeoComAlgoritmoDesconhecido(pki.raiz()));
+
+        assertThat(validate(artifact(sign(header(chain, Long.toString(iat))).json(), iat)))
+                .isEqualTo(SignatureExceptionCode.CERT_UNSUPPORTED_ALGORITHM.getCode());
     }
 
     @Test
