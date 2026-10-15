@@ -198,6 +198,25 @@ class RepositorioPkiSimuladaTest {
     }
 
     @Test
+    void shouldWaitForLockWhenAnotherInstanceReleasesItShortly() throws Exception {
+        Path trava = RepositorioPkiSimulada.arquivoTrava(diretorio().toAbsolutePath().normalize());
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try (FileChannel canal = FileChannel.open(trava, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+            FileLock ocupada = canal.lock();
+            Future<Object> liberacao = executor.submit(() -> {
+                Thread.sleep(500);
+                ocupada.release();
+                return null;
+            });
+
+            assertThat(RepositorioPkiSimulada.abrir(diretorio()).situacao()).isEqualTo(Situacao.GERADA);
+            liberacao.get();
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
     void shouldNeverGenerateTwiceWhenOpenedConcurrently() throws Exception {
         CountDownLatch largada = new CountDownLatch(1);
         Callable<Object> abrir = () -> {
@@ -217,7 +236,7 @@ class RepositorioPkiSimuladaTest {
 
             assertThat(resultados).containsOnlyOnce(Situacao.GERADA);
             assertThat(resultados).allSatisfy(resultado -> assertThat(resultado.toString())
-                    .matches("GERADA|REUTILIZADA|.*em uso por outra instância.*"));
+                    .matches("GERADA|REUTILIZADA"));
         } finally {
             executor.shutdownNow();
         }

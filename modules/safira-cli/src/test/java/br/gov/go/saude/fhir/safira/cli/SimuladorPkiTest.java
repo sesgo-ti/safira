@@ -109,4 +109,32 @@ class SimuladorPkiTest {
             processos.forEach(Process::destroyForcibly);
         }
     }
+
+    @Test
+    void shouldLetParallelProcessesWaitWhenFirstGenerationIsInProgress() throws Exception {
+        Path pki = diretorio.resolve("pki");
+        List<Process> processos = new ArrayList<>();
+        List<Path> saidas = new ArrayList<>();
+        try {
+            for (int i = 0; i < 4; i++) {
+                Path saida = diretorio.resolve("geracao-" + i + ".txt");
+                saidas.add(saida);
+                processos.add(simuladorPkiEmProcesso(pki, saida));
+            }
+            List<Integer> codigos = new ArrayList<>();
+            for (Process processo : processos) {
+                assertThat(processo.waitFor(60, TimeUnit.SECONDS)).isTrue();
+                codigos.add(processo.exitValue());
+            }
+            StringBuilder textos = new StringBuilder();
+            for (Path saida : saidas) {
+                textos.append(Files.readString(saida, StandardCharsets.UTF_8));
+            }
+
+            assertThat(textos.toString()).doesNotContain("em uso").containsOnlyOnce("\"GERADA\"");
+            assertThat(codigos).containsOnly(0);
+        } finally {
+            processos.forEach(Process::destroyForcibly);
+        }
+    }
 }

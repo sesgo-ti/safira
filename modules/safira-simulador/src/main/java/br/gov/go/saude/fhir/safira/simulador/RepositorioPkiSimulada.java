@@ -83,6 +83,10 @@ public final class RepositorioPkiSimulada {
 
     static final Duration ANTECEDENCIA_RENOVACAO = Duration.ofDays(30);
     static final Duration VALIDADE_REVOGACAO = Duration.ofDays(7);
+    /** Espera máxima pela trava: cobre a geração ou a renovação de outra partida concorrente. */
+    static final Duration ESPERA_TRAVA = Duration.ofSeconds(10);
+
+    private static final Duration INTERVALO_TRAVA = Duration.ofMillis(100);
 
     private static final String FORMATO = "1";
     private static final String ALIAS_RAIZ = "raiz";
@@ -132,7 +136,8 @@ public final class RepositorioPkiSimulada {
 
     /**
      * Executa com a trava do diretório: compartilhada para ler uma PKI existente, exclusiva para gerar
-     * ou renovar. Quem não obtém a trava falha na hora (sem espera).
+     * ou renovar. Quem não obtém a trava tenta de novo a pequenos intervalos por até {@link #ESPERA_TRAVA}
+     * e então falha.
      */
     private static Optional<PkiPersistida> travado(Path dir, boolean compartilhada,
                                                    Supplier<Optional<PkiPersistida>> acao) {
@@ -141,17 +146,12 @@ public final class RepositorioPkiSimulada {
             criarDiretorioPrivado(trava.getParent());
             try (FileChannel canal = FileChannel.open(trava, StandardOpenOption.CREATE, StandardOpenOption.READ,
                     StandardOpenOption.WRITE)) {
-                FileLock obtida;
-                try {
-                    obtida = canal.tryLock(0, Long.MAX_VALUE, compartilhada);
-                } catch (OverlappingFileLockException e) {
-                    obtida = null;
-                }
+                FileLock obtida = tentarTravar(canal, compartilhada);
                 if (obtida == null) {
                     throw new IllegalStateException("Diretório da PKI simulada " + dir
-                            + " em uso por outra instância (trava " + trava + "): outra partida está gerando ou "
-                            + "renovando a PKI. Aguarde e repita, ou use outro diretório (--pki-dir na CLI, "
-                            + "safira.simulador.diretorio na configuração).");
+                            + " em uso por outra instância após " + ESPERA_TRAVA.toSeconds() + " s de espera (trava "
+                            + trava + "): outra partida está gerando ou renovando a PKI. Aguarde e repita, ou use "
+                            + "outro diretório (--pki-dir na CLI, safira.simulador.diretorio na configuração).");
                 }
                 try (FileLock ignorada = obtida) {
                     return acao.get();
@@ -159,6 +159,30 @@ public final class RepositorioPkiSimulada {
             }
         } catch (IOException e) {
             throw new UncheckedIOException("Falha ao travar o diretório da PKI simulada " + dir, e);
+        }
+    }
+
+    /** Trava obtida em até {@link #ESPERA_TRAVA}, ou nula; na mesma JVM a trava sobreposta também espera. */
+    private static FileLock tentarTravar(FileChannel canal, boolean compartilhada) throws IOException {
+        long limite = System.nanoTime() + ESPERA_TRAVA.toNanos();
+        while (true) {
+            try {
+                FileLock obtida = canal.tryLock(0, Long.MAX_VALUE, compartilhada);
+                if (obtida != null) {
+                    return obtida;
+                }
+            } catch (OverlappingFileLockException e) {
+                // outra thread desta JVM detém a trava: espera como se fosse outro processo
+            }
+            if (System.nanoTime() - limite >= 0) {
+                return null;
+            }
+            try {
+                Thread.sleep(INTERVALO_TRAVA);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            }
         }
     }
 
