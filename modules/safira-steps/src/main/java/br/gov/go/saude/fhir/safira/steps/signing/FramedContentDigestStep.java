@@ -12,6 +12,8 @@ import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
 import br.gov.go.saude.fhir.safira.steps.content.FramedContentDigest;
 import br.gov.go.saude.fhir.safira.steps.content.SignedContentRules;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Base64;
 
@@ -24,6 +26,8 @@ import java.util.Base64;
 @StepId("framed-content-digest")
 public class FramedContentDigestStep implements SigningStep {
 
+    private static final Logger log = LoggerFactory.getLogger(FramedContentDigestStep.class);
+
     @Override
     public StepResult<SigningContext> execute(SigningContext context) {
         try {
@@ -34,8 +38,10 @@ public class FramedContentDigestStep implements SigningStep {
                             Base64.getUrlEncoder().withoutPadding().encodeToString(digest))
                     .build());
         } catch (RuntimeException e) {
+            // Não registra a exceção: a mensagem do parser pode ecoar trechos do corpo (dados de saúde)
+            log.warn("Falha na canonicalização lossless do conteúdo assinado ({})", e.getClass().getSimpleName());
             return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_CANONICALIZATION_FAILED,
-                    "Falha na canonicalização lossless do conteúdo assinado: " + e.getMessage(), context);
+                    "Falha na canonicalização lossless do conteúdo assinado.", context);
         }
     }
 }

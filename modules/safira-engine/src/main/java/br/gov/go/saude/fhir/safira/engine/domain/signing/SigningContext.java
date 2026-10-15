@@ -16,6 +16,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.TimestampStrategy;
 
 import lombok.Builder;
 import lombok.Singular;
+import lombok.ToString;
 import lombok.Value;
 
 import java.security.PrivateKey;
@@ -39,8 +40,11 @@ public class SigningContext implements StepContext {
     Long referenceTimestamp;
     TimestampStrategy strategy;
     String policyIdentifierUri;
+    /** Fora do {@code toString()}: contém credenciais operacionais (ex.: senha da TSA). */
+    @ToString.Exclude
     SafiraOperationalConfigProperties operationalConfig;
 
+    @ToString.Exclude
     PrivateKey privateKey;
     X509Certificate[] certificateChain;
     Instant signingTime;

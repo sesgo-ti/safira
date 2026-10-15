@@ -14,6 +14,8 @@ import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
 import br.gov.go.saude.fhir.safira.jades.JadesSigningService;
 import br.gov.go.saude.fhir.safira.jades.JadesSigningSession;
 import br.gov.go.saude.fhir.safira.steps.signing.SigningKeys;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPublicKey;
@@ -30,6 +32,8 @@ import java.util.List;
  */
 @StepId("jades-data-to-sign")
 public class JadesDataToSignStep implements SigningStep {
+
+    private static final Logger log = LoggerFactory.getLogger(JadesDataToSignStep.class);
 
     public static final String JADES_SESSION_KEY = "jadesSession";
 
@@ -64,7 +68,7 @@ public class JadesDataToSignStep implements SigningStep {
             payload = Base64.getUrlDecoder().decode(contentDigest);
         } catch (IllegalArgumentException e) {
             return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_BASE64_INVALID,
-                    "Impressão digital do conteúdo não é base64url válido: " + e.getMessage(), context);
+                    "Impressão digital do conteúdo não é base64url válido.", context);
         }
         if (!(chain[0].getPublicKey() instanceof RSAPublicKey)) {
             return StepResult.failure(getName(), SignatureExceptionCode.CERT_UNSUPPORTED_ALGORITHM,
@@ -88,8 +92,10 @@ public class JadesDataToSignStep implements SigningStep {
 
             return StepResult.success(getName(), updated);
         } catch (Exception e) {
+            // O detalhe é interno (DSS, JVM): fica no log, nunca no diagnóstico
+            log.error("Falha ao preparar os dados a assinar (JAdES)", e);
             throw new StepException(SignatureExceptionCode.CRYPTO_SIGNATURE_CREATION_FAILED,
-                    "Erro ao preparar os dados a assinar (JAdES): " + e.getMessage(), e);
+                    "Erro ao preparar os dados a assinar (JAdES).", e);
         }
     }
 }

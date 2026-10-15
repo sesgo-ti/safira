@@ -15,6 +15,11 @@ public final class SigningKeys {
     /** JWS General JSON Serialization produzido (String). */
     public static final String JWS_FINAL = "jwsFinal";
 
+    /** Snapshot do acervo de confiança capturado uma vez por operação ({@code AcervoDeConfianca}). */
+    public static final String ACERVO = "acervo";
+    /** Evidência de que o {@code pkix-chain-validation} aprovou a cadeia pelo EU DSS (Boolean); exigida por {@code fhir-signature}. */
+    public static final String CADEIA_APROVADA_DSS = "cadeiaAprovadaDss";
+
     private SigningKeys() {
     }
 }

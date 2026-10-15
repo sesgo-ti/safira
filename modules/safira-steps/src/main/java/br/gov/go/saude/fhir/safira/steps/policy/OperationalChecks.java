@@ -22,9 +22,6 @@ public final class OperationalChecks {
         }
         var verification = config.verification();
         if (verification != null) {
-            if (outside(verification.ocspCacheTtl(), 300, 86400) || outside(verification.crlCacheTtl(), 300, 86400)) {
-                return fail(SignatureExceptionCode.CONFIG_TTL_OUT_OF_RANGE, "TTL de cache de revogação fora de [300, 86400].");
-            }
             if (outside(verification.ocspTimeout(), 5, 120) || outside(verification.crlTimeout(), 5, 120)
                     || outside(verification.tsaTimeout(), 5, 120)) {
                 return fail(SignatureExceptionCode.CONFIG_TIMEOUT_OUT_OF_RANGE, "Timeout de verificação fora de [5, 120].");
@@ -38,9 +35,6 @@ public final class OperationalChecks {
             if (outside(security.maxBundleSize(), 1048576, 209715200)) {
                 return fail(SignatureExceptionCode.CONFIG_BUNDLE_MEMORY_LIMIT_OUT_OF_RANGE,
                         "maxBundleBytes fora de [1048576, 209715200].");
-            }
-            if (outside(security.timoutVerificationBundle(), 5, 300)) {
-                return fail(SignatureExceptionCode.CONFIG_BUNDLE_TIMEOUT_OUT_OF_RANGE, "bundleVerifyTimeout fora de [5, 300].");
             }
         }
         return Optional.empty();

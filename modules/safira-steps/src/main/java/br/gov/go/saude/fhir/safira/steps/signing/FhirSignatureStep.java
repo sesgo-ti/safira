@@ -19,6 +19,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
 import br.gov.go.saude.fhir.safira.steps.certificate.SignerIdentity;
 import br.gov.go.saude.fhir.safira.steps.policy.Policy020;
+import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -37,12 +38,21 @@ import java.util.Map;
  * uma cópia do Provenance recebido com exatamente essa assinatura em {@code Provenance.signature},
  * sem mutar a entrada. Exige um {@code Provenance.agent} cujo {@code who.identifier} seja
  * integralmente igual a {@code Signature.who.identifier}.
+ *
+ * <p>Falha fechada: sem o acervo da operação e a evidência {@link SigningKeys#CADEIA_APROVADA_DSS}
+ * do {@code pkix-chain-validation} (pipeline que o omite) recusa com {@code CONFIG.INVALID-PARAMETER}.
  */
 @StepId("fhir-signature")
 public class FhirSignatureStep implements SigningStep {
 
     @Override
     public StepResult<SigningContext> execute(SigningContext context) {
+        if (context.getAttribute(SigningKeys.ACERVO, AcervoDeConfianca.class).isEmpty()
+                || !context.getAttribute(SigningKeys.CADEIA_APROVADA_DSS, Boolean.class).orElse(false)) {
+            return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_INVALID_PARAMETER,
+                    "A cadeia do signatário não foi validada pelo EU DSS: o pipeline não executou pkix-chain-validation.",
+                    context);
+        }
         String jws = context.getAttribute(SigningKeys.JWS_FINAL, String.class)
                 .orElseThrow(() -> new StepException(SignatureExceptionCode.CRYPTO_SIGNATURE_CREATION_FAILED,
                         "A estrutura JWS final não foi encontrada no contexto."));

@@ -15,7 +15,8 @@ import br.gov.go.saude.fhir.safira.steps.policy.PolicyChecks;
 import br.gov.go.saude.fhir.safira.steps.policy.PolicyViolation;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.ConfigViolation;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.AcervoDeConfianca;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 
 import java.time.Clock;
 import java.util.List;
@@ -24,19 +25,19 @@ import java.util.Optional;
 /**
  * Passo {@code validation-context}: seção 0 do caso de uso de validação da política 0.2.0 —
  * entradas obrigatórias (Signature, Bundle, Provenance), política solicitada, timestamp de
- * referência, configurações e disponibilidade do acervo ICP-Brasil.
+ * referência, configurações e disponibilidade do acervo ICP-Brasil. Captura o acervo uma única
+ * vez e o guarda em {@link ValidationKeys#ACERVO}: os demais steps usam esse snapshot.
  */
 @StepId("validation-context")
 public class ValidationRequestContextStep implements ValidationStep {
 
     private final SafiraPolicyProperties policy;
-    private final TrustMaterialSource trustMaterialSource;
+    private final FonteDeConfianca fonte;
     private final Clock clock;
 
-    public ValidationRequestContextStep(SafiraPolicyProperties policy, TrustMaterialSource trustMaterialSource,
-                                        Clock clock) {
+    public ValidationRequestContextStep(SafiraPolicyProperties policy, FonteDeConfianca fonte, Clock clock) {
         this.policy = policy;
-        this.trustMaterialSource = trustMaterialSource;
+        this.fonte = fonte;
         this.clock = clock;
     }
 
@@ -46,11 +47,16 @@ public class ValidationRequestContextStep implements ValidationStep {
                 .or(() -> PolicyChecks.policyUri(context.getPolicyIdentifierUri()))
                 .or(() -> PolicyChecks.referenceTimestamp(context.getReferenceTimestamp(), clock.instant().getEpochSecond()))
                 .or(this::checkPolicyConfiguration)
-                .or(() -> OperationalChecks.check(context.getOperationalConfig()))
-                .or(this::checkTrustStore);
-        return violation
-                .map(v -> StepResult.failure(getName(), v.code(), v.diagnostics(), context))
-                .orElseGet(() -> StepResult.success(getName(), context));
+                .or(() -> OperationalChecks.check(context.getOperationalConfig()));
+        if (violation.isPresent()) {
+            return StepResult.failure(getName(), violation.get().code(), violation.get().diagnostics(), context);
+        }
+        Optional<AcervoDeConfianca> acervo = fonte.atual();
+        if (acervo.isEmpty()) {
+            return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY,
+                    "Acervo ICP-Brasil indisponível ou expirado: nenhuma âncora de confiança carregada.", context);
+        }
+        return StepResult.success(getName(), context.toBuilder().attribute(ValidationKeys.ACERVO, acervo.get()).build());
     }
 
     private static Optional<PolicyViolation> checkInputs(ValidationContext context) {
@@ -71,12 +77,6 @@ public class ValidationRequestContextStep implements ValidationStep {
         return violations.isEmpty()
                 ? Optional.empty()
                 : fail(violations.getFirst().code(), violations.getFirst().diagnostics());
-    }
-
-    private Optional<PolicyViolation> checkTrustStore() {
-        boolean available = trustMaterialSource.current().filter(t -> t.hasAnchors()).isPresent();
-        return available ? Optional.empty() : fail(SignatureExceptionCode.CONFIG_TRUST_STORE_EMPTY,
-                "Acervo ICP-Brasil indisponível ou expirado: nenhuma âncora de confiança carregada.");
     }
 
     private static Optional<PolicyViolation> fail(SignatureExceptionCode code, String diagnostics) {

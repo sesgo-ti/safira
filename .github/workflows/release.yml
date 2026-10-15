@@ -1,7 +1,8 @@
 name: Release
 
 # Tag vX.Y.Z na main publica hubsaude-safira-X.Y.Z.jar em sesgo-ti/hubsaude,
-# de onde o hubsaude-cli provisiona o Safira. Só o job publicar tem o PAT.
+# de onde o hubsaude-cli provisiona o Safira. O asset é o JAR da safira-cli
+# (CLI mais os servidores icpbrasil e simulação). Só o job publicar tem o PAT.
 
 on:
   push:
@@ -99,11 +100,19 @@ jobs:
           VERSAO: ${{ needs.validar-tag.outputs.versao }}
         run: |
           set -euo pipefail
-          origem="modules/safira-rest/target/safira-rest-${VERSAO}.jar"
+          origem="modules/safira-cli/target/safira-cli-${VERSAO}-exec.jar"
           jar="hubsaude-safira-${VERSAO}.jar"
-          [ -f "$origem" ] || { echo "::error::JAR ausente: $origem"; ls -la modules/safira-rest/target/ || true; exit 1; }
-          if ! unzip -l "$origem" | grep -q 'BOOT-INF/lib/'; then
+          classe="br.gov.go.saude.fhir.safira.cli.SafiraCli"
+          [ -f "$origem" ] || { echo "::error::JAR ausente: $origem"; ls -la modules/safira-cli/target/ || true; exit 1; }
+          # Sem pipe: com pipefail, o grep -q fecha o pipe e o SIGPIPE do unzip vira falso negativo.
+          listagem="$(unzip -Z1 "$origem")"
+          if ! grep -q '^BOOT-INF/lib/' <<<"$listagem"; then
             echo "::error::$origem não é um JAR executável do Spring Boot"
+            exit 1
+          fi
+          start="$(unzip -p "$origem" META-INF/MANIFEST.MF | tr -d '\r' | awk -F': ' '$1 == "Start-Class" {print $2}')"
+          if [ "$start" != "$classe" ]; then
+            echo "::error::$origem tem Start-Class '${start}', esperado ${classe}"
             exit 1
           fi
           mkdir -p dist

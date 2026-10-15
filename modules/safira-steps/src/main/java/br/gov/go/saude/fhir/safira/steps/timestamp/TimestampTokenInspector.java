@@ -21,9 +21,10 @@ import org.bouncycastle.asn1.x509.KeyPurposeId;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cms.CMSSignedData;
-import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
 import org.bouncycastle.tsp.TimeStampToken;
 import org.bouncycastle.tsp.TimeStampTokenInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -37,11 +38,13 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Inspeção e verificação de um {@code TimeStampToken} RFC 3161 segundo a política 0.2.0
- * (criar 12.3; validar 5.1–5.4). A cadeia do certificado TSA e sua revogação são verificadas
- * por quem chama, contra o trust store TSA da política selecionada.
+ * Inspeção e verificação de um {@code TimeStampToken} RFC 3161 segundo as regras próprias da
+ * política 0.2.0 (criar 12.3; validar 5.1–5.4). Assinatura CMS, cadeia do certificado TSA e
+ * revogação são verificadas pelo EU DSS, contra o trust store TSA da política selecionada.
  */
 public final class TimestampTokenInspector {
+
+    private static final Logger log = LoggerFactory.getLogger(TimestampTokenInspector.class);
 
     /**
      * @param policyOid         {@code TSTInfo.policy}
@@ -88,8 +91,9 @@ public final class TimestampTokenInspector {
         } catch (TimestampTokenException e) {
             throw e;
         } catch (Exception e) {
+            log.warn("TimeStampToken malformado (CMS/TSTInfo)", e);
             throw new TimestampTokenException(SignatureExceptionCode.TSA_INVALID_TOKEN,
-                    "TimeStampToken malformado (CMS/TSTInfo): " + e.getMessage(), e);
+                    "TimeStampToken malformado (CMS/TSTInfo).", e);
         }
     }
 
@@ -114,7 +118,7 @@ public final class TimestampTokenInspector {
             return der;
         } catch (IllegalArgumentException e) {
             throw new TimestampTokenException(SignatureExceptionCode.TSA_INVALID_TOKEN,
-                    "sigTst.tstTokens[0].val não é Base64 padrão canônico: " + e.getMessage(), e);
+                    "sigTst.tstTokens[0].val não é Base64 padrão canônico.", e);
         }
     }
 
@@ -171,13 +175,7 @@ public final class TimestampTokenInspector {
             return fail(SignatureExceptionCode.TSA_CERTIFICATE_TIME_INVALID,
                     "O intervalo do carimbo não está contido na validade do certificado da TSA.");
         }
-        // Após as checagens temporais: o validate() do BC também rejeita certificado fora da validade
-        try {
-            // Verifica assinatura CMS, atributos assinados e ESSCertID/ESSCertIDv2 contra o certificado da TSA
-            inspection.token().validate(new JcaSimpleSignerInfoVerifierBuilder().build(inspection.tsaCertificate()));
-        } catch (Exception e) {
-            return fail(SignatureExceptionCode.TSA_SIGNATURE_INVALID, "Assinatura CMS do carimbo inválida: " + e.getMessage());
-        }
+        // Assinatura CMS, ESSCertID, cadeia e revogação da TSA: EU DSS (dss-validation / tsa-token-verification)
         return Optional.empty();
     }
 

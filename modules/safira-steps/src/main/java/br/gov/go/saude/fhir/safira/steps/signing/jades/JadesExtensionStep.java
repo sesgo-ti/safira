@@ -13,11 +13,13 @@ import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
 import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
-import br.gov.go.saude.fhir.safira.jades.adapter.TspSources;
+import br.gov.go.saude.fhir.safira.jades.adapter.TspSourceFactory;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.TsaPolicy;
 import br.gov.go.saude.fhir.safira.steps.signing.SigningKeys;
 import eu.europa.esig.dss.spi.exception.DSSExternalResourceException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Passo {@code jades-extension}: etapas 12 e 13 do caso de uso de criação.
@@ -34,14 +36,24 @@ import eu.europa.esig.dss.spi.exception.DSSExternalResourceException;
 @StepId("jades-extension")
 public class JadesExtensionStep implements SigningStep {
 
+    private static final Logger log = LoggerFactory.getLogger(JadesExtensionStep.class);
+
     public static final String TSA_POLICY_OID_KEY = "tsaPolicyOid";
 
     private final JadesExtensionService extensionService;
     private final SafiraPolicyProperties policy;
+    private final TspSourceFactory tspSources;
 
+    /** Carimbo pela TSA online de {@code safira.operational.verification.tsa-url}. */
     public JadesExtensionStep(JadesExtensionService extensionService, SafiraPolicyProperties policy) {
+        this(extensionService, policy, TspSourceFactory.online());
+    }
+
+    public JadesExtensionStep(JadesExtensionService extensionService, SafiraPolicyProperties policy,
+                              TspSourceFactory tspSources) {
         this.extensionService = extensionService;
         this.policy = policy;
+        this.tspSources = tspSources;
     }
 
     @Override
@@ -61,17 +73,19 @@ public class JadesExtensionStep implements SigningStep {
         String tsaUrl = verification.tsaUrl();
         try {
             String extended = extensionService.extendToBaselineT(jws,
-                    TspSources.online(tsaUrl, verification.tsaTimeout(), tsaPolicy.oid()));
+                    tspSources.create(tsaUrl, verification.tsaTimeout(), tsaPolicy.oid()));
             return StepResult.success(getName(), context.toBuilder()
                     .attribute(SigningKeys.JWS_FINAL, extended)
                     .attribute(TSA_POLICY_OID_KEY, tsaPolicy.oid())
                     .build());
         } catch (DSSExternalResourceException e) {
+            log.warn("TSA inacessível em {}", tsaUrl, e);
             return StepResult.failure(getName(), SignatureExceptionCode.TSA_UNAVAILABLE,
-                    "TSA inacessível em " + tsaUrl + ": " + e.getMessage(), context);
+                    "TSA inacessível em " + tsaUrl + ".", context);
         } catch (Exception e) {
+            log.warn("Resposta da TSA rejeitada em {}", tsaUrl, e);
             return StepResult.failure(getName(), SignatureExceptionCode.TSA_INVALID_RESPONSE,
-                    "Resposta da TSA rejeitada (status, nonce, imprint ou política): " + e.getMessage(), context);
+                    "Resposta da TSA rejeitada (status, nonce, imprint ou política).", context);
         }
     }
 }

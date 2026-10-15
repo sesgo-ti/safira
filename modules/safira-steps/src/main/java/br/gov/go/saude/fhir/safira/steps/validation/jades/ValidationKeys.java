@@ -21,6 +21,12 @@ public final class ValidationKeys {
     /** Identidade do titular extraída do certificado ({@code SignerIdentity}). */
     public static final String SIGNER_IDENTITY = "signerIdentity";
 
+    /** Snapshot do acervo de confiança capturado uma vez por operação ({@code AcervoDeConfianca}). */
+    public static final String ACERVO = "acervo";
+
+    /** Evidência de que o {@code dss-validation} aprovou a assinatura (Boolean); exigida por {@code validation-outcome}. */
+    public static final String DSS_APROVADO = "dssAprovado";
+
     private ValidationKeys() {
     }
 }

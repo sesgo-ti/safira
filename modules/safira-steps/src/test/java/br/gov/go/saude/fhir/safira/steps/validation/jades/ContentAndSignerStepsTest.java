@@ -10,42 +10,33 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.json.JsonValue.JsonString;
 import br.gov.go.saude.fhir.safira.engine.domain.json.LosslessJson;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationContext;
-import br.gov.go.saude.fhir.safira.jades.fixture.TestPki;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
 import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
+import br.gov.go.saude.fhir.safira.steps.support.FonteDeTeste;
 import br.gov.go.saude.fhir.safira.steps.support.SignedArtifactFixture;
 import br.gov.go.saude.fhir.safira.steps.support.TestConfigs;
-import br.gov.go.saude.truststore.icpbrasil.model.ValidationResult;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.PkixCertificateValidator;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterial;
-import br.gov.go.saude.truststore.icpbrasil.service.pkix.TrustMaterialSource;
+import br.gov.go.saude.fhir.safira.steps.trust.VerificadoresDss;
+import br.gov.go.saude.fhir.safira.jades.adapter.CertificateVerifierFactory;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.security.cert.CertPathValidatorException.BasicReason;
-import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
-/** Steps {@code content-integrity}, {@code signer-certificate} e {@code current-chain}. */
+/** Steps {@code content-integrity} e {@code signer-certificate}. */
 class ContentAndSignerStepsTest {
 
-    private static TestPki pki;
+    private static PkiIcpSimulada pki;
     private static SafiraPolicyProperties policy;
-    private static TrustMaterialSource trust;
+    private static FonteDeConfianca trust;
     private static ValidationContext structured;
 
     @BeforeAll
     static void setUp() {
-        pki = TestPki.create();
+        pki = PkiIcpSimulada.criar();
         policy = TestConfigs.policy(pki);
-        trust = () -> Optional.of(TrustMaterial.of(List.of(pki.caCert)));
+        trust = FonteDeTeste.com(pki.raiz(), pki.ac());
         ValidationContext context = SignedArtifactFixture.validationContext(SignedArtifactFixture.sign(pki, policy));
         context = new SignatureBindingStep().execute(context).context();
         structured = new JwsStructureStep().execute(context).context();
@@ -54,6 +45,13 @@ class ContentAndSignerStepsTest {
     private static SignatureExceptionCode code(StepResult<ValidationContext> result) {
         assertThat(result).isInstanceOf(StepResult.Failure.class);
         return ((StepResult.Failure<ValidationContext>) result).code();
+    }
+
+    private static StepResult<ValidationContext> signer(SafiraPolicyProperties properties, FonteDeConfianca source,
+                                                        ValidationContext context) {
+        return new SignerCertificateStep(properties, new VerificadoresDss(source,
+                CertificateVerifierFactory.offline(null, null)))
+                .execute(SignedArtifactFixture.comAcervo(context, source));
     }
 
     @Test
@@ -84,7 +82,7 @@ class ContentAndSignerStepsTest {
 
     @Test
     void shouldAcceptSignerCertificate() {
-        StepResult<ValidationContext> result = new SignerCertificateStep(policy, trust).execute(structured);
+        StepResult<ValidationContext> result = signer(policy, trust, structured);
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.context().getAttribute(ValidationKeys.SIGNER_IDENTITY, Object.class)).isPresent();
@@ -96,7 +94,7 @@ class ContentAndSignerStepsTest {
                 .signatureJson(structured.getSignatureJson().with("when", new JsonString("2026-01-01T00:00:00Z")))
                 .build();
 
-        assertThat(code(new SignerCertificateStep(policy, trust).execute(changed)))
+        assertThat(code(signer(policy, trust, changed)))
                 .isEqualTo(SignatureExceptionCode.TEMPORAL_IAT_INVALID);
     }
 
@@ -106,52 +104,40 @@ class ContentAndSignerStepsTest {
                 .referenceTimestamp(structured.getAttribute(ValidationKeys.IAT, Long.class).orElseThrow() - 1)
                 .build();
 
-        assertThat(code(new SignerCertificateStep(policy, trust).execute(earlier)))
+        assertThat(code(signer(policy, trust, earlier)))
                 .isEqualTo(SignatureExceptionCode.TEMPORAL_IAT_INVALID);
     }
 
     @Test
-    void shouldRejectRootOutsideTrustStore() {
-        TrustMaterialSource other = () -> Optional.of(TrustMaterial.of(List.of(TestPki.create().caCert)));
+    void shouldLeaveRootTrustToDssWhenProfileAccepts() {
+        FonteDeConfianca other = FonteDeTeste.com(PkiIcpSimulada.criar().raiz());
 
-        assertThat(code(new SignerCertificateStep(policy, other).execute(structured)))
+        assertThat(signer(policy, other, structured).isSuccess()).isTrue();
+    }
+
+    @Test
+    void shouldReportNotIcpBrasilWhenRootIsOutsideAcervoAndIssuerNotInAllowlist() {
+        PkiIcpSimulada other = PkiIcpSimulada.criar();
+        FonteDeConfianca otherAcervo = FonteDeTeste.com(other.raiz(), other.ac());
+
+        assertThat(code(signer(TestConfigs.policy(other), otherAcervo, structured)))
                 .isEqualTo(SignatureExceptionCode.CERT_NOT_ICP_BRASIL);
     }
 
     @Test
     void shouldReportPolicyComplianceWhenLeafPolicyNotInAllowlist() {
-        TestPki other = TestPki.create();
+        PkiIcpSimulada other = PkiIcpSimulada.criar();
 
-        assertThat(code(new SignerCertificateStep(TestConfigs.policy(other), trust).execute(structured)))
+        assertThat(code(signer(TestConfigs.policy(other), trust, structured)))
                 .isEqualTo(SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED);
     }
 
     @Test
     void shouldRejectSignatureWhoDifferentFromCertificate() {
-        String who = LosslessJson.write(structured.getSignatureJson()).replace(TestPki.TEST_CPF, "11144477735");
+        String who = LosslessJson.write(structured.getSignatureJson()).replace(PkiIcpSimulada.CPF, "11144477735");
 
-        assertThat(code(new SignerCertificateStep(policy, trust).execute(structured.toBuilder()
+        assertThat(code(signer(policy, trust, structured.toBuilder()
                 .signatureJson(LosslessJson.parseObject(who)).build())))
                 .isEqualTo(SignatureExceptionCode.VALIDATION_POLICY_COMPLIANCE_FAILED);
-    }
-
-    @Test
-    void shouldValidateCurrentChainForBaselineB() {
-        PkixCertificateValidator validator = mock(PkixCertificateValidator.class);
-        when(validator.validate(any(), anyCollection()))
-                .thenReturn(new ValidationResult.Untrusted(BasicReason.EXPIRED, "expirado"));
-
-        assertThat(code(new CurrentChainStep(validator).execute(structured))).isEqualTo(SignatureExceptionCode.CERT_EXPIRED);
-    }
-
-    @Test
-    void shouldSkipCurrentChainForBaselineT() {
-        PkixCertificateValidator validator = mock(PkixCertificateValidator.class);
-
-        StepResult<ValidationContext> result = new CurrentChainStep(validator)
-                .execute(structured.toBuilder().attribute(ValidationKeys.JADES_LEVEL, JadesLevel.B_T).build());
-
-        assertThat(result.isSuccess()).isTrue();
-        verify(validator, never()).validate(any(), anyCollection());
     }
 }

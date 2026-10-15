@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: Apache-2.0
+  Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>br.gov.go.saude.fhir</groupId>
+        <artifactId>safira</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>safira-cli</artifactId>
+    <packaging>jar</packaging>
+    <name>Safira :: CLI</name>
+    <description>Linha de comando do Safira (assinar e validar) sobre os mesmos serviços do safira-rest, no modo ICP-Brasil (adaptador do safira-app) ou simulação (PKI do safira-simulador).</description>
+
+    <dependencies>
+        <!-- Serviços de assinatura e validação (mesmo pipeline da API) -->
+        <dependency>
+            <groupId>br.gov.go.saude.fhir</groupId>
+            <artifactId>safira-rest</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Modo icpbrasil: adaptador da icpbrasil-truststore (jar comum do app, biblioteca) -->
+        <dependency>
+            <groupId>br.gov.go.saude.fhir</groupId>
+            <artifactId>safira-app</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Modo simulacao: PKI simulada persistida (jar comum do simulador, biblioteca) -->
+        <dependency>
+            <groupId>br.gov.go.saude.fhir</groupId>
+            <artifactId>safira-simulador</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>info.picocli</groupId>
+            <artifactId>picocli</artifactId>
+            <version>${picocli.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Exemplos de Bundle/Provenance da política 0.2.0 -->
+        <dependency>
+            <groupId>br.gov.go.saude.fhir</groupId>
+            <artifactId>safira-rest</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Nenhum teste grava no ~ real nem acessa o ITI: PKI simulada e acervo em target/ -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <user.home>${project.build.directory}/home</user.home>
+                        <icpbrasil-truststore.bootstrap.enabled>false</icpbrasil-truststore.bootstrap.enabled>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <!-- JAR executável da CLI (safira-cli-*-exec.jar) -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <classifier>exec</classifier>
+                    <mainClass>br.gov.go.saude.fhir.safira.cli.SafiraCli</mainClass>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- SHA-256 do JAR executável (safira-cli-*-exec.jar.sha256, só o hash) e conferência no build -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.2.0</version>
+                <executions>
+                    <execution>
+                        <id>checksum-exec</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <property name="exec.jar"
+                                          value="${project.build.directory}/${project.build.finalName}-exec.jar"/>
+                                <checksum file="${exec.jar}" algorithm="SHA-256" fileext=".sha256"/>
+                                <checksum file="${exec.jar}" algorithm="SHA-256" fileext=".sha256"
+                                          verifyproperty="exec.checksum.ok"/>
+                                <fail message="SHA-256 do JAR executável não confere com o arquivo .sha256">
+                                    <condition>
+                                        <not>
+                                            <equals arg1="${exec.checksum.ok}" arg2="true"/>
+                                        </not>
+                                    </condition>
+                                </fail>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

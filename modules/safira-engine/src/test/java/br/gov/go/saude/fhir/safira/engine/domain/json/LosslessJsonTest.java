@@ -98,4 +98,10 @@ class LosslessJsonTest {
         assertThat(LosslessJson.write(changed)).isEqualTo("{\"b\":2}");
         assertThat(LosslessJson.write(object)).isEqualTo("{\"a\":1,\"b\":2}");
     }
+
+    @Test
+    void shouldNotEchoBodyFragmentInExceptionMessageWhenJsonIsInvalid() {
+        assertThatThrownBy(() -> LosslessJson.parse("{\"nome\": SEGREDO_PHI}"))
+                .isInstanceOfSatisfying(LosslessJsonException.class, e -> assertThat(e.getMessage()).doesNotContain("SEGREDO_PHI"));
+    }
 }

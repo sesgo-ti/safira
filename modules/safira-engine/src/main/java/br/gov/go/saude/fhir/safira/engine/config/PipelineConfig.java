@@ -10,10 +10,12 @@ import br.gov.go.saude.fhir.safira.engine.domain.PipelineExecutor;
 import br.gov.go.saude.fhir.safira.engine.domain.Step;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.PipelineDefinition;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.PipelineKey;
+import br.gov.go.saude.fhir.safira.engine.domain.pipelines.RequiredSteps;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepRegistry;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
 import br.gov.go.saude.fhir.safira.engine.domain.validation.ValidationStep;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -42,11 +44,17 @@ public class PipelineConfig {
                 .toList();
     }
 
+    /**
+     * Resolve os pipelines do YAML e confere, na partida, os {@link RequiredSteps} declarados pelos
+     * módulos de steps: pipeline sem um step obrigatório (ou fora de ordem) impede a partida.
+     */
     @Bean
     public StepRegistry stepRegistry(
             List<Step<?>> availableSteps,
-            List<PipelineDefinition> definitions) {
+            List<PipelineDefinition> definitions,
+            ObjectProvider<RequiredSteps> requiredSteps) {
 
+        RequiredSteps.verificar(definitions, requiredSteps.orderedStream().toList());
         Map<String, Step<?>> stepIndex = indexStepsByAnnotation(availableSteps);
         Map<PipelineKey, List<Step<?>>> resolvedPipelines = resolvePipelines(definitions, stepIndex);
 
