@@ -84,18 +84,25 @@ não por um monitoramento contínuo.
 
 A auto-configuração da lib **pode** expor um health indicator (`trustStoreCache`)
 em `/actuator/health`, com os estados `VALID`/`CRITICAL`/`EXPIRED`/`UNAVAILABLE`,
-mas isso depende do Spring Boot Actuator estar no classpath
+condicionado a `org.springframework.boot.actuate.health.HealthIndicator`
 (`HealthConfiguration` da lib é `@ConditionalOnClass(HealthIndicator.class)`).
-**O `safira-rest` não depende de `spring-boot-starter-actuator` hoje**, então esse
-endpoint **não existe** na aplicação como está: não há hoje forma de observar o
-estado do acervo via HTTP. Para ativá-lo, adicione a dependência
-`spring-boot-starter-actuator` ao `modules/safira-rest/pom.xml`.
 
-Com o Actuator presente, o significado de cada estado e o que fazer em caso de
-`CRITICAL`/`EXPIRED` está no
-[manual de monitoramento da lib](https://github.com/sesgo-ti/icpbrasil-truststore/blob/main/docs/manual-monitoramento.md);
-o indicador é o mesmo tanto no uso embutido (biblioteca) quanto no modo
-microsserviço standalone a que o manual se refere primariamente.
+**Essa classe não existe no Actuator do Spring Boot 4**, a versão que o Safira usa
+(o pacote `org.springframework.boot.actuate.health` foi removido/reestruturado;
+conferido inspecionando o jar `spring-boot-actuator:4.0.7` diretamente). Isso
+significa que simplesmente adicionar `spring-boot-starter-actuator` ao
+`modules/safira-rest/pom.xml` **não ativa** esse indicator como numa aplicação
+Spring Boot 3: a introspecção do bean tentaria carregar
+`TrustStoreCacheHealthIndicator`, que implementa uma interface inexistente no
+classpath, e derruba o contexto na subida. Hoje, com a versão 0.0.1 da lib, não há
+como observar o estado detalhado do acervo (`VALID`/`CRITICAL`/`EXPIRED`/
+`UNAVAILABLE`) via HTTP; só os endpoints genéricos do Actuator
+(`health`/`readiness`/`liveness`) funcionariam, sem esse detalhe.
+
+Se uma versão futura da lib atualizar esse indicator para o Actuator do Spring
+Boot 4, o significado de cada estado e o que fazer em caso de `CRITICAL`/`EXPIRED`
+está no
+[manual de monitoramento da lib](https://github.com/sesgo-ti/icpbrasil-truststore/blob/main/docs/manual-monitoramento.md).
 
 ## Para desenvolvimento local
 
