@@ -29,6 +29,17 @@ public class VerificadoresDss {
     private record Geracao(String id, Acervo fontes) {
     }
 
+    /**
+     * O que o DSS usa da geração vigente.
+     *
+     * @param geracao        geração do acervo
+     * @param raizes         raízes na fonte confiável do DSS
+     * @param intermediarias ACs candidatas à cadeia
+     * @param ignorados      certificados do acervo que o DSS não representa
+     */
+    public record Uso(String geracao, int raizes, int intermediarias, int ignorados) {
+    }
+
     private final FonteDeConfianca fonte;
     private final CertificateVerifierFactory factory;
     private final AtomicReference<Geracao> geracao = new AtomicReference<>();
@@ -44,6 +55,15 @@ public class VerificadoresDss {
      */
     public Optional<AcervoDeConfianca> acervoAtual() {
         return fonte.atual().filter(this::utilizavel);
+    }
+
+    /** Contagens do que o DSS usa do {@linkplain #acervoAtual() acervo vigente}; vazio quando indisponível. */
+    public Optional<Uso> usoAtual() {
+        return acervoAtual().map(acervo -> {
+            Acervo fontes = fontes(acervo);
+            return new Uso(acervo.geracao(), fontes.trusted().getCertificates().size(), fontes.cas().size(),
+                    fontes.ignorados());
+        });
     }
 
     /** Se ao menos uma raiz do snapshot é representável pelo DSS; sem ela, o acervo é indisponível. */

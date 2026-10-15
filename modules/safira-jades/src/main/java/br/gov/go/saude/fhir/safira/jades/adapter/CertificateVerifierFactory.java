@@ -105,11 +105,16 @@ public final class CertificateVerifierFactory {
      */
     public static Acervo acervo(Collection<X509Certificate> roots, Collection<X509Certificate> cas) {
         CommonTrustedCertificateSource trusted = new CommonTrustedCertificateSource();
-        roots.forEach(root -> representavel(root, "raiz").ifPresent(trusted::addCertificate));
+        int ignorados = 0;
+        for (X509Certificate root : roots) {
+            Optional<CertificateToken> token = representavel(root, "raiz");
+            token.ifPresent(trusted::addCertificate);
+            ignorados += token.isEmpty() ? 1 : 0;
+        }
         List<X509Certificate> usableCas = cas.stream()
                 .filter(ca -> representavel(ca, "intermediária").isPresent())
                 .toList();
-        return new Acervo(trusted, usableCas);
+        return new Acervo(trusted, usableCas, ignorados + cas.size() - usableCas.size());
     }
 
     private static Optional<CertificateToken> representavel(X509Certificate certificate, String papel) {
@@ -179,10 +184,11 @@ public final class CertificateVerifierFactory {
      * alterada depois de pronta, como admite a doc. do DSS §20.2.1); as ACs ficam como certificados
      * e viram fonte adjunta e tokens novos a cada {@link #create}.
      *
-     * @param trusted raízes confiáveis
-     * @param cas     ACs candidatas à cadeia
+     * @param trusted   raízes confiáveis
+     * @param cas       ACs candidatas à cadeia
+     * @param ignorados certificados do acervo (raízes e ACs) que o DSS não representa
      */
-    public record Acervo(CommonTrustedCertificateSource trusted, List<X509Certificate> cas) {
+    public record Acervo(CommonTrustedCertificateSource trusted, List<X509Certificate> cas, int ignorados) {
 
         public Acervo {
             cas = List.copyOf(cas);

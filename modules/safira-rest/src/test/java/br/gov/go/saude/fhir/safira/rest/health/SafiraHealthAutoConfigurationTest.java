@@ -62,4 +62,19 @@ class SafiraHealthAutoConfigurationTest {
                 .run(context -> assertThat(context.getBean(FonteDeConfiancaHealthIndicator.class).health().getStatus())
                         .isEqualTo(Status.UP));
     }
+
+    @Test
+    void shouldReportCountsUsedByDssWhenAcervoHasUnsupportedCertificate() {
+        PkiIcpSimulada pki = PkiIcpSimulada.criar();
+        AcervoDeConfianca misto = new AcervoDeConfianca("v7", List.of(CertificadosIcpBrasilReais.raizV7(), pki.raiz()),
+                List.of(pki.ac()));
+
+        runner.withBean(VerificadoresDss.class, () -> verificadores(() -> Optional.of(misto)))
+                .run(context -> assertThat(context.getBean(FonteDeConfiancaHealthIndicator.class).health().getDetails())
+                        .containsEntry("geracao", "v7")
+                        .containsEntry("raizes", 1)
+                        .containsEntry("intermediarias", 1)
+                        .containsEntry("ignorados", 1)
+                        .hasSize(4));
+    }
 }

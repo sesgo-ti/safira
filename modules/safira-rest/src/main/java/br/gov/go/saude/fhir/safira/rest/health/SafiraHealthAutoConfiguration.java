@@ -24,6 +24,6 @@ public class SafiraHealthAutoConfiguration {
     @Bean("fonteDeConfianca")
     @ConditionalOnBean(VerificadoresDss.class)
     public FonteDeConfiancaHealthIndicator fonteDeConfiancaHealthIndicator(VerificadoresDss verificadores) {
-        return new FonteDeConfiancaHealthIndicator(verificadores::acervoAtual);
+        return new FonteDeConfiancaHealthIndicator(verificadores::usoAtual);
     }
 }
