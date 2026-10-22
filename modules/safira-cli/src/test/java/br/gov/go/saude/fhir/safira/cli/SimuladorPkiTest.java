@@ -74,7 +74,9 @@ class SimuladorPkiTest {
     private static Process simuladorPkiEmProcesso(Path pki, Path saida) throws Exception {
         String java = ProcessHandle.current().info().command().orElse(Path.of(System.getProperty("java.home"), "bin",
                 "java").toString());
-        return new ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), SafiraCli.class.getName(),
+        String classpath = GerenciadorDoServidor.classpathEmArquivo(saida.resolveSibling(saida.getFileName() + ".args"),
+                System.getProperty("java.class.path"));
+        return new ProcessBuilder(java, classpath, SafiraCli.class.getName(),
                 "simulador", "pki", "--pki-dir", pki.toString())
                 .redirectErrorStream(true)
                 .redirectOutput(saida.toFile())

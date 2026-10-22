@@ -12,8 +12,10 @@ import br.gov.go.saude.truststore.icpbrasil.config.TrustStoreAutoConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.net.InetAddress;
 import java.net.ServerSocket;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -73,6 +75,22 @@ class ServidorOpcoesTest {
                 "--safira.simulacao.enabled=false",
                 "--spring.autoconfigure.exclude=" + SafiraSimulacaoAutoConfiguration.class.getName());
         assertThat(icpbrasil).anyMatch(argumento -> argumento.startsWith("--icpbrasil-truststore.filesystem.base-dir="));
+    }
+
+    @Test
+    void shouldPassClasspathInArgumentFileWhenNotRunningFromExecutableJar() throws Exception {
+        GerenciadorDoServidor.Partida partida = new GerenciadorDoServidor.Partida(Modo.SIMULACAO, diretorio, 8081,
+                null, null, Duration.ofSeconds(30), null);
+
+        List<String> comando = GerenciadorDoServidor.comando(partida);
+
+        Path argumentos = diretorio.resolve("servidor.args");
+        assertThat(comando).doesNotContain("-cp").contains("@" + argumentos,
+                SafiraCli.class.getName(), "servidor", "executar");
+        assertThat(String.join(" ", comando).length()).isLessThan(4096);
+        assertThat(Files.readString(argumentos)).startsWith("-cp \"")
+                .contains(System.getProperty("java.class.path").split(File.pathSeparator)[0]
+                        .replace("\\", "\\\\"));
     }
 
     @Test

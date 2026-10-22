@@ -16,6 +16,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -40,6 +41,7 @@ final class GerenciadorDoServidor {
 
     static final String VARIAVEL_PORTA = "SAFIRA_PORT";
     static final String PRONTIDAO = "/actuator/health/readiness";
+    static final String ARGUMENTOS = "servidor.args";
 
     private static final Duration INTERVALO = Duration.ofMillis(250);
     private static final Duration TIMEOUT_DA_SONDA = Duration.ofSeconds(2);
@@ -270,10 +272,12 @@ final class GerenciadorDoServidor {
     /**
      * Comando do filho: a mesma {@code java} e o mesmo classpath deste processo, rodando
      * {@code safira servidor executar}. Do jar executável do Spring Boot, {@code -jar}; senão (IDE,
-     * testes), {@code -cp} com a classe principal da CLI. Com {@code nohup} quando existir, o servidor
-     * sobrevive ao fechamento do terminal ({@code nohup} faz {@code exec}: o PID é o da JVM).
+     * testes), o classpath vai num arquivo de argumentos ({@code @servidor.args}, que o lançador do
+     * {@code java} expande) com a classe principal da CLI: um {@code -cp} longo passaria do limite da linha
+     * de comando do Windows (32 K). Com {@code nohup} quando existir, o servidor sobrevive ao fechamento do
+     * terminal ({@code nohup} faz {@code exec}: o PID é o da JVM).
      */
-    static List<String> comando(Partida partida) {
+    static List<String> comando(Partida partida) throws IOException {
         List<String> comando = new ArrayList<>();
         Path nohup = Path.of("/usr/bin/nohup");
         if (Files.isExecutable(nohup)) {
@@ -286,8 +290,7 @@ final class GerenciadorDoServidor {
             comando.add("-jar");
             comando.add(Path.of(classpath).toAbsolutePath().toString());
         } else {
-            comando.add("-cp");
-            comando.add(classpath);
+            comando.add(classpathEmArquivo(partida.diretorio().resolve(ARGUMENTOS), classpath));
             comando.add(SafiraCli.class.getName());
         }
         comando.addAll(List.of("servidor", "executar", "--modo", partida.modo().nome(),
@@ -302,6 +305,15 @@ final class GerenciadorDoServidor {
             comando.addAll(List.of("--ociosidade", partida.ociosidade().toString()));
         }
         return comando;
+    }
+
+    /** Grava {@code -cp <classpath>} como arquivo de argumentos do {@code java} (0600) e devolve {@code @<arquivo>}. */
+    static String classpathEmArquivo(Path arquivo, String classpath) throws IOException {
+        EstadoDoServidor.criarPrivado(arquivo);
+        // o lançador lê o arquivo na codificação nativa; entre aspas, a barra invertida escapa (Windows a dobra)
+        Files.writeString(arquivo, "-cp \"" + classpath.replace("\\", "\\\\") + "\"" + System.lineSeparator(),
+                Charset.forName(System.getProperty("native.encoding")));
+        return "@" + arquivo;
     }
 
     /**
