@@ -10,6 +10,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -66,8 +68,11 @@ class ServidorTest {
     @AfterEach
     void encerrar() {
         Cli.executar("servidor", "parar", "--modo", "simulacao", "--estado-dir", estado.toString());
-        pids.forEach(pid -> ProcessHandle.of(pid).ifPresent(ProcessHandle::destroyForcibly));
-        servidoresFilhos().forEach(ProcessHandle::destroyForcibly);
+        List<ProcessHandle> restantes = new ArrayList<>(servidoresFilhos());
+        pids.forEach(pid -> ProcessHandle.of(pid).ifPresent(restantes::add));
+        restantes.forEach(ProcessHandle::destroyForcibly);
+        // no Windows o diretório temporário só pode ser apagado depois que o filho soltar o log
+        restantes.forEach(processo -> await().atMost(Duration.ofSeconds(15)).until(() -> !processo.isAlive()));
     }
 
     /**
@@ -79,6 +84,15 @@ class ServidorTest {
         return ProcessHandle.current().descendants().filter(ProcessHandle::isAlive)
                 .filter(filho -> filho.info().command().filter(java::equals).isPresent())
                 .toList();
+    }
+
+    /** Processo vivo alheio ao Safira (outro executável), por 60 s. */
+    private static Process processoAlheio() throws IOException {
+        List<String> comando = OS.WINDOWS.isCurrentOs()
+                ? List.of("ping", "-n", "61", "127.0.0.1")
+                : List.of("sleep", "60");
+        return new ProcessBuilder(comando).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .start();
     }
 
     private Resultado iniciar(String... extras) {
@@ -124,6 +138,13 @@ class ServidorTest {
             }
         }
         assertThat(resultado.err()).contains("SIMULAÇÃO");
+    }
+
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void shouldRestrictStateFilesToOwnerOnPosix() throws IOException {
+        assertThat(iniciar().saida()).isZero();
+
         assertThat(Files.getPosixFilePermissions(estado.resolve("simulacao")))
                 .isEqualTo(PosixFilePermissions.fromString("rwx------"));
         assertThat(Files.getPosixFilePermissions(arquivoDeEstado()))
@@ -266,7 +287,7 @@ class ServidorTest {
 
     @Test
     void shouldDiscardCorruptedStateAsOrphanWithoutKillingAnyProcess() throws Exception {
-        Process alheio = new ProcessBuilder("sleep", "60").start();
+        Process alheio = processoAlheio();
         try {
             Files.createDirectories(arquivoDeEstado().getParent());
             List<Resultado> resultados = new ArrayList<>();
@@ -295,7 +316,7 @@ class ServidorTest {
 
     @Test
     void shouldNotKillReusedPidWhenProcessStartIsUnknown() throws Exception {
-        Process alheio = new ProcessBuilder("sleep", "60").start();
+        Process alheio = processoAlheio();
         try {
             gravarEstado(alheio.pid(), null);
 
@@ -312,7 +333,7 @@ class ServidorTest {
 
     @Test
     void shouldNotKillProcessWhoseCommandIsNotTheServer() throws Exception {
-        Process alheio = new ProcessBuilder("sleep", "60").start();
+        Process alheio = processoAlheio();
         try {
             gravarEstado(alheio.pid(), alheio.info().startInstant().orElseThrow());
 

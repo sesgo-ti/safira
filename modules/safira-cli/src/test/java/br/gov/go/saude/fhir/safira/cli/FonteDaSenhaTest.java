@@ -6,6 +6,8 @@
 package br.gov.go.saude.fhir.safira.cli;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
@@ -14,6 +16,7 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFileAttributeView;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Map;
 
@@ -35,7 +38,9 @@ class FonteDaSenhaTest {
 
     private FonteDaSenha arquivo(String conteudo, String permissoes) throws Exception {
         Path arquivo = Files.writeString(diretorio.resolve("senha.txt"), conteudo);
-        Files.setPosixFilePermissions(arquivo, PosixFilePermissions.fromString(permissoes));
+        if (Files.getFileStore(arquivo).supportsFileAttributeView(PosixFileAttributeView.class)) {
+            Files.setPosixFilePermissions(arquivo, PosixFilePermissions.fromString(permissoes));
+        }
         FonteDaSenha fonte = new FonteDaSenha();
         fonte.arquivo = arquivo;
         return fonte;
@@ -48,6 +53,7 @@ class FonteDaSenhaTest {
     }
 
     @Test
+    @DisabledOnOs(OS.WINDOWS)
     void shouldWarnWhenPasswordFileIsReadableByOthers() throws Exception {
         assertThat(ler(arquivo("segredo\n", "rw-r--r--"))).isEqualTo("segredo");
         assertThat(avisos.toString()).contains("senha.txt").contains("chmod 600");
