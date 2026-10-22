@@ -10,8 +10,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -70,17 +72,45 @@ class SimuladorPkiTest {
         assertThat(resultado.json().get("situacao").asText()).isEqualTo("REUTILIZADA");
     }
 
-    /** {@code safira simulador pki} num processo próprio (travas de arquivo valem entre processos). */
-    private static Process simuladorPkiEmProcesso(Path pki, Path saida) throws Exception {
+    @Test
+    void shouldWriteStdoutAsUtf8WhenConsoleEncodingIsNotUtf8() throws Exception {
+        Path pki = diretorio.resolve("pki");
+        Path saida = diretorio.resolve("latin1.json");
+        Process processo = simuladorPkiEmProcesso(pki, saida, "-Dstdout.encoding=ISO-8859-1");
+        assertThat(processo.waitFor(60, TimeUnit.SECONDS)).isTrue();
+
+        String json = StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(Files.readAllBytes(saida))).toString();
+
+        assertThat(processo.exitValue()).isZero();
+        assertThat(json).contains("SIMULAÇÃO");
+    }
+
+    /**
+     * {@code safira simulador pki} num processo próprio (travas de arquivo valem entre processos): stdout em
+     * {@code saida} e stderr em {@code saida.err}.
+     */
+    private static Process simuladorPkiEmProcesso(Path pki, Path saida, String... opcoesDaJvm) throws Exception {
         String java = ProcessHandle.current().info().command().orElse(Path.of(System.getProperty("java.home"), "bin",
                 "java").toString());
         String classpath = GerenciadorDoServidor.classpathEmArquivo(saida.resolveSibling(saida.getFileName() + ".args"),
                 System.getProperty("java.class.path"));
-        return new ProcessBuilder(java, classpath, SafiraCli.class.getName(),
-                "simulador", "pki", "--pki-dir", pki.toString())
-                .redirectErrorStream(true)
+        List<String> comando = new ArrayList<>(List.of(java));
+        comando.addAll(List.of(opcoesDaJvm));
+        comando.addAll(List.of(classpath, SafiraCli.class.getName(), "simulador", "pki", "--pki-dir", pki.toString()));
+        return new ProcessBuilder(comando)
                 .redirectOutput(saida.toFile())
+                .redirectError(erros(saida).toFile())
                 .start();
+    }
+
+    private static Path erros(Path saida) {
+        return saida.resolveSibling(saida.getFileName() + ".err");
+    }
+
+    /** stdout (UTF-8) e stderr (codificação do console) do processo. */
+    private static String textos(Path saida) throws Exception {
+        return Files.readString(saida, StandardCharsets.UTF_8)
+                + Files.readString(erros(saida), Charset.forName(System.getProperty("native.encoding")));
     }
 
     @Test
@@ -102,7 +132,7 @@ class SimuladorPkiTest {
             }
             List<String> textos = new ArrayList<>();
             for (Path saida : saidas) {
-                textos.add(Files.readString(saida, StandardCharsets.UTF_8));
+                textos.add(textos(saida));
             }
 
             assertThat(textos).allSatisfy(texto -> assertThat(texto).doesNotContain("em uso"));
@@ -130,7 +160,7 @@ class SimuladorPkiTest {
             }
             StringBuilder textos = new StringBuilder();
             for (Path saida : saidas) {
-                textos.append(Files.readString(saida, StandardCharsets.UTF_8));
+                textos.append(textos(saida));
             }
 
             assertThat(textos.toString()).doesNotContain("em uso").containsOnlyOnce("\"GERADA\"");

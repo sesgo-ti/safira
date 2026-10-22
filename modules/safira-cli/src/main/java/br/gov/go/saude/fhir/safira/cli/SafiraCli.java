@@ -16,7 +16,9 @@ import picocli.CommandLine.Spec;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
 /**
@@ -58,8 +60,10 @@ public final class SafiraCli implements Runnable {
     }
 
     public static void main(String[] args) {
-        // PrintWriter direto sobre o PrintStream: checkError() enxerga a falha do stdout (ex.: pipe fechado)
-        System.exit(linhaDeComando().setOut(new PrintWriter(System.out, true)).execute(args));
+        // stdout sempre em UTF-8 (o JSON do resultado, RFC 8259), qualquer que seja a codificação do console;
+        // checkError() do PrintWriter enxerga a falha do stdout (ex.: pipe fechado)
+        PrintWriter out = new PrintWriter(new OutputStreamWriter(System.out, StandardCharsets.UTF_8), true);
+        System.exit(linhaDeComando().setOut(out).execute(args));
     }
 
     /** Versão do artefato (gravada pelo Maven em {@value #RECURSO}; senão, do manifesto). */
