@@ -114,7 +114,7 @@ final class GerenciadorDoServidor {
             Path log = dir.resolve(EstadoDoServidor.LOG);
             Process processo = lancar(partida, log);
             EstadoDoServidor estado = new EstadoDoServidor(partida.modo(), processo.pid(), partida.porta(),
-                    inicioDe(processo), Instant.now(), log);
+                    inicioDe(processo), java(), Instant.now(), log);
             try {
                 estado.gravar(dir);
                 esperarProntidao(processo, estado, dir, partida.timeout());
@@ -279,8 +279,7 @@ final class GerenciadorDoServidor {
         if (Files.isExecutable(nohup)) {
             comando.add(nohup.toString());
         }
-        comando.add(ProcessHandle.current().info().command()
-                .orElse(Path.of(System.getProperty("java.home"), "bin", "java").toString()));
+        comando.add(java());
         comando.add("-Duser.home=" + System.getProperty("user.home"));
         String classpath = System.getProperty("java.class.path");
         if (jarExecutavel(classpath)) {
@@ -303,6 +302,15 @@ final class GerenciadorDoServidor {
             comando.addAll(List.of("--ociosidade", partida.ociosidade().toString()));
         }
         return comando;
+    }
+
+    /**
+     * O executável {@code java} deste processo, como o SO o informa: o filho roda o mesmo, e é com ele que
+     * a identidade do filho é conferida depois.
+     */
+    static String java() {
+        return ProcessHandle.current().info().command()
+                .orElse(Path.of(System.getProperty("java.home"), "bin", "java").toString());
     }
 
     /** Um único jar com {@code Start-Class} no manifesto: o jar executável do Spring Boot. */

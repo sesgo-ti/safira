@@ -32,14 +32,16 @@ import java.util.Set;
 
 /**
  * Estado de um servidor local em {@code <base>/<modo>/servidor.properties}: PID, porta, modo, instante de
- * início do processo e comando (identidade do PID, contra reuso) e caminho do log. O diretório é 0700 e os
- * arquivos 0600 (POSIX); a gravação é atômica.
+ * início e executável do processo (identidade do PID, contra reuso) e caminho do log. O diretório é 0700 e
+ * os arquivos 0600 (POSIX); a gravação é atômica.
  *
  * @param inicioDoProcesso instante de início do processo segundo o SO (nulo = desconhecido)
+ * @param comando          executável do processo segundo o SO, ex. o {@code java} (nulo = desconhecido)
  * @param iniciadoEm       instante em que a CLI subiu o servidor (nulo = desconhecido)
  * @param log              arquivo de log do servidor (nulo = desconhecido)
  */
-record EstadoDoServidor(Modo modo, long pid, int porta, Instant inicioDoProcesso, Instant iniciadoEm, Path log) {
+record EstadoDoServidor(Modo modo, long pid, int porta, Instant inicioDoProcesso, String comando, Instant iniciadoEm,
+                        Path log) {
 
     static final String ARQUIVO = "servidor.properties";
     static final String LOG = "servidor.log";
@@ -84,7 +86,7 @@ record EstadoDoServidor(Modo modo, long pid, int porta, Instant inicioDoProcesso
             Modo modo = new Modo.Conversor().convert(obrigatoria(propriedades, "modo"));
             return Optional.of(new EstadoDoServidor(modo, Long.parseLong(obrigatoria(propriedades, "pid")),
                     Integer.parseInt(obrigatoria(propriedades, "porta")), instante(propriedades, "inicioDoProcesso"),
-                    instante(propriedades, "iniciadoEm"),
+                    propriedades.getProperty("comando"), instante(propriedades, "iniciadoEm"),
                     propriedades.getProperty("log") != null ? Path.of(propriedades.getProperty("log")) : null));
         } catch (IOException | RuntimeException e) {
             throw new Ilegivel(arquivo);
@@ -112,6 +114,9 @@ record EstadoDoServidor(Modo modo, long pid, int porta, Instant inicioDoProcesso
         propriedades.setProperty("porta", String.valueOf(porta));
         if (inicioDoProcesso != null) {
             propriedades.setProperty("inicioDoProcesso", inicioDoProcesso.toString());
+        }
+        if (comando != null) {
+            propriedades.setProperty("comando", comando);
         }
         if (iniciadoEm != null) {
             propriedades.setProperty("iniciadoEm", iniciadoEm.toString());
@@ -145,12 +150,13 @@ record EstadoDoServidor(Modo modo, long pid, int porta, Instant inicioDoProcesso
     }
 
     /**
-     * O processo do estado, se vivo e com identidade confirmada: mesmo instante de início e comando
-     * {@code servidor executar --modo <modo>}. Identidade desconhecida (início ou comando indisponíveis)
-     * conta como NÃO confirmada: um PID reaproveitado por outro processo nunca é tomado pelo servidor.
+     * O processo do estado, se vivo e com identidade confirmada ({@link #identidadeConfirmada}). Identidade
+     * desconhecida conta como NÃO confirmada: um PID reaproveitado por outro processo nunca é tomado pelo
+     * servidor.
      */
     Optional<ProcessHandle> processo() {
-        return vivo().filter(this::mesmoProcesso);
+        return vivo().filter(processo -> identidadeConfirmada(processo.info().startInstant(),
+                processo.info().command(), processo.info().arguments()));
     }
 
     /** O processo com o PID do estado, se vivo, sem conferir a identidade. */
@@ -158,18 +164,23 @@ record EstadoDoServidor(Modo modo, long pid, int porta, Instant inicioDoProcesso
         return ProcessHandle.of(pid).filter(ProcessHandle::isAlive);
     }
 
-    private boolean mesmoProcesso(ProcessHandle processo) {
-        Optional<Instant> inicio = processo.info().startInstant();
-        return inicioDoProcesso != null && inicio.isPresent()
-                && inicio.get().truncatedTo(ChronoUnit.SECONDS).equals(inicioDoProcesso.truncatedTo(ChronoUnit.SECONDS))
-                && comandoDoServidor(processo.info(), modo);
+    /**
+     * Identidade do processo segundo o SO: mesmo instante de início (ao segundo) e mesmo executável gravados
+     * na partida; início ou executável ausentes (no estado ou no SO) = não confirmada. Os argumentos só são
+     * conferidos ({@code servidor executar --modo <modo>}) quando o JDK os fornece, e então completos: o
+     * Windows nunca os fornece e o Linux os omite quando a linha de comando passa do limite lido de
+     * {@code /proc} (a {@code commandLine()} truncada não é usada).
+     */
+    boolean identidadeConfirmada(Optional<Instant> inicio, Optional<String> executavel, Optional<String[]> argumentos) {
+        return inicioDoProcesso != null && comando != null
+                && inicio.map(instante -> instante.truncatedTo(ChronoUnit.SECONDS))
+                        .filter(inicioDoProcesso.truncatedTo(ChronoUnit.SECONDS)::equals).isPresent()
+                && executavel.filter(comando::equals).isPresent()
+                && argumentos.map(List::of).map(this::comandoDoServidor).orElse(true);
     }
 
-    /** Os argumentos (ou a linha de comando) contêm {@code servidor executar} e {@code --modo <modo>}. */
-    static boolean comandoDoServidor(ProcessHandle.Info info, Modo modo) {
-        List<String> argumentos = info.arguments().map(List::of)
-                .or(() -> info.commandLine().map(linha -> List.of(linha.split("\\s+"))))
-                .orElse(List.of());
+    /** Os argumentos contêm {@code servidor executar} e {@code --modo <modo>}. */
+    private boolean comandoDoServidor(List<String> argumentos) {
         return Collections.indexOfSubList(argumentos, List.of("servidor", "executar")) >= 0
                 && Collections.indexOfSubList(argumentos, List.of("--modo", modo.nome())) >= 0;
     }

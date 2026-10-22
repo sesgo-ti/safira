@@ -70,10 +70,14 @@ class ServidorTest {
         servidoresFilhos().forEach(ProcessHandle::destroyForcibly);
     }
 
-    /** Filhos vivos deste processo de teste que rodam {@code servidor executar}. */
+    /**
+     * Descendentes vivos deste processo de teste que rodam o mesmo {@code java} (os servidores): o executável
+     * o SO informa nos três sistemas, os argumentos não (Windows; Linux com classpath longo).
+     */
     private static List<ProcessHandle> servidoresFilhos() {
+        String java = ProcessHandle.current().info().command().orElseThrow();
         return ProcessHandle.current().descendants().filter(ProcessHandle::isAlive)
-                .filter(filho -> filho.info().arguments().map(List::of).orElse(List.of()).contains("executar"))
+                .filter(filho -> filho.info().command().filter(java::equals).isPresent())
                 .toList();
     }
 
