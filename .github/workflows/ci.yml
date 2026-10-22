@@ -50,3 +50,48 @@ jobs:
             **/target/site/jacoco/
             **/target/site/jacoco-aggregate/
           retention-days: 7
+
+  cli-multiplataforma:
+    name: CLI em ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      # sem conversão para CRLF no Windows: os recursos de teste ficam idênticos aos dos outros SOs
+      - name: Desligar conversão de fim de linha
+        run: git config --global core.autocrlf false
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Testes do safira-cli (Linux e macOS)
+        if: runner.os != 'Windows'
+        run: >-
+          ./mvnw -B --no-transfer-progress -pl modules/safira-cli -am
+          -Dtest='br/gov/go/saude/fhir/safira/cli/**/*Test' -Dsurefire.failIfNoSpecifiedTests=false test
+
+      - name: Testes do safira-cli (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: >-
+          mvnw.cmd -B --no-transfer-progress -pl modules/safira-cli -am
+          "-Dtest=br/gov/go/saude/fhir/safira/cli/**/*Test" -Dsurefire.failIfNoSpecifiedTests=false test
+
+      - name: Publicar relatório de testes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-cli-${{ matrix.os }}
+          path: modules/safira-cli/target/surefire-reports/
+          retention-days: 7
