@@ -21,11 +21,9 @@ public class TestVersionsService {
     VersionsService versionsService;
 
     @Test
-    void getVersionsSupportedCorrectly() {
+    void shouldSupportOnlyPolicy020() {
         Set<String> expectedSupportedVersions = Set.of(
-                "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|0.1.0",
-                "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|1.1.0",
-                "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|2.0.0"
+                "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0"
         );
 
         assertEquals(expectedSupportedVersions, versionsService.getVersionsSupported());

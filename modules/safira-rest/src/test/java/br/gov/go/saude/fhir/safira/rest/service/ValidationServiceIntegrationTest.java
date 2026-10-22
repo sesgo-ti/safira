@@ -7,50 +7,49 @@ package br.gov.go.saude.fhir.safira.rest.service;
 
 import br.gov.go.saude.fhir.safira.engine.domain.PipelineResult;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.OperationOutcome;
-import br.gov.go.saude.fhir.safira.engine.domain.fhir.Signature;
-import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
-import br.gov.go.saude.fhir.safira.rest.dto.SigningInput;
-import br.gov.go.saude.fhir.safira.rest.dto.ValidationInput;
-import br.gov.go.saude.fhir.truststore.icpbrasil.model.RevocationStatus;
-import br.gov.go.saude.fhir.truststore.icpbrasil.service.TrustStoreService;
-import br.gov.go.saude.fhir.truststore.icpbrasil.service.revocation.RevocationService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import br.gov.go.saude.fhir.safira.engine.domain.json.JsonValue.JsonArray;
+import br.gov.go.saude.fhir.safira.engine.domain.json.JsonValue.JsonObject;
+import br.gov.go.saude.fhir.safira.engine.domain.json.JsonValue.JsonString;
+import br.gov.go.saude.fhir.safira.engine.domain.json.LosslessJson;
+import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningResult;
+import br.gov.go.saude.fhir.safira.jades.JadesExtensionService;
+import br.gov.go.saude.fhir.safira.jades.adapter.TspSources;
+import br.gov.go.saude.fhir.safira.testkit.PkiIcpSimulada;
+import br.gov.go.saude.fhir.safira.testkit.TsaHttpLocal;
+import br.gov.go.saude.fhir.safira.steps.trust.FonteDeConfianca;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 
-import static br.gov.go.saude.fhir.safira.rest.service.IcpBrasilCertificateFixture.*;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 /**
- * Teste de integração E2E que executa a pipeline completa de assinatura (1.1.0) seguida
- * da pipeline de validação (1.1.0) via {@link SigningService} e {@link ValidationService}.
- *
- * <p>TrustStoreService e RevocationService são substituídos por mocks porque dependem de
- * infraestrutura externa (ICP-Brasil, OCSP/CRL) não disponível em CI. A âncora de confiança
- * é injetada via {@code @DynamicPropertySource} para que o step de validação da cadeia
- * reconheça o certificado raiz gerado em memória.
+ * Integração da validação JAdES-B-T: assinatura B-B produzida pelo {@link SigningService},
+ * estendida a B-T com a TSA local de teste e validada pelo {@link ValidationService} (política
+ * TSA e trust store TSA configurados, revogação e acervo da lib substituídos pela PKI de teste).
  */
 @SpringBootTest
+@Import(OfflineRevocationConfig.class)
 class ValidationServiceIntegrationTest {
 
-    private static final long REFERENCE_TS = Instant.now().getEpochSecond();
-    private static final String POLICY_URI =
-            "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|1.1.0";
+    static final TsaHttpLocal TSA = JadesSigningSystemTest.PKI.iniciarTsaHttp();
 
     @MockitoBean
-    TrustStoreService trustStoreService;
-
-    @MockitoBean
-    RevocationService revocationService;
+    FonteDeConfianca fonteDeConfianca;
 
     @Autowired
     SigningService signingService;
@@ -58,77 +57,69 @@ class ValidationServiceIntegrationTest {
     @Autowired
     ValidationService validationService;
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    @DynamicPropertySource
+    static void policy(DynamicPropertyRegistry registry) throws Exception {
+        JadesSigningSystemTest.policy(registry);
+        Path anchors = Files.createTempFile("tsa-anchors", ".pem");
+        Files.writeString(anchors, "-----BEGIN CERTIFICATE-----\n"
+                + Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.US_ASCII))
+                .encodeToString(JadesSigningSystemTest.PKI.raiz().getEncoded())
+                + "\n-----END CERTIFICATE-----\n", StandardCharsets.US_ASCII);
+        registry.add("safira.policy.tsa-policies.version", () -> "1.0.0");
+        registry.add("safira.policy.tsa-policies.policies[0].oid", () -> PkiIcpSimulada.POLITICA_TSA);
+        registry.add("safira.policy.tsa-policies.policies[0].max-accuracy-seconds", () -> "1");
+        registry.add("safira.policy.tsa-policies.policies[0].trust-store.reference", () -> "file:" + anchors);
+    }
+
+    @AfterAll
+    static void stopTsa() {
+        TSA.close();
+    }
 
     @BeforeEach
-    void configureMocks() {
-        when(trustStoreService.isTrustedRoot(any())).thenReturn(true);
-        when(revocationService.check(any(), any()))
-                .thenReturn(new RevocationStatus.Good("OCSP", new byte[64]));
+    void setUp() {
+        PkiIcpSimulada pki = JadesSigningSystemTest.PKI;
+        when(fonteDeConfianca.atual()).thenReturn(AcervoDeTeste.com(pki.raiz(), pki.ac()));
+        OfflineRevocationConfig.reset();
+    }
+
+    /** Assina (B-B) e estende o JWS a B-T, recompondo Signature e Provenance. */
+    private String baselineTValidationBody() throws Exception {
+        PipelineResult<?> signed = signingService.sign(
+                JadesSigningSystemTest.signingBody(JadesSigningSystemTest.POLICY_URI, Instant.now().getEpochSecond()));
+        SigningResult result = (SigningResult) signed.getValue();
+        JsonObject signature = LosslessJson.parseObject(result.signatureJson());
+        String bb = new String(Base64.getDecoder().decode(signature.string("data").orElseThrow()), StandardCharsets.UTF_8);
+        String bt = new JadesExtensionService().extendToBaselineT(bb, TspSources.online(TSA.url(), 10, PkiIcpSimulada.POLITICA_TSA));
+
+        JsonObject btSignature = signature.with("data",
+                new JsonString(Base64.getEncoder().encodeToString(bt.getBytes(StandardCharsets.UTF_8))));
+        JsonObject provenance = LosslessJson.parseObject(result.provenanceJson())
+                .with("signature", new JsonArray(List.of(btSignature)));
+        // DIVERGENCIA-IG D17: o fim do intervalo do carimbo (genTime + accuracy) deve ser <= V (validar 5.4)
+        return SignAndValidateSystemTest.validationBody(LosslessJson.write(btSignature),
+                JadesSigningSystemTest.example("bundle.json"), LosslessJson.write(provenance),
+                Instant.now().getEpochSecond() + 2);
     }
 
     @Test
-    void shouldValidateSignatureProducedBySigningPipeline() throws Exception {
-        PipelineResult<?> signingResult = signingService.sign(buildSigningInput());
-        assertTrue(signingResult.isSuccess(),
-                "Assinatura falhou: " + signingResult.getExceptionDetails());
+    void shouldValidateJadesBaselineT() throws Exception {
+        PipelineResult<OperationOutcome> result = validationService.validate(baselineTValidationBody());
 
-        Signature signature = (Signature) signingResult.getValue();
-
-        ValidationInput validationInput = new ValidationInput(
-                Base64.getEncoder().encodeToString(signature.data()),
-                REFERENCE_TS,
-                POLICY_URI,
-                null,
-                null
-        );
-
-        PipelineResult<OperationOutcome> validationResult = validationService.validate(validationInput);
-        assertTrue(validationResult.isSuccess(),
-                "Validação falhou: " + validationResult.getExceptionDetails());
-
-        OperationOutcome outcome = validationResult.getValue();
-        assertEquals("OperationOutcome", outcome.resourceType());
-        assertFalse(outcome.issue().isEmpty());
-
-        OperationOutcome.Issue successIssue = outcome.issue().get(0);
-        assertEquals("information", successIssue.severity());
-        assertEquals("informational", successIssue.code());
-        assertFalse(successIssue.details().coding().isEmpty());
-        assertEquals(SignatureExceptionCode.VALIDATION_SUCCESS.getCode(),
-                successIssue.details().coding().get(0).code());
+        assertThat(result.getExceptionDetails()).isNull();
+        assertThat(result.getValue().issue().getFirst().diagnostics()).contains("JAdES-B-T");
     }
 
-    private SigningInput buildSigningInput() throws Exception {
-        String bundleJson = """
-                {
-                  "resourceType": "Bundle",
-                  "id": "bundle-it-validation",
-                  "entry": [{
-                    "fullUrl": "urn:uuid:22222222-2222-2222-2222-222222222222",
-                    "resource": {
-                      "resourceType": "Patient",
-                      "id": "p1",
-                      "name": [{"family": "Souza"}]
-                    }
-                  }]
-                }
-                """;
-        String provenanceJson = """
-                {
-                  "resourceType": "Provenance",
-                  "id": "prov-it-validation",
-                  "target": [{"reference": "urn:uuid:22222222-2222-2222-2222-222222222222"}]
-                }
-                """;
-        return new SigningInput(
-                mapper.readTree(bundleJson),
-                mapper.readTree(provenanceJson),
-                new SigningInput.PemCryptoMaterial(toPemBase64(LEAF_KEYS), null),
-                List.of(toBase64(LEAF_CERT), toBase64(CA_CERT)),
-                REFERENCE_TS,
-                "iat",
-                POLICY_URI
-        );
+    @Test
+    void shouldRejectBaselineTWhenTsaRevocationIsInconclusive() throws Exception {
+        String body = baselineTValidationBody();
+        OfflineRevocationConfig.responder = certificate -> certificate.equals(TSA.certificado())
+                ? null
+                : JadesSigningSystemTest.PKI.ocspBom(certificate);
+
+        PipelineResult<OperationOutcome> result = validationService.validate(body);
+
+        assertThat(result.getExceptionDetails().issue().getFirst().details().coding().getFirst().code())
+                .isEqualTo("REVOCATION.STATUS-UNKNOWN");
     }
 }

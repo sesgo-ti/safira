@@ -1,0 +1,119 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
+ */
+
+package br.gov.go.saude.fhir.safira.cli;
+
+import br.gov.go.saude.fhir.safira.engine.domain.fhir.Coding;
+import br.gov.go.saude.fhir.safira.engine.domain.fhir.OperationOutcome;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+
+/**
+ * Códigos de saída da CLI, alinhados aos do hubsaude CLI (0, 3, 4, 6) mais 1 para erro interno, e o
+ * mapeamento do código do IG (CodeSystem {@code situacao-excepcional-assinatura}) para a saída.
+ *
+ * <p>Na dúvida, o resultado é inconclusivo (4): uma assinatura só é dada como reprovada (6) com
+ * evidência clara. Só os códigos que descrevem a assinatura recebida (JWS/JAdES) contam como
+ * reprovação na validação; na assinatura, o mesmo código aponta um defeito da entrada (3).
+ */
+public final class CodigosDeSaida {
+
+    /** Assinatura criada ou validada com sucesso. */
+    public static final int SUCESSO = 0;
+    /** Falha inesperada (sem stack trace no stdout; causa em stderr com {@code --verbose}). */
+    public static final int ERRO_INTERNO = 1;
+    /** Erro de uso ou configuração: argumentos, arquivos, JSON, limites, política, allowlist. */
+    public static final int USO = 3;
+    /** Inconclusivo: INDETERMINATE do DSS, revogação ou carimbo indisponível, acervo indisponível, rede. */
+    public static final int INCONCLUSIVO = 4;
+    /** Reprovação definitiva: assinatura inválida, certificado revogado, vencido ou não confiável. */
+    public static final int REPROVADA = 6;
+
+    /** Operação que produziu o {@code OperationOutcome}. */
+    public enum Operacao { ASSINATURA, VALIDACAO }
+
+    private static final String SUCESSO_DA_VALIDACAO = "VALIDATION.SUCCESS";
+
+    /** Inclui {@code VALIDATION.SUCCESS} numa issue de erro: contraditório, logo inconclusivo. */
+    private static final Set<String> INCONCLUSIVOS = Set.of(
+            SUCESSO_DA_VALIDACAO, "VALIDATION.INDETERMINATE", "VALIDATION.TRY-LATER", "CONFIG.TRUST-STORE-EMPTY",
+            "TSA.UNAVAILABLE", "TSA.INVALID-RESPONSE", "SYSTEM.TIMEOUT", "SECURITY.HASH-VALIDATION-FAILED");
+
+    /** Código do {@code PipelineExecutor} para exceção inesperada de um step (fora do CodeSystem do IG). */
+    private static final String ERRO_INTERNO_DO_PIPELINE = "INTERNAL_ERROR";
+
+    private static final Set<String> DE_USO = Set.of("CRYPTO.KEY-INACCESSIBLE", "CRYPTO.PIN-INVALID");
+
+    /** Códigos {@code FORMAT.*} que, na validação, descrevem a assinatura recebida (reprovação). */
+    private static final Set<String> FORMATO_DA_ASSINATURA = Set.of(
+            "FORMAT.JWS-MALFORMED", "FORMAT.JWK-INVALID", "FORMAT.CERT-PEM-INVALID");
+
+    private CodigosDeSaida() {
+    }
+
+    /**
+     * Saída para o {@code OperationOutcome}, com evidência positiva: a primeira issue
+     * {@code error}/{@code fatal} (ou sem severidade) decide (o erro prevalece sobre {@code VALIDATION.SUCCESS}); sem ela,
+     * só a validação com uma issue {@code VALIDATION.SUCCESS} sai com 0. Qualquer outro caso (sem issues,
+     * só avisos, sem coding, ou {@code OperationOutcome} da assinatura, que nunca é o resultado de
+     * sucesso) é inconclusivo, nunca 0.
+     */
+    public static int de(OperationOutcome outcome, Operacao operacao) {
+        List<OperationOutcome.Issue> issues = outcome.issue() == null ? List.of() : outcome.issue();
+        Optional<OperationOutcome.Issue> erro = issues.stream()
+                .filter(issue -> issue != null && erro(issue))
+                .findFirst();
+        if (erro.isPresent()) {
+            return codigo(erro.get()).map(codigo -> paraCodigo(codigo, operacao)).orElse(INCONCLUSIVO);
+        }
+        boolean validada = operacao == Operacao.VALIDACAO && issues.stream()
+                .filter(issue -> issue != null)
+                .anyMatch(issue -> codigo(issue).filter(SUCESSO_DA_VALIDACAO::equals).isPresent());
+        return validada ? SUCESSO : INCONCLUSIVO;
+    }
+
+    /** {@code error}, {@code fatal} ou sem severidade (na dúvida, erro). */
+    private static boolean erro(OperationOutcome.Issue issue) {
+        return issue.severity() == null || "error".equals(issue.severity()) || "fatal".equals(issue.severity());
+    }
+
+    private static Optional<String> codigo(OperationOutcome.Issue issue) {
+        if (issue.details() == null || issue.details().coding() == null) {
+            return Optional.empty();
+        }
+        return issue.details().coding().stream().filter(coding -> coding != null)
+                .map(Coding::code).filter(codigo -> codigo != null).findFirst();
+    }
+
+    /** Saída para o código de uma issue {@code error}/{@code fatal}. */
+    static int paraCodigo(String codigo, Operacao operacao) {
+        if (ERRO_INTERNO_DO_PIPELINE.equals(codigo)) {
+            return ERRO_INTERNO;
+        }
+        if (INCONCLUSIVOS.contains(codigo)) {
+            return INCONCLUSIVO;
+        }
+        if (DE_USO.contains(codigo)) {
+            return USO;
+        }
+        if ("SECURITY.SIGNATURE-VALIDATION-REPLAY".equals(codigo)) {
+            return REPROVADA;
+        }
+        if (codigo.startsWith("FORMAT.")) {
+            boolean daAssinatura = FORMATO_DA_ASSINATURA.contains(codigo) || codigo.startsWith("FORMAT.JADES-");
+            return operacao == Operacao.VALIDACAO && daAssinatura ? REPROVADA : USO;
+        }
+        String categoria = codigo.contains(".") ? codigo.substring(0, codigo.indexOf('.')) : codigo;
+        return switch (categoria) {
+            case "POLICY", "CONFIG", "SECURITY", "MIDDLEWARE", "DEVICE" -> USO;
+            case "REVOCATION", "CACHE", "NETWORK" -> INCONCLUSIVO;
+            case "CERT", "CRYPTO", "VALIDATION", "TSA", "TEMPORAL" -> REPROVADA;
+            case "SYSTEM", "STORAGE" -> ERRO_INTERNO;
+            default -> INCONCLUSIVO;
+        };
+    }
+}

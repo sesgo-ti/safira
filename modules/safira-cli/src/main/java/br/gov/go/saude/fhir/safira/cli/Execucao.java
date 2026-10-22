@@ -1,0 +1,115 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
+ */
+
+package br.gov.go.saude.fhir.safira.cli;
+
+import br.gov.go.saude.fhir.safira.simulador.AvisoSimulacaoAdvice;
+import picocli.CommandLine.Model.CommandSpec;
+
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+/**
+ * Execução comum de {@code assinar} e {@code validar}: partida do contexto no modo, aviso de simulação,
+ * emissão do JSON (stdout ou {@code --saida}) e tradução de falhas em códigos de saída. O stdout só
+ * recebe o JSON de resultado; mensagens e, com {@code --verbose}, stack traces vão para o stderr.
+ */
+final class Execucao {
+
+    /** Operação sobre o contexto iniciado. */
+    @FunctionalInterface
+    interface Operacao {
+        Resultado executar(ContextoSafira contexto) throws Exception;
+    }
+
+    /** JSON de resultado e código de saída. */
+    record Resultado(String json, int saida) {
+    }
+
+    private Execucao() {
+    }
+
+    /** @param entradas arquivos conferidos antes da partida do Spring (existência e leitura) */
+    static int executar(CommandSpec spec, OpcoesComuns opcoes, Operacao operacao, Path... entradas) {
+        PrintWriter out = spec.commandLine().getOut();
+        PrintWriter err = spec.commandLine().getErr();
+        try {
+            opcoes.conferir(entradas);
+        } catch (FalhaDeUso e) {
+            err.println("Erro: " + e.getMessage());
+            return CodigosDeSaida.USO;
+        }
+        ContextoSafira contexto;
+        try {
+            contexto = ContextoSafira.iniciar(opcoes.modo, opcoes.pkiDir, opcoes.config, opcoes.timeoutAcervo,
+                    opcoes.verbose);
+        } catch (FalhaDeUso e) {
+            err.println("Erro: " + e.getMessage());
+            return CodigosDeSaida.USO;
+        } catch (RuntimeException e) {
+            err.println("Erro: falha na partida do Safira (modo " + opcoes.modo.nome() + "): " + FalhaDePartida.mensagem(e));
+            detalhar(opcoes, err, e);
+            return CodigosDeSaida.USO;
+        }
+        try (contexto) {
+            if (opcoes.modo.simulacao()) {
+                err.println("AVISO: " + AvisoSimulacaoAdvice.TEXTO + contexto.pkiSimulada()
+                        .map(pki -> " (PKI simulada em " + pki.diretorio() + ")").orElse(""));
+            }
+            Resultado resultado;
+            try {
+                resultado = operacao.executar(contexto);
+            } catch (FalhaDeUso e) {
+                err.println("Erro: " + e.getMessage());
+                if (e.outcome() != null) {
+                    emitir(opcoes, out, contexto.json(e.outcome()));
+                }
+                return CodigosDeSaida.USO;
+            }
+            emitir(opcoes, out, resultado.json());
+            return resultado.saida();
+        } catch (FalhaDeUso e) {
+            err.println("Erro: " + e.getMessage());
+            return CodigosDeSaida.USO;
+        } catch (SaidaIndisponivel e) {
+            err.println("Erro: não foi possível escrever o resultado no stdout.");
+            return CodigosDeSaida.ERRO_INTERNO;
+        } catch (Exception e) {
+            err.println("Erro interno: " + e.getClass().getSimpleName() + ". Use --verbose para ver a causa.");
+            detalhar(opcoes, err, e);
+            return CodigosDeSaida.ERRO_INTERNO;
+        }
+    }
+
+    private static void emitir(OpcoesComuns opcoes, PrintWriter out, String json) {
+        if (opcoes.saida == null) {
+            out.println(json);
+            out.flush();
+            if (out.checkError()) {
+                throw new SaidaIndisponivel();
+            }
+            return;
+        }
+        try {
+            Files.writeString(opcoes.saida, json + System.lineSeparator(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new FalhaDeUso("Não foi possível gravar " + opcoes.saida + ": " + e.getMessage());
+        }
+    }
+
+    /** O stdout recusou a escrita (ex.: pipe fechado): o {@code PrintWriter} não lança, só marca o erro. */
+    private static final class SaidaIndisponivel extends RuntimeException {
+    }
+
+    private static void detalhar(OpcoesComuns opcoes, PrintWriter err, Exception e) {
+        if (opcoes.verbose) {
+            e.printStackTrace(err);
+            err.flush();
+        }
+    }
+}

@@ -55,7 +55,7 @@ public record Bundle(
 
             return new Bundle(resourceType, id, List.copyOf(entries), rawJson);
         } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("JSON inválido: " + e.getMessage(), e);
+            throw new IllegalArgumentException("JSON inválido.", e);
         }
     }
 

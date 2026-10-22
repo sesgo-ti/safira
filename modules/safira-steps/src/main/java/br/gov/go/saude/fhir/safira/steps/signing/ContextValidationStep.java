@@ -5,6 +5,7 @@
 
 package br.gov.go.saude.fhir.safira.steps.signing;
 
+import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties;
 import br.gov.go.saude.fhir.safira.engine.domain.CryptoMaterial;
 import br.gov.go.saude.fhir.safira.engine.domain.StepResult;
 import br.gov.go.saude.fhir.safira.engine.domain.TimestampStrategy;
@@ -12,130 +13,112 @@ import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.pipelines.StepId;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
-import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties;
+import br.gov.go.saude.fhir.safira.steps.policy.OperationalChecks;
+import br.gov.go.saude.fhir.safira.steps.policy.PolicyChecks;
+import br.gov.go.saude.fhir.safira.steps.policy.PolicyViolation;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties;
+import br.gov.go.saude.fhir.safira.steps.policy.SafiraPolicyProperties.ConfigViolation;
 
-import java.time.Instant;
+import java.net.URI;
+import java.time.Clock;
 import java.util.Base64;
+import java.util.List;
+import java.util.Optional;
 
+/**
+ * Passo {@code context-validation}: etapa 1 do caso de uso de criação da política 0.2.0
+ * (1.1 política, 1.2/1.10 timestamp de referência, 1.3 resultado pretendido, 1.11
+ * configurações operacionais e da política). Executa antes de qualquer processamento
+ * criptográfico.
+ */
 @StepId("context-validation")
 public class ContextValidationStep implements SigningStep {
 
+    private final SafiraPolicyProperties policy;
+    private final Clock clock;
+
+    public ContextValidationStep(SafiraPolicyProperties policy, Clock clock) {
+        this.policy = policy;
+        this.clock = clock;
+    }
+
     @Override
     public StepResult<SigningContext> execute(SigningContext context) {
-        StepResult<SigningContext> fail;
-
-        if ((fail = verifyPolicy(context.getPolicyIdentifierUri(), context)) != null) return fail;
-        if ((fail = verifyReferenceTimestamp(context.getReferenceTimestamp(), context)) != null) return fail;
-        if ((fail = verifyStrategy(context.getStrategy(), context.getOperationalConfig(), context)) != null) return fail;
-        if ((fail = verifyTemporalConstraints(context.getReferenceTimestamp(), context)) != null) return fail;
-        if ((fail = verifyOperationalConfigs(context.getOperationalConfig(), context.getCryptoMaterial(), context)) != null) return fail;
-
-        return StepResult.success(getName(), context);
+        Optional<PolicyViolation> violation = PolicyChecks.policyUri(context.getPolicyIdentifierUri())
+                .or(() -> PolicyChecks.referenceTimestamp(context.getReferenceTimestamp(), clock.instant().getEpochSecond()))
+                .or(() -> checkStrategy(context))
+                .or(() -> checkMinimumIssueDate(context.getReferenceTimestamp()))
+                .or(() -> checkPolicyConfiguration(context.getStrategy() == TimestampStrategy.TSA))
+                .or(() -> OperationalChecks.check(context.getOperationalConfig()))
+                .or(() -> checkCryptoMaterial(context.getCryptoMaterial()));
+        return violation
+                .map(v -> StepResult.failure(getName(), v.code(), v.diagnostics(), context))
+                .orElseGet(() -> StepResult.success(getName(), context));
     }
 
-    private StepResult<SigningContext> verifyPolicy(String policyUri, SigningContext context) {
-        if (policyUri == null || policyUri.trim().isEmpty()) {
-            return StepResult.failure(getName(), SignatureExceptionCode.POLICY_MISSING, "Política de assinatura não fornecida na entrada.", context);
+    private Optional<PolicyViolation> checkStrategy(SigningContext context) {
+        if (context.getStrategy() == null) {
+            return fail(SignatureExceptionCode.CONFIG_INVALID_STRATEGY, "Resultado pretendido deve ser 'iat' ou 'tsa'.");
         }
-
-        String expectedPrefix = "https://fhir.saude.go.gov.br/r4/seguranca/ImplementationGuide/br.go.ses.seguranca|";
-        if (!policyUri.startsWith(expectedPrefix)) {
-            return StepResult.failure(getName(), SignatureExceptionCode.POLICY_URI_INVALID, "URI da política não inicia com o prefixo esperado.", context);
+        if (context.getStrategy() != TimestampStrategy.TSA) {
+            return Optional.empty();
         }
-
-        String[] parts = policyUri.split("\\|");
-        if (parts.length != 2) {
-            return StepResult.failure(getName(), SignatureExceptionCode.POLICY_URI_INVALID, "URI da política deve conter exatamente um separador de versão ('|').", context);
+        SafiraOperationalConfigProperties config = context.getOperationalConfig();
+        String tsaUrl = config == null || config.verification() == null ? null : config.verification().tsaUrl();
+        if (tsaUrl == null || tsaUrl.isBlank()) {
+            return fail(SignatureExceptionCode.CONFIG_MISSING_PARAMETER,
+                    "Resultado 'tsa' exige safira.operational.verification.tsa-url.");
         }
-
-        String version = parts[1];
-        if (!version.matches("^\\d+\\.\\d+\\.\\d+$")) {
-            return StepResult.failure(getName(), SignatureExceptionCode.POLICY_URI_INVALID, "A versão da política obrigatoriamente segue formato major.minor.patch.", context);
+        try {
+            URI uri = new URI(tsaUrl);
+            if (!"https".equals(uri.getScheme()) || uri.getHost() == null) {
+                return fail(SignatureExceptionCode.CONFIG_TSA_URL_INVALID, "A URL da TSA deve ser HTTPS válida.");
+            }
+        } catch (Exception e) {
+            return fail(SignatureExceptionCode.CONFIG_TSA_URL_INVALID, "A URL da TSA é inválida (RFC 3986).");
         }
-        return null;
+        return Optional.empty();
     }
 
-    private StepResult<SigningContext> verifyReferenceTimestamp(Long refTs, SigningContext context) {
-        if (refTs == null) {
-            return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_INVALID_TIMESTAMP, "O Timestamp de referência não foi fornecido.", context);
+    private Optional<PolicyViolation> checkMinimumIssueDate(Long referenceTimestamp) {
+        if (referenceTimestamp < policy.minCertIssueDate()) {
+            return fail(SignatureExceptionCode.FORMAT_INVALID_TIMESTAMP,
+                    "Timestamp de referência anterior a temporalPolicy.minCertIssueDate.");
         }
-        var security = context.getOperationalConfig().security();
-        long min = security.minReferenceTimestamp();
-        long max = security.maxReferenceTimestamp();
-        if (refTs < min || refTs > max) {
-            return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_TIMESTAMP_OUT_OF_RANGE, "O Timestamp de referência está fora do intervalo seguro permitido para assinatura.", context);
-        }
-        return null;
+        return Optional.empty();
     }
 
-    private StepResult<SigningContext> verifyStrategy(TimestampStrategy strategy, SafiraOperationalConfigProperties config, SigningContext context) {
-        if (strategy == null) {
-            return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_INVALID_STRATEGY, "Estratégia do timestamp não declarada na entrada (iat ou tsa).", context);
+    private Optional<PolicyViolation> checkPolicyConfiguration(boolean tsaRequired) {
+        List<ConfigViolation> violations = policy.violations(tsaRequired);
+        if (violations.isEmpty()) {
+            return Optional.empty();
         }
-        if (strategy == TimestampStrategy.TSA) {
-            if (config == null || config.verification() == null || 
-                config.verification().tsaUrl() == null || config.verification().tsaUrl().isBlank()) {
-                return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_TSA_CONFIG_MISSING, "O uso de Auto-TSA falhou porque a URL da TSA não está configurada.", context);
-            }
-        }
-        return null;
+        ConfigViolation first = violations.getFirst();
+        return fail(first.code(), first.diagnostics());
     }
 
-    private StepResult<SigningContext> verifyTemporalConstraints(Long refTs, SigningContext context) {
-        long currentTs = Instant.now().getEpochSecond();
-        long diff = Math.abs(refTs - currentTs);
-        if (diff > 300) {
-            return StepResult.failure(getName(), SignatureExceptionCode.TEMPORAL_CLOCK_SKEW_DETECTED, "A diferença entre o timestamp enviado e a hora do servidor é maior que o permitido (>300 segundos).", context);
+    private Optional<PolicyViolation> checkCryptoMaterial(CryptoMaterial material) {
+        if (material == null) {
+            return fail(SignatureExceptionCode.CONFIG_MISSING_PARAMETER, "Material criptográfico do signatário ausente.");
         }
-        return null;
-    }
-
-    private StepResult<SigningContext> verifyOperationalConfigs(SafiraOperationalConfigProperties config, CryptoMaterial material, SigningContext context) {
-        if (config == null) {
-            return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_MISSING_PARAMETER, "Faltam configurações operacionais no sistema (SafiraOperationalConfigProperties).", context);
-        }
-
-        var vProps = config.verification();
-        if (vProps != null) {
-            if (vProps.ocspCacheTtl() < 300 || vProps.ocspCacheTtl() > 86400 || vProps.crlCacheTtl() < 300 || vProps.crlCacheTtl() > 86400) {
-                return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_TTL_OUT_OF_RANGE, "A configuração do tempo de cache de revogação (TTL) está fora dos limites permitidos.", context);
-            }
-            if (vProps.ocspTimeout() < 5 || vProps.ocspTimeout() > 120 || vProps.crlTimeout() < 5 || vProps.crlTimeout() > 120 || vProps.tsaTimeout() < 5 || vProps.tsaTimeout() > 120) {
-                return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_TIMEOUT_OUT_OF_RANGE, "O timeout configurado para requisições online está fora do limite permitido.", context);
-            }
-            if (vProps.tsaUrl() != null && !vProps.tsaUrl().isBlank() && !vProps.tsaUrl().startsWith("https://")) {
-                return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_TSA_URL_INVALID, "A URL de Auto-TSA deve utilizar o protocolo seguro HTTPS.", context);
-            }
-        }
-
-        var sProps = config.security();
-        if (sProps != null) {
-            if (sProps.maxEntriesBundle() < 100 || sProps.maxEntriesBundle() > 10000) {
-                return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_BUNDLE_SIZE_LIMIT_OUT_OF_RANGE, "O limite de entradas (entries) do Bundle nas configurações está inválido.", context);
-            }
-            if (sProps.maxBundleSize() < 1048576 || sProps.maxBundleSize() > 209715200) {
-                return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_BUNDLE_MEMORY_LIMIT_OUT_OF_RANGE, "O limite de tamanho em bytes máximo do Bundle (Payload) configurado é inválido.", context);
-            }
-            if (sProps.timoutVerificationBundle() < 5 || sProps.timoutVerificationBundle() > 300) {
-                return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_BUNDLE_TIMEOUT_OUT_OF_RANGE, "O timeout configurado para processamento do Bundle é inválido.", context);
-            }
-        }
-
         if (material instanceof CryptoMaterial.Pkcs12Material p12) {
             if (p12.password() == null || p12.password().isEmpty()) {
-                return StepResult.failure(getName(), SignatureExceptionCode.CONFIG_MISSING_PARAMETER, "A senha do certificado PKCS#12 (p12) não foi fornecida.", context);
+                return fail(SignatureExceptionCode.CONFIG_MISSING_PARAMETER, "A senha do PKCS#12 não foi fornecida.");
             }
-            if (p12.alias() != null && p12.alias().length() > 64) {
-                return StepResult.failure(getName(), SignatureExceptionCode.MIDDLEWARE_TOKEN_LABEL_INVALID, "O alias do certificado excede o tamanho máximo de 64 caracteres.", context);
+            if (p12.alias() != null && (p12.alias().isEmpty() || p12.alias().length() > 64)) {
+                return fail(SignatureExceptionCode.MIDDLEWARE_TOKEN_LABEL_INVALID,
+                        "O alias do PKCS#12 deve ter entre 1 e 64 caracteres.");
             }
-            if (p12.contentBase64() != null) {
-                try {
-                    Base64.getDecoder().decode(p12.contentBase64());
-                } catch (IllegalArgumentException ex) {
-                    return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_BASE64_INVALID, "O conteúdo do certificado (PKCS#12) enviado não está em formato Base64 válido.", context);
-                }
+            try {
+                Base64.getDecoder().decode(p12.contentBase64() == null ? "" : p12.contentBase64());
+            } catch (IllegalArgumentException e) {
+                return fail(SignatureExceptionCode.FORMAT_BASE64_INVALID, "O conteúdo PKCS#12 não é Base64 válido.");
             }
         }
-        return null;
+        return Optional.empty();
+    }
+
+    private static Optional<PolicyViolation> fail(SignatureExceptionCode code, String diagnostics) {
+        return Optional.of(new PolicyViolation(code, diagnostics));
     }
 }
