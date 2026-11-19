@@ -13,10 +13,12 @@ import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningStep;
 import br.gov.go.saude.fhir.safira.jades.JadesSigningService;
 import br.gov.go.saude.fhir.safira.jades.JadesSigningSession;
-import br.gov.go.saude.fhir.safira.steps.signing.ContentDigestStep;
-import br.gov.go.saude.fhir.safira.steps.signing.SigningInputStep;
+import br.gov.go.saude.fhir.safira.steps.signing.SigningKeys;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.security.cert.X509Certificate;
+import java.security.interfaces.RSAPublicKey;
 import java.util.Base64;
 import java.util.List;
 
@@ -30,6 +32,8 @@ import java.util.List;
  */
 @StepId("jades-data-to-sign")
 public class JadesDataToSignStep implements SigningStep {
+
+    private static final Logger log = LoggerFactory.getLogger(JadesDataToSignStep.class);
 
     public static final String JADES_SESSION_KEY = "jadesSession";
 
@@ -49,41 +53,49 @@ public class JadesDataToSignStep implements SigningStep {
                 .orElse(null);
         if (chain == null || chain.length == 0) {
             return StepResult.failure(getName(), SignatureExceptionCode.CERT_CHAIN_INCOMPLETE,
-                    "Cadeia de certificados ausente no contexto. Verifique se o step chain-build foi executado.",
+                    "Cadeia de certificados ausente no contexto. Verifique se o step pkix-chain-validation foi executado.",
                     context);
         }
 
         String contentDigest = context
-                .getAttribute(ContentDigestStep.CONTENT_DIGEST_KEY, String.class)
+                .getAttribute(SigningKeys.CONTENT_DIGEST, String.class)
                 .orElseThrow(() -> new StepException(SignatureExceptionCode.CRYPTO_HASH_VERIFICATION_FAILED,
                         "A impressão digital do conteúdo não foi encontrada no contexto. "
-                                + "Verifique se o step content-digest foi executado."));
+                                + "Verifique se o step framed-content-digest foi executado."));
+
+        byte[] payload;
+        try {
+            payload = Base64.getUrlDecoder().decode(contentDigest);
+        } catch (IllegalArgumentException e) {
+            return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_BASE64_INVALID,
+                    "Impressão digital do conteúdo não é base64url válido.", context);
+        }
+        if (!(chain[0].getPublicKey() instanceof RSAPublicKey)) {
+            return StepResult.failure(getName(), SignatureExceptionCode.CERT_UNSUPPORTED_ALGORITHM,
+                    "A política 0.2.0 admite somente RS256; chave do signatário: "
+                            + chain[0].getPublicKey().getAlgorithm(), context);
+        }
 
         try {
-            byte[] payload = Base64.getUrlDecoder().decode(contentDigest);
-
             JadesSigningSession session = signingService.newSession(new JadesSigningService.Request(
                     List.of(chain),
                     payload,
                     context.getReferenceTimestamp(),
-                    context.getPolicyIdentifierUri(),
-                    null,
-                    null));
+                    context.getPolicyIdentifierUri()));
 
             byte[] dataToSign = signingService.dataToSign(session);
 
             SigningContext updated = context.toBuilder()
                     .attribute(JADES_SESSION_KEY, session)
-                    .attribute(SigningInputStep.SIGNING_INPUT_BYTES_KEY, dataToSign)
+                    .attribute(SigningKeys.SIGNING_INPUT_BYTES, dataToSign)
                     .build();
 
             return StepResult.success(getName(), updated);
-        } catch (IllegalArgumentException e) {
-            return StepResult.failure(getName(), SignatureExceptionCode.FORMAT_BASE64_INVALID,
-                    "Impressão digital do conteúdo não é base64url válido: " + e.getMessage(), context);
         } catch (Exception e) {
+            // O detalhe é interno (DSS, JVM): fica no log, nunca no diagnóstico
+            log.error("Falha ao preparar os dados a assinar (JAdES)", e);
             throw new StepException(SignatureExceptionCode.CRYPTO_SIGNATURE_CREATION_FAILED,
-                    "Erro ao preparar os dados a assinar (JAdES): " + e.getMessage(), e);
+                    "Erro ao preparar os dados a assinar (JAdES).", e);
         }
     }
 }

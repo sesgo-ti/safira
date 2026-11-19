@@ -10,6 +10,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.StepException;
 import br.gov.go.saude.fhir.safira.engine.domain.StepResult;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.SignatureExceptionCode;
 import br.gov.go.saude.fhir.safira.engine.domain.signing.SigningContext;
+import br.gov.go.saude.fhir.safira.jades.JadesSigningService;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
@@ -20,6 +21,7 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.io.StringWriter;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -61,10 +63,11 @@ class CryptoSigningStepTest {
     @Test
     void shouldSignWithRsaPemMaterial() throws Exception {
         KeyPair keys = generateRsaKeyPair(2048);
+        X509Certificate cert = selfSign(keys, "CN=Test");
         String pemBase64 = toPemBase64(keys.getPrivate());
         var material = new CryptoMaterial.PemMaterial(pemBase64, null);
         byte[] signingInput = "header.payload".getBytes(StandardCharsets.UTF_8);
-        var context = contextWith(material, signingInput);
+        var context = contextWith(material, cert, signingInput);
 
         var result = step.execute(context);
 
@@ -74,21 +77,20 @@ class CryptoSigningStepTest {
         assertTrue(verifyRsa(keys.getPublic(), signingInput, signatureBytes));
     }
 
-    // ===== Happy path ECDSA via PEM =====
+    // ===== ECDSA não é admitido pela política 0.2.0 (somente RS256) =====
 
     @Test
-    void shouldSignWithEcPemMaterialAndProduce64BytesRawSignature() throws Exception {
+    void shouldRejectEcPrivateKeyBecausePolicyAdmitsOnlyRs256() throws Exception {
         KeyPair keys = generateEcKeyPair();
+        X509Certificate cert = selfSign(keys, "CN=Test");
         String pemBase64 = toPemBase64(keys.getPrivate());
         var material = new CryptoMaterial.PemMaterial(pemBase64, null);
         byte[] signingInput = "header.payload".getBytes(StandardCharsets.UTF_8);
-        var context = contextWith(material, signingInput);
+        var context = contextWith(material, cert, signingInput);
 
         var result = step.execute(context);
 
-        assertSuccess(result);
-        byte[] signatureBytes = Base64.getUrlDecoder().decode(getSignature(result));
-        assertEquals(64, signatureBytes.length);
+        assertFailure(result, SignatureExceptionCode.CERT_UNSUPPORTED_ALGORITHM);
     }
 
     // ===== Happy path RSA via PKCS12 =====
@@ -100,7 +102,7 @@ class CryptoSigningStepTest {
         String p12Base64 = buildPkcs12(keys.getPrivate(), cert, "senha", "test-alias");
         var material = new CryptoMaterial.Pkcs12Material(p12Base64, "senha", "test-alias");
         byte[] signingInput = "header.payload".getBytes(StandardCharsets.UTF_8);
-        var context = contextWith(material, signingInput);
+        var context = contextWith(material, cert, signingInput);
 
         var result = step.execute(context);
 
@@ -117,11 +119,85 @@ class CryptoSigningStepTest {
         X509Certificate cert = selfSign(keys, "CN=Test");
         String p12Base64 = buildPkcs12(keys.getPrivate(), cert, "senha", "only-alias");
         var material = new CryptoMaterial.Pkcs12Material(p12Base64, "senha", null);
-        var context = contextWith(material, "data".getBytes(StandardCharsets.UTF_8));
+        var context = contextWith(material, cert, "data".getBytes(StandardCharsets.UTF_8));
 
         var result = step.execute(context);
 
         assertSuccess(result);
+    }
+
+    // ===== Chave × certificado do signatário =====
+
+    @Test
+    void shouldRejectPemKeyWhenItDoesNotMatchSignerCertificate() throws Exception {
+        KeyPair keys = generateRsaKeyPair(2048);
+        X509Certificate cert = selfSign(generateRsaKeyPair(2048), "CN=Outro");
+        var material = new CryptoMaterial.PemMaterial(toPemBase64(keys.getPrivate()), null);
+        var context = contextWith(material, cert, "data".getBytes(StandardCharsets.UTF_8));
+
+        var result = step.execute(context);
+
+        assertFailure(result, SignatureExceptionCode.CRYPTO_KEY_INACCESSIBLE);
+    }
+
+    @Test
+    void shouldSelectPkcs12EntryMatchingSignerCertificateWhenAliasIsAbsent() throws Exception {
+        KeyPair other = generateRsaKeyPair(2048);
+        KeyPair keys = generateRsaKeyPair(2048);
+        X509Certificate cert = selfSign(keys, "CN=Test");
+        KeyStore keyStore = KeyStore.getInstance("PKCS12");
+        keyStore.load(null, null);
+        keyStore.setKeyEntry("a-outro", other.getPrivate(), "senha".toCharArray(),
+                new Certificate[]{selfSign(other, "CN=Outro")});
+        keyStore.setKeyEntry("b-titular", keys.getPrivate(), "senha".toCharArray(), new Certificate[]{cert});
+        var baos = new ByteArrayOutputStream();
+        keyStore.store(baos, "senha".toCharArray());
+        var material = new CryptoMaterial.Pkcs12Material(Base64.getEncoder().encodeToString(baos.toByteArray()), "senha", null);
+        byte[] signingInput = "data".getBytes(StandardCharsets.UTF_8);
+
+        var result = step.execute(contextWith(material, cert, signingInput));
+
+        assertSuccess(result);
+        assertTrue(verifyRsa(keys.getPublic(), signingInput, Base64.getUrlDecoder().decode(getSignature(result))));
+    }
+
+    @Test
+    void shouldSignWithPkcs12WithoutAliasWhenForeignEntryHasAnotherKeyPassword() throws Exception {
+        KeyPair other = generateRsaKeyPair(2048);
+        KeyPair keys = generateRsaKeyPair(2048);
+        X509Certificate cert = selfSign(keys, "CN=Test");
+        KeyStore keyStore = KeyStore.getInstance("PKCS12");
+        keyStore.load(null, null);
+        keyStore.setKeyEntry("a-outro", other.getPrivate(), "outra-senha".toCharArray(),
+                new Certificate[]{selfSign(other, "CN=Outro")});
+        keyStore.setKeyEntry("b-titular", keys.getPrivate(), "senha".toCharArray(), new Certificate[]{cert});
+        var baos = new ByteArrayOutputStream();
+        keyStore.store(baos, "senha".toCharArray());
+        var material = new CryptoMaterial.Pkcs12Material(Base64.getEncoder().encodeToString(baos.toByteArray()), "senha", null);
+        byte[] signingInput = "data".getBytes(StandardCharsets.UTF_8);
+
+        var result = step.execute(contextWith(material, cert, signingInput));
+
+        assertSuccess(result);
+        assertTrue(verifyRsa(keys.getPublic(), signingInput, Base64.getUrlDecoder().decode(getSignature(result))));
+    }
+
+    @Test
+    void shouldReturnCertificateNotFoundWhenPkcs12AliasHasNoPrivateKey() throws Exception {
+        KeyPair keys = generateRsaKeyPair(2048);
+        X509Certificate cert = selfSign(keys, "CN=Test");
+        KeyStore keyStore = KeyStore.getInstance("PKCS12");
+        keyStore.load(null, null);
+        keyStore.setKeyEntry("titular", keys.getPrivate(), "senha".toCharArray(), new Certificate[]{cert});
+        keyStore.setCertificateEntry("so-certificado", cert);
+        var baos = new ByteArrayOutputStream();
+        keyStore.store(baos, "senha".toCharArray());
+        var material = new CryptoMaterial.Pkcs12Material(
+                Base64.getEncoder().encodeToString(baos.toByteArray()), "senha", "so-certificado");
+
+        var result = step.execute(contextWith(material, cert, "data".getBytes(StandardCharsets.UTF_8)));
+
+        assertFailure(result, SignatureExceptionCode.DEVICE_CERTIFICATE_NOT_FOUND);
     }
 
     // ===== PKCS12 alias não encontrado =====
@@ -132,7 +208,7 @@ class CryptoSigningStepTest {
         X509Certificate cert = selfSign(keys, "CN=Test");
         String p12Base64 = buildPkcs12(keys.getPrivate(), cert, "senha", "real-alias");
         var material = new CryptoMaterial.Pkcs12Material(p12Base64, "senha", "alias-inexistente");
-        var context = contextWith(material, "data".getBytes(StandardCharsets.UTF_8));
+        var context = contextWith(material, cert, "data".getBytes(StandardCharsets.UTF_8));
 
         var result = step.execute(context);
 
@@ -147,7 +223,7 @@ class CryptoSigningStepTest {
         X509Certificate cert = selfSign(keys, "CN=Test");
         String p12Base64 = buildPkcs12(keys.getPrivate(), cert, "senha-correta", "test-alias");
         var material = new CryptoMaterial.Pkcs12Material(p12Base64, "senha-errada", "test-alias");
-        var context = contextWith(material, "data".getBytes(StandardCharsets.UTF_8));
+        var context = contextWith(material, cert, "data".getBytes(StandardCharsets.UTF_8));
 
         var result = step.execute(context);
 
@@ -159,8 +235,9 @@ class CryptoSigningStepTest {
     @Test
     void shouldProduceBase64UrlWithoutPadding() throws Exception {
         KeyPair keys = generateRsaKeyPair(2048);
+        X509Certificate cert = selfSign(keys, "CN=Test");
         var material = new CryptoMaterial.PemMaterial(toPemBase64(keys.getPrivate()), null);
-        var context = contextWith(material, "data".getBytes(StandardCharsets.UTF_8));
+        var context = contextWith(material, cert, "data".getBytes(StandardCharsets.UTF_8));
 
         var result = step.execute(context);
 
@@ -169,6 +246,26 @@ class CryptoSigningStepTest {
         assertFalse(signature.contains("="));
         assertFalse(signature.contains("+"));
         assertFalse(signature.contains("/"));
+    }
+
+    // ===== Autoverificação pelo EU DSS =====
+
+    @Test
+    void shouldFailWhenDssRejectsProducedSignatureValue() throws Exception {
+        KeyPair keys = generateRsaKeyPair(2048);
+        X509Certificate cert = selfSign(keys, "CN=Test");
+        var material = new CryptoMaterial.PemMaterial(toPemBase64(keys.getPrivate()), null);
+        var rejecting = new JadesSigningService() {
+            @Override
+            public boolean isValidSignatureValue(byte[] dataToSign, byte[] signatureValue, X509Certificate signer) {
+                return false;
+            }
+        };
+
+        var result = new CryptoSigningStep(rejecting)
+                .execute(contextWith(material, cert, "data".getBytes(StandardCharsets.UTF_8)));
+
+        assertFailure(result, SignatureExceptionCode.CRYPTO_SIGNATURE_CREATION_FAILED);
     }
 
     // ===== Falhas defensivas =====
@@ -191,13 +288,14 @@ class CryptoSigningStepTest {
                 .cryptoMaterial(material)
                 .build();
 
-        assertThrows(StepException.class, () -> step.execute(context));
+        StepException exception = assertThrows(StepException.class, () -> step.execute(context));
+        assertTrue(exception.getMessage().contains("jades-data-to-sign"));
     }
 
     @Test
     void shouldThrowStepExceptionWhenCryptoMaterialMissing() {
         SigningContext context = SigningContext.builder()
-                .attribute(SigningInputStep.SIGNING_INPUT_BYTES_KEY, "data".getBytes(StandardCharsets.UTF_8))
+                .attribute(SigningKeys.SIGNING_INPUT_BYTES, "data".getBytes(StandardCharsets.UTF_8))
                 .build();
 
         assertThrows(StepException.class, () -> step.execute(context));
@@ -205,10 +303,11 @@ class CryptoSigningStepTest {
 
     // ===== Helpers =====
 
-    private SigningContext contextWith(CryptoMaterial material, byte[] signingInputBytes) {
+    private SigningContext contextWith(CryptoMaterial material, X509Certificate signer, byte[] signingInputBytes) {
         return SigningContext.builder()
                 .cryptoMaterial(material)
-                .attribute(SigningInputStep.SIGNING_INPUT_BYTES_KEY, signingInputBytes)
+                .certificateChain(new X509Certificate[]{signer})
+                .attribute(SigningKeys.SIGNING_INPUT_BYTES, signingInputBytes)
                 .build();
     }
 
@@ -251,7 +350,7 @@ class CryptoSigningStepTest {
         keyStore.load(null, null);
         keyStore.setKeyEntry(alias, privateKey, password.toCharArray(), new Certificate[]{cert});
 
-        var baos = new java.io.ByteArrayOutputStream();
+        var baos = new ByteArrayOutputStream();
         keyStore.store(baos, password.toCharArray());
         return Base64.getEncoder().encodeToString(baos.toByteArray());
     }

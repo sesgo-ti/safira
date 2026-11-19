@@ -5,6 +5,7 @@
 
 package br.gov.go.saude.fhir.safira.engine.domain.fhir;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 
 import java.util.List;
@@ -14,12 +15,14 @@ import java.util.List;
  * situações excepcionais na criação e validação de assinaturas digitais.
  */
 @Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record OperationOutcome(
         String resourceType,
         String id,
         List<Issue> issue
 ) {
     @Builder
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Issue(
             String severity,
             String code,

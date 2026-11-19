@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
+
+# -----------------------------------------------------------------------------
+# Modo icpbrasil (padrão): acervo ICP-Brasil da icpbrasil-truststore, como o safira-app.
+# A cada execução o acervo é sincronizado de forma síncrona com o ITI; o diretório
+# SAFIRA_TRUSTSTORE_DIR é persistente entre execuções. Sem rede, cada comando espera o timeout
+# do download (CLI: 30 s, uma tentativa; --timeout-acervo 30..300). Sem acervo, a operação não
+# aborta a partida: o pipeline devolve CONFIG.TRUST-STORE-EMPTY e a CLI sai com 4 (inconclusivo).
+# Sem agendamento em background (assinar/validar). O 'safira servidor' usa o application.yml do
+# safira-app e mantém o agendador do acervo, por ser de longa duração.
+# -----------------------------------------------------------------------------
+icpbrasil-truststore:
+  storage:
+    type: filesystem
+  filesystem:
+    base-dir: ${SAFIRA_TRUSTSTORE_DIR:${user.home}/.safira/icpbrasil-truststore}
+  scheduling:
+    enabled: false
+  # Padrões menores que os da lib (60 s, 3 tentativas, 30 s entre elas): um comando, não um serviço
+  network:
+    download-timeout-seconds: 30
+    max-retries: 1
+    retry-interval-seconds: 10
+  bootstrap:
+    fail-fast: false
+
+safira:
+  policy:
+    # Allowlist institucional obrigatória (OID, tipo e issuer-sha256): informe por --config.
+    # Sem ela toda operação retorna CONFIG.INVALID-PARAMETER (saída 3).
+    accepted-certificate-policies: []
+
+  operational:
+    verification:
+      # URL da TSA (RFC 3161) para a estratégia "tsa": informe por --config.
+      tsa-url: "https://tsa.example.com"

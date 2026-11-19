@@ -6,6 +6,7 @@
 package br.gov.go.saude.fhir.safira.engine.domain.signing;
 
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.Bundle;
+import br.gov.go.saude.fhir.safira.engine.domain.json.JsonValue.JsonObject;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.Provenance;
 import br.gov.go.saude.fhir.safira.engine.domain.fhir.Signature;
 import br.gov.go.saude.fhir.safira.engine.config.SafiraOperationalConfigProperties;
@@ -15,6 +16,7 @@ import br.gov.go.saude.fhir.safira.engine.domain.TimestampStrategy;
 
 import lombok.Builder;
 import lombok.Singular;
+import lombok.ToString;
 import lombok.Value;
 
 import java.security.PrivateKey;
@@ -28,19 +30,28 @@ import java.util.Optional;
 @Builder(toBuilder = true)
 public class SigningContext implements StepContext {
     Bundle bundle;
+    /** Bundle recebido, sem perda (tokens numéricos preservados) — base da canonicalização 0.2.0. */
+    JsonObject bundleJson;
+    /** Provenance recebido, sem perda — origem da cópia assinada. */
+    JsonObject provenanceJson;
     Provenance provenance;
     CryptoMaterial cryptoMaterial;
     List<String> rawCertificateChain;
     Long referenceTimestamp;
     TimestampStrategy strategy;
     String policyIdentifierUri;
+    /** Fora do {@code toString()}: contém credenciais operacionais (ex.: senha da TSA). */
+    @ToString.Exclude
     SafiraOperationalConfigProperties operationalConfig;
 
+    @ToString.Exclude
     PrivateKey privateKey;
     X509Certificate[] certificateChain;
     Instant signingTime;
 
     Signature signature;
+    /** Resultado final (Signature + cópia do Provenance assinada) da política 0.2.0. */
+    SigningResult signingResult;
 
     @Singular("attribute")
     Map<String, Object> attributes;

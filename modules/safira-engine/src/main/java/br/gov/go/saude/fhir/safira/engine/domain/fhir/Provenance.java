@@ -52,7 +52,7 @@ public record Provenance(
 
             return new Provenance(resourceType, id, List.copyOf(targets), null, rawJson);
         } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("JSON inválido: " + e.getMessage(), e);
+            throw new IllegalArgumentException("JSON inválido.", e);
         }
     }
 

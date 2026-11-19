@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
+
+# -----------------------------------------------------------------------------
+# CLI do Safira — configuração comum aos dois modos (spring.config.name=safira-cli).
+# O modo acrescenta safira-cli-icpbrasil.yml ou safira-cli-simulacao.yml; --config
+# acrescenta um YAML do usuário (ex.: allowlist institucional, limites).
+# Os application*.yml do safira-app e do safira-simulador no classpath não são lidos.
+# Mesmo pipeline da política 0.2.0 do safira-app e do simulador: manter em sincronia.
+# -----------------------------------------------------------------------------
+# Log no stderr (logback.xml). Avisos internos do EU DSS só com --verbose.
+logging:
+  level:
+    eu.europa.esig: ERROR
+
+spring:
+  main:
+    banner-mode: off
+    web-application-type: none
+
+safira:
+  pipelines:
+    - version: "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0"
+      operation: SIGNING
+      steps:
+        - "context-validation"
+        - "payload-validation"
+        - "pkix-chain-validation"
+        - "certificate-policy"
+        - "framed-content-digest"
+        - "jades-data-to-sign"
+        - "crypto-signing"
+        - "jades-assemble"
+        - "jades-extension"
+        - "tsa-token-verification"
+        - "fhir-signature"
+
+    - version: "https://fhir.saude.go.gov.br/r4/seguranca/assinatura/politica/0.2.0"
+      operation: VALIDATION
+      steps:
+        - "validation-context"
+        - "signature-binding"
+        - "jws-structure"
+        - "content-integrity"
+        - "signer-certificate"
+        - "dss-validation"
+        - "timestamp-validation"
+        - "validation-outcome"
+
+  policy:
+    temporal-policy:
+      min-cert-issue-date: 1751328000
+
+  operational:
+    verification:
+      ocsp-timeout: 20
+      crl-timeout: 20
+      tsa-timeout: 20
+
+    security:
+      max-entries-bundle: 1000
+      # Também limita os arquivos de entrada da CLI (Bundle; demais arquivos somados até + 4 MiB)
+      max-bundle-size: 52428800

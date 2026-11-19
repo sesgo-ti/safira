@@ -39,9 +39,13 @@
 
     <modules>
         <module>modules/safira-engine</module>
+        <module>modules/safira-testkit</module>
         <module>modules/safira-jades</module>
         <module>modules/safira-steps</module>
         <module>modules/safira-rest</module>
+        <module>modules/safira-app</module>
+        <module>modules/safira-simulador</module>
+        <module>modules/safira-cli</module>
     </modules>
 
     <properties>
@@ -53,18 +57,83 @@
         <maven.compiler.target>${java.version}</maven.compiler.target>
         <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
 
-        <spring-boot.version>4.0.1</spring-boot.version>
+        <spring-boot.version>4.0.7</spring-boot.version>
 
-        <!-- Alinhado à versão usada pelo EU DSS 6.4 (inclui correções de CVEs pós-1.77) -->
-        <bouncycastle.version>1.83</bouncycastle.version>
-        <dss.version>6.4</dss.version>
+        <!-- 1.84+: corrige CVE-2025-14813 (crítica), CVE-2026-5588 e CVE-2026-0636.
+             1.86 é override deliberado sobre a 1.85 usada pelo DSS 6.5 (DSS-3957), alinhado à icpbrasil-truststore 0.0.3 -->
+        <bouncycastle.version>1.86</bouncycastle.version>
+        <dss.version>6.5</dss.version>
+        <icpbrasil-truststore.version>0.0.3</icpbrasil-truststore.version>
+        <netty.version>4.2.17.Final</netty.version>
         <vavr.version>0.10.4</vavr.version>
+        <archunit.version>1.5.1</archunit.version>
+        <picocli.version>4.7.7</picocli.version>
 
         <surefire.version>3.2.5</surefire.version>
+        <jacoco.version>0.8.12</jacoco.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+
+            <!-- ================================================================
+                 Pins de segurança — devem preceder o BOM do Spring Boot
+                 (em imports duplicados, a primeira declaração vence)
+                 ================================================================ -->
+
+            <!-- Netty (transitivo do AWS SDK via trust-store): correções de segurança -->
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>${netty.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>com.tngtech.archunit</groupId>
+                <artifactId>archunit-junit5</artifactId>
+                <version>${archunit.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <!-- CVE-2026-54399 / CVE-2026-54428 / CVE-2026-64607 -->
+            <dependency>
+                <groupId>org.apache.httpcomponents.client5</groupId>
+                <artifactId>httpclient5</artifactId>
+                <version>5.6.3</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.httpcomponents.core5</groupId>
+                <artifactId>httpcore5</artifactId>
+                <version>5.4.3</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.httpcomponents.core5</groupId>
+                <artifactId>httpcore5-h2</artifactId>
+                <version>5.4.3</version>
+            </dependency>
+
+            <!-- CVE-2026-54515 / CVE-2026-59889 / GHSA-mhm7-754m-9p8w -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>2.21.5</version>
+            </dependency>
+            <dependency>
+                <groupId>tools.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>3.1.5</version>
+            </dependency>
+
+            <!-- CVE-2026-49844 -->
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-bom</artifactId>
+                <version>2.25.5</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
 
             <!-- Spring Boot BOM -->
             <dependency>
@@ -135,15 +204,62 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${surefire.version}</version>
                     <configuration>
-                        <argLine>
-                            -Xshare:off
-                            -XX:+EnableDynamicAgentLoading
-                        </argLine>
+                        <argLine>@{jacocoArgLine} -Xshare:off -XX:+EnableDynamicAgentLoading</argLine>
+                        <!-- Testes de integração (rede externa / certificado real) não rodam no build padrão -->
+                        <excludedGroups>integration</excludedGroups>
                     </configuration>
                 </plugin>
-
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco.version}</version>
+                </plugin>
             </plugins>
         </pluginManagement>
+        <plugins>
+            <!-- Cobertura de testes: relatório por módulo em target/site/jacoco/index.html -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                        <configuration>
+                            <!-- Propriedade dedicada para compor com as demais opções do surefire -->
+                            <propertyName>jacocoArgLine</propertyName>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
+
+    <profiles>
+        <!-- Executa também os testes de integração (@Tag("integration")) -->
+        <profile>
+            <id>integration-tests</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <excludedGroups combine.self="override"/>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>
